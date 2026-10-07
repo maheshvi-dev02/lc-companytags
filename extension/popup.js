@@ -1,0 +1,330 @@
+(() => {
+  'use strict';
+  const api = globalThis.browser || globalThis.chrome;
+  const core = globalThis.LCTCore;
+  const $ = id => document.getElementById(id);
+  const defaults = { enabled: true, collapsed: false, window: 'all' };
+  const windowLabels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
+  let settings = { ...defaults };
+  let status = {};
+  let companies = [];
+  let slug = null;
+  let error = '';
+  let loading = false;
+  let requestId = 0;
+  let companiesExpanded = false;
+  let windowAvailable = false;
+  let practiceCompany = null;
+  let practiceQuestions = [];
+  let practiceTotal = 0;
+  let practiceAvailable = false;
+  let practiceLoading = false;
+  let practiceError = '';
+  let practiceRequestId = 0;
+  let topicTimer;
+  const previewCount = 5;
+  const frequencyHelp = 'Scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.';
+  const selectedWindow = () => Object.hasOwn(windowLabels, settings.window) ? settings.window : 'all';
+
+  function dateLabel(value) {
+    const date = new Date(value);
+    if (!value || !Number.isFinite(date.getTime())) return '';
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function safeSource(url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' && parsed.hostname === 'github.com' && parsed.pathname.startsWith('/liquidslr/leetcode-company-wise-problems/')) return parsed.href;
+    } catch (_) { /* Use the known repository link. */ }
+    return core.SOURCE_URL;
+  }
+
+  function renderCompanies() {
+    const query = $('search').value.trim().toLocaleLowerCase();
+    const ordered = core.sortCompanies(companies);
+    const filtered = ordered.filter(company => company.name.toLocaleLowerCase().includes(query));
+    const shown = query || companiesExpanded ? filtered : filtered.slice(0, previewCount);
+    $('companies').toggleAttribute('data-scrollable', shown.length > previewCount);
+    const hasFrequency = companies.some(company => Number.isFinite(company.frequency) && company.frequency >= 0);
+    $('frequency-heading').hidden = companies.length === 0;
+    $('frequency-heading').textContent = hasFrequency ? 'Frequency score · high to low' : 'Frequency unavailable · A–Z';
+    $('frequency-heading').title = hasFrequency ? frequencyHelp : `Refresh to check for frequency scores. ${frequencyHelp}`;
+    $('frequency-heading').setAttribute('aria-label', `${$('frequency-heading').textContent}. ${$('frequency-heading').title}`);
+    $('show-companies').hidden = Boolean(query) || companies.length <= previewCount;
+    $('show-companies').setAttribute('aria-expanded', String(companiesExpanded));
+    $('show-companies-label').textContent = companiesExpanded ? 'Show fewer' : `Show all ${companies.length} companies`;
+    $('companies').replaceChildren(...shown.map((company, index) => {
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      const companyName = document.createElement('span');
+      companyName.className = 'company-name';
+      companyName.textContent = company.name;
+      const knownFrequency = Number.isFinite(company.frequency) && company.frequency >= 0;
+      const frequency = document.createElement('span');
+      frequency.className = 'frequency-score';
+      frequency.textContent = knownFrequency ? String(company.frequency) : '—';
+      frequency.id = `company-frequency-${index}`;
+      frequency.title = knownFrequency ? `Frequency score: ${company.frequency}` : 'Frequency score unavailable';
+      frequency.setAttribute('aria-label', frequency.title);
+      const companyInfo = document.createElement('span');
+      companyInfo.className = 'company-info';
+      const rank = document.createElement('span');
+      rank.className = 'company-rank';
+      rank.textContent = Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}` : 'Rank unavailable';
+      rank.title = `This problem’s frequency rank within ${company.name} for ${windowLabels[selectedWindow()].toLowerCase()}. Equal scores share a rank.`;
+      companyInfo.append(companyName, rank);
+      link.append(companyInfo, frequency);
+      link.href = safeSource(company.sourceUrl);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('aria-label', `${company.name}, view source`);
+      link.setAttribute('aria-describedby', frequency.id);
+      const practiceButton = document.createElement('button');
+      practiceButton.type = 'button';
+      practiceButton.className = 'practice-company';
+      practiceButton.textContent = 'Practice';
+      practiceButton.setAttribute('aria-label', `Practice ${company.name}`);
+      practiceButton.dataset.company = company.name;
+      practiceButton.addEventListener('click', () => openPractice(company.name));
+      item.append(link, practiceButton);
+      return item;
+    }));
+    $('search-wrap').hidden = companies.length < 6 && !query;
+    $('empty').hidden = !slug || filtered.length > 0;
+    if (query && companies.length) $('empty').textContent = 'No company names match your search.';
+    else if (loading && !status.hasData) $('empty').textContent = 'Loading company tags…';
+    else if (!status.hasData && status.phase === 'syncing') $('empty').textContent = 'The first sync may take a minute.';
+    else if (!windowAvailable) $('empty').textContent = status.phase === 'syncing' ? 'This time window is syncing. It will appear when the updated dataset is ready.' : 'This time window is not downloaded yet. Refresh to load it.';
+    else $('empty').textContent = 'No company matches in this dataset. Coverage may be incomplete.';
+  }
+
+  function render() {
+    const revision = /^[a-f0-9]{40}$/i.test(status.commit || '') ? status.commit : '';
+    $('source').href = revision ? `${core.SOURCE_URL.replace(/\/$/, '')}/tree/${revision}` : core.SOURCE_URL;
+    $('source').title = revision ? `Dataset revision ${revision.slice(0, 7)}` : 'Public company dataset';
+    const syncedDate = new Date(status.lastSyncedAt);
+    $('status').title = status.lastSyncedAt && Number.isFinite(syncedDate.getTime()) ? `Last synced: ${syncedDate.toLocaleString()}` : '';
+    $('enabled').checked = settings.enabled;
+    $('problem-title').textContent = slug ? core.formatProblemTitle(slug) : 'Open a LeetCode problem';
+    $('problem-summary').textContent = slug ? `${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}` : 'Company tags appear as you browse problem pages.';
+    $('window-select').value = selectedWindow();
+    $('window-note').textContent = status.sourceUpdatedAt ? `Windows relative to source updated ${dateLabel(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';
+    $('company-view').hidden = Boolean(practiceCompany);
+    $('practice-view').hidden = !practiceCompany;
+    $('open-problems').hidden = Boolean(slug);
+    const failure = error || (status.phase === 'error' ? status.message || 'Refresh failed. Check your connection and try again.' : '');
+    const stale = status.lastCheckedAt && Date.now() - new Date(status.lastCheckedAt).getTime() > 48 * 60 * 60 * 1000;
+    $('dataset-state').textContent = status.phase === 'syncing' ? 'Syncing' : failure ? 'Needs attention' : stale ? 'Saved data' : status.hasData ? 'Ready' : 'Not synced';
+    $('dataset-state').toggleAttribute('data-warning', Boolean(failure || stale));
+    $('dataset-summary').textContent = status.hasData ? `${Number(status.companyCount || 0).toLocaleString()} companies · ${Number(status.problemCount || 0).toLocaleString()} problems indexed` : 'Live data from liquidslr’s public GitHub repository.';
+    $('status').toggleAttribute('data-warning', Boolean(failure || stale));
+    if (failure) $('status').textContent = `${status.hasData ? 'Showing saved data. ' : ''}${failure}`;
+    else if (status.phase === 'syncing') $('status').textContent = status.total > 0 ? `Syncing dataset · ${status.completed || 0} of ${status.total}` : 'Checking the latest dataset…';
+    else if (stale) $('status').textContent = `Last checked ${dateLabel(status.lastCheckedAt)}. Refresh for updates.`;
+    else if (status.sourceUpdatedAt) $('status').textContent = `Source updated ${dateLabel(status.sourceUpdatedAt)} · checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
+    else if (status.lastCheckedAt || status.lastSyncedAt) $('status').textContent = `Last checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
+    else $('status').textContent = 'Refresh to save the latest company index for offline use.';
+    $('refresh').disabled = status.phase === 'syncing';
+    $('refresh').textContent = status.phase === 'syncing' ? 'Syncing…' : 'Refresh dataset';
+    $('progress').hidden = status.phase !== 'syncing';
+    if (status.total > 0) {
+      $('progress').max = status.total;
+      $('progress').value = Math.min(status.completed || 0, status.total);
+    } else $('progress').removeAttribute('value');
+    renderCompanies();
+    renderPractice();
+  }
+
+  function resetWindow() {
+    requestId++;
+    companies = [];
+    windowAvailable = false;
+    companiesExpanded = false;
+    error = '';
+    render();
+    void load();
+    if (practiceCompany) void loadPractice();
+  }
+
+  function openPractice(company) {
+    practiceCompany = company;
+    $('difficulty-select').value = '';
+    $('topic-input').value = '';
+    render();
+    $('back-companies').focus();
+    void loadPractice();
+  }
+
+  function renderPractice() {
+    if (!practiceCompany) return;
+    $('practice-title').textContent = practiceCompany;
+    if (practiceError) $('practice-summary').textContent = practiceError;
+    else if (practiceLoading) $('practice-summary').textContent = 'Loading practice questions…';
+    else if (!practiceAvailable) $('practice-summary').textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
+    else if (!practiceTotal) $('practice-summary').textContent = 'No questions match these filters in this time window.';
+    else {
+      const order = practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0) ? 'highest frequency first' : 'frequency unavailable';
+      $('practice-summary').textContent = `${practiceQuestions.length} of ${practiceTotal} questions · ${order}`;
+    }
+    $('practice-questions').replaceChildren(...practiceQuestions.map(question => {
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = `https://leetcode.com/problems/${encodeURIComponent(question.slug)}/`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const title = document.createElement('span');
+      title.className = 'question-title';
+      title.textContent = question.title;
+      const score = Number.isFinite(question.frequency) && question.frequency >= 0 ? String(question.frequency) : 'unavailable';
+      const rank = Number.isInteger(question.rank) && question.rank > 0 ? `company rank #${question.rank}` : 'rank unavailable';
+      const meta = document.createElement('span');
+      meta.className = 'question-meta';
+      meta.textContent = `${question.difficulty || 'Difficulty unavailable'} · score ${score} · ${rank}`;
+      link.append(title, meta);
+      if (Array.isArray(question.topics) && question.topics.length) {
+        const topics = document.createElement('span');
+        topics.className = 'question-topics';
+        topics.textContent = question.topics.slice(0, 3).join(' · ');
+        topics.title = question.topics.join(', ');
+        link.append(topics);
+      }
+      item.append(link);
+      return item;
+    }));
+  }
+
+  async function loadPractice() {
+    if (!practiceCompany) return;
+    const id = ++practiceRequestId;
+    practiceQuestions = [];
+    practiceLoading = true;
+    practiceError = '';
+    renderPractice();
+    try {
+      const message = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), limit: 20 };
+      if (slug) message.excludeSlug = slug;
+      if ($('difficulty-select').value) message.difficulty = $('difficulty-select').value;
+      if ($('topic-input').value.trim()) message.topic = $('topic-input').value.trim();
+      const result = await api.runtime.sendMessage(message);
+      if (id !== practiceRequestId || !practiceCompany) return;
+      if (!result?.ok) throw new Error(result?.error || 'Could not load practice questions. Try again.');
+      practiceQuestions = Array.isArray(result.questions) ? result.questions : [];
+      practiceTotal = Number(result.total) || 0;
+      practiceAvailable = result.available !== false;
+    } catch (cause) {
+      if (id !== practiceRequestId) return;
+      practiceError = cause.message || 'Could not load practice questions. Try again.';
+    } finally {
+      if (id === practiceRequestId) { practiceLoading = false; renderPractice(); }
+    }
+  }
+
+  async function load() {
+    const id = ++requestId;
+    loading = true;
+    render();
+    try {
+      const result = await api.runtime.sendMessage(slug ? { type: 'LCT_GET', slug, window: selectedWindow() } : { type: 'LCT_STATUS' });
+      if (id !== requestId) return;
+      if (!result?.ok) throw new Error(result?.error || 'Could not load the dataset. Try Refresh.');
+      status = result.status || status;
+      if (Array.isArray(result.companies)) companies = result.companies;
+      windowAvailable = result.available ?? Boolean(result.status?.hasData && selectedWindow() === 'all');
+      error = '';
+    } catch (cause) {
+      if (id !== requestId) return;
+      error = cause.message || 'Could not connect. Check your connection and try again.';
+    } finally {
+      if (id === requestId) { loading = false; render(); }
+    }
+  }
+
+  $('search').addEventListener('input', renderCompanies);
+  $('window-select').addEventListener('change', () => {
+    settings.window = $('window-select').value;
+    resetWindow();
+    api.storage.local.set({ lctSettings: settings }).catch(() => { error = 'Could not save your time window preference.'; render(); });
+  });
+  $('back-companies').addEventListener('click', () => {
+    const previousCompany = practiceCompany;
+    practiceCompany = null;
+    practiceRequestId++;
+    clearTimeout(topicTimer);
+    render();
+    const returnButton = Array.from($('companies').querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
+    (returnButton || $('window-select')).focus();
+  });
+  $('difficulty-select').addEventListener('change', loadPractice);
+  $('topic-input').addEventListener('input', () => {
+    clearTimeout(topicTimer);
+    practiceRequestId++;
+    practiceQuestions = [];
+    practiceLoading = true;
+    renderPractice();
+    topicTimer = setTimeout(loadPractice, 250);
+  });
+  $('show-companies').addEventListener('click', () => {
+    companiesExpanded = !companiesExpanded;
+    renderCompanies();
+    if (!companiesExpanded) $('companies').scrollTop = 0;
+  });
+  $('enabled').addEventListener('change', async () => {
+    const previousEnabled = settings.enabled;
+    settings.enabled = $('enabled').checked;
+    try { await api.storage.local.set({ lctSettings: settings }); }
+    catch (_) { settings.enabled = previousEnabled; error = 'Could not save your display preference. Try again.'; render(); }
+  });
+  $('refresh').addEventListener('click', async () => {
+    error = '';
+    status = { ...status, phase: 'syncing', total: 0, completed: 0 };
+    render();
+    try {
+      const result = await api.runtime.sendMessage({ type: 'LCT_REFRESH' });
+      if (!result?.ok) throw new Error(result?.error || 'Refresh failed. Check your connection and try again.');
+      status = result.status || status;
+      await load();
+      if (practiceCompany) await loadPractice();
+    } catch (cause) {
+      status = { ...status, phase: 'error' };
+      error = cause.message || 'Refresh failed. Check your connection and try again.';
+      render();
+    }
+  });
+  api.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes.lctSettings) {
+      const previousWindow = selectedWindow();
+      settings = { ...defaults, ...changes.lctSettings.newValue };
+      if (previousWindow !== selectedWindow()) resetWindow();
+    }
+    if (changes.lctStatus) {
+      const previous = status;
+      status = changes.lctStatus.newValue || {};
+      if (status.phase !== 'error') error = '';
+      if (status.hasData && status.phase !== 'syncing' && (previous.phase === 'syncing' || previous.lastSyncedAt !== status.lastSyncedAt)) {
+        void load();
+        if (practiceCompany) void loadPractice();
+      }
+    }
+    render();
+  });
+
+  async function start() {
+    try {
+      const stored = await api.storage.local.get(['lctSettings', 'lctStatus']);
+      settings = { ...settings, ...stored.lctSettings };
+      status = stored.lctStatus || {};
+    } catch (_) { /* The background request will report a usable error if needed. */ }
+    try {
+      const tabs = await api.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]?.id !== undefined) {
+        const context = await api.tabs.sendMessage(tabs[0].id, { type: 'LCT_CONTEXT' });
+        slug = typeof context?.slug === 'string' ? context.slug : null;
+      }
+    } catch (_) { /* Other sites and tabs opened before installation have no content script. */ }
+    render();
+    await load();
+  }
+  void start();
+})();

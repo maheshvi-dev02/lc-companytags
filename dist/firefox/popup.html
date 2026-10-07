@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Company Lens</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="header">
+    <span class="mark" aria-hidden="true"></span>
+    <div><h1>Company Lens</h1><p>Company tags for LeetCode</p></div>
+    <span class="edition">COMMUNITY</span>
+  </header>
+  <main>
+    <label class="setting" for="enabled">
+      <span><strong>Show on problem pages</strong><span class="setting-hint">A compact card beside your practice.</span></span>
+      <input type="checkbox" id="enabled" checked role="switch">
+    </label>
+    <label class="window-filter">Time window<select id="window-select" aria-label="Time window"><option value="all">All time</option><option value="30d">Last 30 days</option><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="older">Older than 6 months</option></select></label>
+    <p id="window-note" class="window-note">Time windows follow the dates in the source dataset.</p>
+    <section class="problem" aria-labelledby="problem-title">
+      <div id="company-view">
+      <p class="eyebrow">Current problem</p>
+      <h2 id="problem-title">Open a LeetCode problem</h2>
+      <p id="problem-summary" class="muted">Company tags appear as you browse problem pages.</p>
+      <label id="search-wrap" class="search" hidden><input type="search" id="search" placeholder="Find a company" aria-label="Filter company names" autocomplete="off"></label>
+      <p id="frequency-heading" class="frequency-heading" tabindex="0" hidden></p>
+      <ul id="companies" class="companies" aria-label="Companies listed for this problem"></ul>
+      <button id="show-companies" class="show-companies" type="button" aria-controls="companies" aria-expanded="false" hidden><span id="show-companies-label"></span><span class="chevron" aria-hidden="true"></span></button>
+      <p id="empty" class="muted" hidden></p>
+      <a id="open-problems" class="open-problems" href="https://leetcode.com/problemset/" target="_blank" rel="noopener noreferrer">Browse LeetCode problems <span aria-hidden="true">↗</span></a>
+      </div>
+      <section id="practice-view" aria-label="Company practice questions" hidden>
+        <button id="back-companies" class="back-companies" type="button">← Back to companies</button>
+        <p class="eyebrow">Company practice</p>
+        <h2 id="practice-title"></h2>
+        <div class="practice-filters">
+          <label>Difficulty<select id="difficulty-select" aria-label="Difficulty"><option value="">All difficulties</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select></label>
+          <label>Topic<input id="topic-input" type="search" aria-label="Topic filter" placeholder="e.g. Array"></label>
+        </div>
+        <p id="practice-summary" class="practice-summary" role="status"></p>
+        <ul id="practice-questions" class="practice-questions" aria-label="Practice questions sorted by frequency"></ul>
+      </section>
+    </section>
+    <section class="dataset" aria-labelledby="dataset-heading">
+      <div class="dataset-top"><h2 id="dataset-heading">Dataset</h2><span id="dataset-state" class="state">Checking</span></div>
+      <p id="dataset-summary" class="muted">Connecting to the public company dataset…</p>
+      <p id="status" class="status" role="status"></p>
+      <progress id="progress" aria-label="Dataset sync progress" hidden></progress>
+      <div class="dataset-actions"><a id="source" href="https://github.com/liquidslr/leetcode-company-wise-problems" target="_blank" rel="noopener noreferrer">View source ↗</a><button id="refresh" type="button">Refresh dataset</button></div>
+    </section>
+  </main>
+  <footer>Community company reports by liquidslr. Coverage may be incomplete. Company links open the source.</footer>
+  <script src="core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
