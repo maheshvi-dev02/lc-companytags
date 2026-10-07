@@ -255,6 +255,43 @@ async function exercise(context, extensionUrl, browserName) {
   await popup.getByRole('button', { name: 'Back to companies', exact: false }).click();
   results.push('Company practice lists exclude the current problem and support difficulty/topic filtering in both panel and popup.');
 
+  // Disabling the panel must not retain filtered results under newly reset controls.
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await host.locator('.difficulty-select').selectOption('Medium');
+  await host.locator('.topic-input').fill('Tree');
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
+  await popup.locator('#enabled').uncheck();
+  await host.waitFor({ state: 'detached' });
+  await popup.locator('#enabled').check();
+  await host.locator('.company-view').waitFor({ state: 'visible', timeout: 3000 });
+  assert.equal(await host.locator('.practice-view').isVisible(), false);
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  assert.equal(await host.locator('.difficulty-select').inputValue(), '');
+  assert.equal(await host.locator('.topic-input').inputValue(), '');
+  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
+  // A pending topic debounce must also be cancelled when the panel is removed.
+  await host.locator('.topic-input').fill('Tree');
+  await popup.locator('#enabled').uncheck();
+  await host.waitFor({ state: 'detached' });
+  await popup.locator('#enabled').check();
+  await host.locator('.company-view').waitFor({ state: 'visible', timeout: 3000 });
+  await page.waitForTimeout(300);
+  assert.equal(await host.locator('.practice-view').isVisible(), false);
+  // LeetCode can replace page elements; recreating the removed panel resets filters.
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await host.locator('.difficulty-select').selectOption('Medium');
+  await host.locator('.topic-input').fill('Tree');
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
+  await host.evaluate(element => element.remove());
+  await host.locator('.company-view').waitFor({ state: 'visible', timeout: 3000 });
+  assert.equal(await host.locator('.practice-view').isVisible(), false);
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  assert.equal(await host.locator('.difficulty-select').inputValue(), '');
+  assert.equal(await host.locator('.topic-input').inputValue(), '');
+  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  results.push('Panel toggles and external removal reset practice state, filter controls, and pending topic input.');
+
   await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
   await host.locator('.body').waitFor({ state: 'hidden' });
   await host.getByRole('button', { name: 'Expand Company Lens' }).click();

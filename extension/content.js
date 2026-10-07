@@ -262,6 +262,16 @@
   }
 
   function unmount() {
+    // Remounting creates fresh filter controls, so discard their old results too.
+    clearTimeout(topicTimer);
+    practiceRequestId++;
+    practiceCompany = null;
+    practiceQuestions = [];
+    practiceTotal = 0;
+    practiceAvailable = false;
+    practiceLoading = false;
+    practiceError = '';
+    companiesExpanded = false;
     if (host) host.remove();
     host = null;
     view = null;
@@ -507,7 +517,7 @@
       if (!slug) unmount();
       if (slug && settings.enabled) { mount(); render(); void loadCompanies(); }
     } else if (slug && settings.enabled) {
-      if (host && !host.isConnected) { host = null; view = null; }
+      if (host && !host.isConnected) unmount();
       mount();
       render();
       if (force) void loadCompanies();
