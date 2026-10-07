@@ -69,11 +69,12 @@ Optional checks:
 ```powershell
 npm run verify:live
 npm run test:browser
+npm run test:firefox
 ```
 
 `verify:live` downloads the real dataset into the ignored `output/live-source` directory and validates the resulting index. `test:browser` checks the actual Chromium extension against a local page fixture, with GitHub networking blocked. It needs an existing Playwright installation and Chromium binary; use `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` to select them. `node scripts/smoke.mjs --live` additionally verifies a real GitHub refresh after `verify:live` has populated its cache.
 
-The optional `node scripts/firefox-smoke.mjs` uses Mozilla's localhost debugging protocol to install a temporary add-on in an isolated Firefox profile. Set `FIREFOX_EXECUTABLE` for a compatible Playwright Firefox binary. It may report partial verification when GitHub limits prevent a first sync. Reports and preview screenshots are saved under `output/playwright`; fixture previews are not captures of the live LeetCode site. Nothing is installed in your normal browser profiles.
+`test:firefox` installs the actual temporary add-on in an isolated Firefox profile, blocks GitHub networking, and seeds deterministic fixtures. It verifies the problem panel and packaged popup using Playwright and Mozilla's localhost debugging protocol, including all five windows, practice filters, and panel recreation. It needs an existing Playwright installation and compatible Firefox binary; set `PLAYWRIGHT_MODULE` and `FIREFOX_EXECUTABLE` to select them. Reports and preview screenshots are saved under `output/playwright`; fixture previews are not captures of the live LeetCode site. Nothing is installed in your normal browser profiles.
 
 ## Troubleshooting
 

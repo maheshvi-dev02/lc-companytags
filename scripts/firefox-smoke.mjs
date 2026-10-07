@@ -1,129 +1,353 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import path from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { makeFixture } from './firefox-fixture.mjs';
 
+// Installs and exercises the real Firefox MV3 addon. The default is deterministic:
+// a dead proxy blocks extension requests, and the fixture is seeded through the
+// addon's real background console before reloading its unmodified distribution.
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'output/playwright');
 await mkdir(output, { recursive: true });
-const { firefox } = require(process.env.PLAYWRIGHT_MODULE || path.join(process.env.USERPROFILE, '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
-const uuid = randomUUID();
+const { firefox } = require(process.env.PLAYWRIGHT_MODULE || path.join(process.env.USERPROFILE,
+  '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
+const { seed, html, commit } = makeFixture(require(path.join(root, 'dist/firefox/core.js')));
 const id = 'company-lens@leetcode-tags.local';
+const uuid = randomUUID();
 const port = 23000 + Math.floor(Math.random() * 20000);
-const report = { startedAt: new Date().toISOString(), mode: 'actual Firefox temporary extension via Mozilla RDP', checks: [], packets: [] };
-const fixture = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Two Sum - LeetCode</title><style>body{background:#171717;color:#eee;font:16px system-ui;margin:40px;max-width:700px}h1{font-size:30px}pre{background:#292929;padding:24px}header{color:#ffa116}</style></head><body><header>LeetCode / Problems</header><h1>1. Two Sum</h1><p>Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.</p><pre>Input: nums = [2,7,11,15], target = 9\nOutput: [0,1]</pre></body></html>';
+const report = { startedAt: new Date().toISOString(), mode: 'actual Firefox temporary addon, deterministic fixtures', checks: [] };
+
+async function executable() {
+  if (process.env.FIREFOX_EXECUTABLE) return process.env.FIREFOX_EXECUTABLE;
+  const runtime = path.join(process.env.LOCALAPPDATA, 'ms-playwright');
+  const installed = (await readdir(runtime)).filter((name) => /^firefox-\d+$/.test(name))
+    .sort((a, b) => Number(b.split('-').at(-1)) - Number(a.split('-').at(-1)));
+  return installed.length ? path.join(runtime, installed[0], 'firefox/firefox.exe') : undefined;
+}
 
 function rdpConnect() {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: '127.0.0.1', port });
     let buffer = Buffer.alloc(0);
     const messages = [], waiters = [];
-    const next = () => messages.length ? Promise.resolve(messages.shift()) : new Promise((res, rej) => {
-      const timer = setTimeout(() => rej(new Error('RDP response timeout')), 20000);
-      waiters.push((value) => { clearTimeout(timer); res(value); });
-    });
+    const waitFor = (predicate, timeout = 30000) => {
+      const index = messages.findIndex(predicate);
+      if (index >= 0) return Promise.resolve(messages.splice(index, 1)[0]);
+      return new Promise((res, rej) => {
+        const waiter = { predicate, resolve: res };
+        waiter.timer = setTimeout(() => {
+          const i = waiters.indexOf(waiter);
+          if (i >= 0) waiters.splice(i, 1);
+          rej(new Error('Firefox RDP response timeout'));
+        }, timeout);
+        waiters.push(waiter);
+      });
+    };
     socket.on('data', (data) => {
       buffer = Buffer.concat([buffer, data]);
       while (buffer.indexOf(58) >= 0) {
         const colon = buffer.indexOf(58), length = Number(buffer.subarray(0, colon).toString());
-        if (!Number.isFinite(length)) { reject(new Error(`Bad RDP frame ${buffer.toString()}`)); break; }
+        if (!Number.isFinite(length)) { reject(new Error('Bad Firefox RDP frame')); break; }
         if (buffer.length < colon + 1 + length) break;
-        const message = JSON.parse(buffer.subarray(colon + 1, colon + 1 + length));
+        const packet = JSON.parse(buffer.subarray(colon + 1, colon + 1 + length));
         buffer = buffer.subarray(colon + 1 + length);
-        report.packets.push(message);
-        if (waiters.length) waiters.shift()(message); else messages.push(message);
+        const index = waiters.findIndex(({ predicate }) => predicate(packet));
+        if (index >= 0) {
+          const waiter = waiters.splice(index, 1)[0];
+          clearTimeout(waiter.timer); waiter.resolve(packet);
+        } else messages.push(packet);
       }
     });
     socket.once('error', reject);
-    socket.once('connect', () => resolve({ socket, next, send: async (packet) => {
-      const body = JSON.stringify(packet); socket.write(`${Buffer.byteLength(body)}:${body}`);
-      let response;
-      do { response = await next(); } while (response.from !== packet.to);
-      return response;
-    } }));
+    socket.once('connect', () => resolve({ socket, waitFor,
+      discard: (predicate) => { for (let i = messages.length - 1; i >= 0; i--) if (predicate(messages[i])) messages.splice(i, 1); },
+      pending: () => messages,
+      send: async (packet) => {
+        const reply = waitFor((response) => response.from === packet.to && !response.type);
+        const body = JSON.stringify(packet); socket.write(`${Buffer.byteLength(body)}:${body}`);
+        const response = await reply;
+        assert.ok(!response.error, JSON.stringify(response));
+        return response;
+      },
+    }));
   });
 }
 
-let context, rdp, page;
+let context, rdp, page, backgroundConsole;
+async function evaluateConsoleRaw(text, consoleActor = backgroundConsole) {
+  const request = await rdp.send({ to: consoleActor, type: 'evaluateJSAsync', text });
+  const response = await rdp.waitFor((packet) => packet.type === 'evaluationResult' && packet.resultID === request.resultID);
+  assert.ok(!response.hasException && !response.topLevelAwaitRejected, response.exceptionMessage || JSON.stringify(response));
+  return response.result;
+}
+
+async function evaluateBackground(body) {
+  // Raw RDP does not perform the DevTools frontend's top-level-await rewrite.
+  // Keep promise results in this isolated test background global and read them
+  // through synchronous console expressions; production code is untouched.
+  await evaluateConsoleRaw(`globalThis.__lctAuditResult = { done: false };
+    (async () => { try {
+      const value = await (async () => { ${body} })();
+      globalThis.__lctAuditResult = { done: true, value };
+    } catch (error) { globalThis.__lctAuditResult = { done: true, error: String(error.stack || error) }; } })(); 'started'`);
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const result = JSON.parse(await evaluateConsoleRaw('JSON.stringify(globalThis.__lctAuditResult)'));
+    if (result.done) {
+      assert.ok(!result.error, result.error);
+      return result.value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('Asynchronous Firefox background evaluation did not settle');
+}
+
+async function expectTexts(locator, expected) {
+  let observed;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    observed = await locator.allTextContents();
+    if (JSON.stringify(observed) === JSON.stringify(expected)) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.deepEqual(observed, expected);
+}
+
 try {
   context = await firefox.launchPersistentContext(path.join(output, `firefox-profile-${Date.now()}`), {
-    headless: true, viewport: null,
-    executablePath: process.env.FIREFOX_EXECUTABLE || path.join(process.env.LOCALAPPDATA, 'ms-playwright/firefox-1497/firefox/firefox.exe'),
+    headless: true, viewport: null, executablePath: await executable(),
     args: ['-start-debugger-server', String(port)],
     firefoxUserPrefs: {
       'devtools.debugger.remote-enabled': true,
       'devtools.debugger.prompt-connection': false,
       'devtools.chrome.enabled': true,
       'extensions.webextensions.uuids': JSON.stringify({ [id]: uuid }),
+      'network.proxy.type': 1,
+      'network.proxy.http': '127.0.0.1', 'network.proxy.http_port': 9,
+      'network.proxy.ssl': '127.0.0.1', 'network.proxy.ssl_port': 9,
+      'network.proxy.no_proxies_on': 'localhost,127.0.0.1',
+      'network.proxy.allow_hijacking_localhost': false,
     },
   });
+  await context.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//,
+    (route) => route.fulfill({ contentType: 'text/html', body: html }));
   rdp = await rdpConnect();
-  await rdp.next();
+  await rdp.waitFor(() => true);
   const actors = await rdp.send({ to: 'root', type: 'getRoot' });
-  assert.ok(actors.addonsActor, 'Firefox exposes temporary addon installer');
   const installed = await rdp.send({ to: actors.addonsActor, type: 'installTemporaryAddon', addonPath: path.join(root, 'dist/firefox') });
-  assert.ok(!installed.error, JSON.stringify(installed));
-  report.install = installed;
+  assert.ok(installed.addon);
   const addons = await rdp.send({ to: 'root', type: 'listAddons' });
   report.addon = addons.addons.find((entry) => entry.id === id);
   assert.deepEqual(report.addon.warnings, []);
-  report.checks.push('Built Firefox MV3 distribution installed as an actual temporary addon.');
-  console.log('Actual Firefox temporary extension installed; checking content script with live sync.');
+  const watcher = await rdp.send({ to: report.addon.actor, type: 'getWatcher' });
+  report.watcher = watcher;
+  await rdp.send({ to: watcher.actor, type: 'watchTargets', targetType: 'frame' });
+  const background = await rdp.waitFor((packet) => packet.type === 'target-available-form' &&
+    packet.target?.url?.includes('_generated_background_page.html'));
+  backgroundConsole = background.target.consoleActor;
+  report.background = { url: background.target.url, actor: background.target.actor, consoleActor: backgroundConsole };
+  const blocked = JSON.parse(await evaluateBackground(`return JSON.stringify(await Promise.all(
+    ['https://api.github.com/', 'https://raw.githubusercontent.com/'].map(async (url) => {
+      try { await fetch(url); return { url, blocked: false }; }
+      catch { return { url, blocked: true }; }
+    })));`));
+  assert.ok(blocked.every(({ blocked }) => blocked), 'Extension GitHub requests must be blocked before fixture seeding');
+  report.checks.push('Real Firefox MV3 addon installs without manifest warnings; GitHub networking is blocked in its background process.');
+  let settled = false;
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const status = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);'));
+    if (status && status.phase !== 'syncing') {
+      assert.equal(status.hasData, false); settled = true; break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  assert.ok(settled, 'Initial blocked sync must settle before fixture seeding');
+  assert.equal(await evaluateBackground(`await browser.alarms.clearAll(); await browser.storage.local.set(${JSON.stringify(seed)}); return 'seeded';`), 'seeded');
+  rdp.discard((packet) => packet.type === 'target-available-form');
+  await rdp.send({ to: report.addon.actor, type: 'reload' });
+  const reloadedBackground = await rdp.waitFor((packet) => packet.type === 'target-available-form' &&
+    packet.target?.url?.includes('_generated_background_page.html'));
+  backgroundConsole = reloadedBackground.target.consoleActor;
+  report.checks.push('Deterministic source data is seeded into actual addon storage and survives an addon reload.');
+
   page = await context.newPage();
-  await page.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//, (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
   await page.goto('https://leetcode.com/problems/two-sum/description/');
   const host = page.locator('#company-lens-root');
   await host.waitFor({ state: 'visible', timeout: 30000 });
-  report.checks.push('Real content script injects the correct problem panel and communicates with the extension background.');
-  await page.screenshot({ path: path.join(output, 'firefox-initial.png'), fullPage: true });
-  for (let i = 0; i < 30; i++) {
-    report.finalPanel = await host.locator('.body').innerText();
-    if (await host.locator('.companies a').count()) break;
-    if (/rate limit|unavailable|could not/i.test(report.finalPanel)) break;
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+  await host.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
+  await expectTexts(host.locator('.company-name'), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']);
+  await expectTexts(host.locator('.frequency-score'), ['100', '91', '91', '65', '50']);
+  assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).locator('.company-rank').textContent(), 'Company rank #2');
+  assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).getAttribute('href'),
+    `https://github.com/liquidslr/leetcode-company-wise-problems/blob/${commit}/Amazon/5.%20All.csv`);
+  report.checks.push('Actual content script shows five companies in descending frequency order, with alphabetical ties, scores, ranks and pinned source links.');
+
+  await host.getByRole('button', { name: 'Show all 7 companies' }).click();
+  await expectTexts(host.locator('.company-name'), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg', 'Meta', 'Microsoft']);
+  assert.equal(await host.locator('.show-companies').getAttribute('aria-expanded'), 'true');
+  assert.equal(await host.getByRole('link', { name: 'Meta, view source', exact: true }).locator('.frequency-score').textContent(), '0');
+  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.frequency-score').textContent(), '—');
+  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.company-rank').textContent(), 'Rank unavailable');
+  await host.getByRole('button', { name: 'Show fewer' }).click();
+  assert.equal(await host.locator('.companies a').count(), 5);
+  report.checks.push('Show all / Show fewer expands the company list and preserves zero scores and unknown-score ranks.');
+
+  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('micro');
+  await expectTexts(host.locator('.company-name'), ['Microsoft']);
+  assert.equal(await host.locator('.show-companies').isVisible(), false);
+  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('unlisted-test-company');
+  await host.locator('.empty').filter({ hasText: 'No company names match' }).waitFor();
+  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('');
+  await expectTexts(host.locator('.company-name'), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']);
+  report.checks.push('Company search includes the hidden sixth/seventh companies and handles no-match searches.');
+
+  const orders = [
+    ['30d', ['Google', 'Meta', 'Amazon', 'Apple', 'Bloomberg']],
+    ['3m', ['Spotify', 'Amazon', 'Apple', 'Google', 'Bloomberg']],
+    ['6m', ['Meta', 'Amazon', 'Apple', 'Google', 'Spotify']],
+    ['older', ['Bloomberg', 'Amazon', 'Apple', 'Google', 'Spotify']],
+    ['all', ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']],
+  ];
+  for (const [window, names] of orders) {
+    await host.locator('.window-select').selectOption(window);
+    await expectTexts(host.locator('.company-name'), names);
+    if (window === '30d') {
+      assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).locator('.company-rank').textContent(), 'Company rank #7');
+      assert.ok((await host.getByRole('link', { name: 'Amazon, view source', exact: true }).getAttribute('href')).endsWith('/Amazon/1.%20Thirty%20Days.csv'));
+    }
   }
-  report.companyCount = await host.locator('.companies a').count();
-  if (report.companyCount) {
-    report.checks.push(`Actual content script displays ${report.companyCount} live company tags for Two Sum.`);
-    await host.getByRole('searchbox', { name: 'Filter company names' }).fill('amazon');
-    assert.equal(await host.locator('.companies a').count(), 1);
-    await host.getByRole('searchbox', { name: 'Filter company names' }).fill('');
-    report.checks.push('Company search filters actual source data.');
-  } else {
-    report.limitations = [report.finalPanel];
-    if (/GitHub rate limit reached/.test(report.finalPanel)) report.checks.push('Actual GitHub rate-limit response displays retry timing and preserves a usable error state.');
-  }
+  report.checks.push('All five time windows rerank companies and update per-company ranks and the matching source file.');
+
+  const amazonPractice = ['Add Two Numbers', 'Merge Two Sorted Lists', 'Binary Tree Level Order Traversal',
+    'Valid Parentheses', 'Longest Substring Without Repeating Characters', 'Maximum Depth of Binary Tree'];
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
+  assert.match(await host.locator('.practice-questions .question-meta').first().textContent(), /Medium.*score 180.*company rank #1/);
+  assert.equal(await host.locator('.practice-questions a').first().getAttribute('href'), 'https://leetcode.com/problems/add-two-numbers/');
+  await host.locator('.difficulty-select').selectOption('Medium');
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Add Two Numbers', 'Binary Tree Level Order Traversal', 'Longest Substring Without Repeating Characters']);
+  await host.locator('.topic-input').fill('Tree');
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
+  await host.locator('.topic-input').fill('not-a-fixture-topic');
+  await host.locator('.practice-summary').filter({ hasText: 'No questions match these filters' }).waitFor();
+  await expectTexts(host.locator('.practice-questions .question-title'), []);
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  report.checks.push('Practice lists sort by frequency, show scores/ranks, exclude the current problem, and support difficulty/topic/no-match filters.');
+
   await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
   await host.locator('.body').waitFor({ state: 'hidden' });
   await host.getByRole('button', { name: 'Expand Company Lens' }).click();
   await host.locator('.body').waitFor({ state: 'visible' });
-  report.checks.push('Collapse and expand work in Firefox.');
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await page.waitForFunction(() => document.getElementById('company-lens-root')?.hasAttribute('data-dark'));
-  await page.screenshot({ path: path.join(output, report.companyCount ? 'firefox-live-data.png' : 'firefox-final.png'), fullPage: true });
+  await page.screenshot({ path: path.join(output, 'firefox-problem.png'), fullPage: true, animations: 'disabled' });
+  report.checks.push('Whole-panel collapse and expand work, and the panel follows the page dark theme.');
+
+  await host.getByRole('button', { name: 'Show all 7 companies' }).click();
+  await page.evaluate(() => history.pushState({}, '', '/problems/add-two-numbers/'));
+  await host.locator('.company-view h2').filter({ hasText: 'Add Two Numbers' }).waitFor();
+  await expectTexts(host.locator('.company-name'), ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
+  assert.equal(await host.locator('.show-companies').getAttribute('aria-expanded'), 'false');
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  report.checks.push('SPA problem changes rerank tags, reset expansion, and update the practice-list current-problem exclusion.');
+
+  // Playwright cannot expose Firefox extension-process tabs as Page objects.
+  // Mozilla RDP does expose the actual popup document, so dispatch the same
+  // DOM input/change/click events through its console rather than mocking it.
+  const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
+  await evaluateBackground(`await browser.tabs.create({ url: ${JSON.stringify(popupUrl)}, active: false }); return 'opened';`);
+  const popupTarget = await rdp.waitFor((packet) => packet.type === 'target-available-form' && packet.target?.url === popupUrl);
+  const popupConsole = popupTarget.target.consoleActor;
+  const popupRead = async (expression) => JSON.parse(await evaluateConsoleRaw(`JSON.stringify(${expression})`, popupConsole));
+  const popupClick = async (selector) => evaluateConsoleRaw(`document.querySelector(${JSON.stringify(selector)}).click(); 'clicked'`, popupConsole);
+  const popupSet = async (selector, value, event = 'change') => evaluateConsoleRaw(
+    `document.querySelector(${JSON.stringify(selector)}).value = ${JSON.stringify(value)};
+      document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new Event(${JSON.stringify(event)}, { bubbles: true })); 'changed'`, popupConsole);
+  const popupTexts = async (selector, expected) => {
+    let observed;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      observed = await popupRead(`Array.from(document.querySelectorAll(${JSON.stringify(selector)}), node => node.textContent)`);
+      if (JSON.stringify(observed) === JSON.stringify(expected)) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.deepEqual(observed, expected);
+  };
+  await popupTexts('.company-name', ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
+  await popupClick('#show-companies');
+  assert.equal(await popupRead('document.querySelectorAll("#companies a").length'), 7);
+  assert.equal(await popupRead('document.querySelector("#show-companies").getAttribute("aria-expanded")'), 'true');
+  await popupClick('#show-companies');
+  await popupSet('#search', 'Spotify', 'input');
+  await popupTexts('.company-name', ['Spotify']);
+  await popupSet('#search', '', 'input');
+  await popupSet('#window-select', '30d');
+  await page.waitForFunction(() => document.getElementById('company-lens-root')?.shadowRoot.querySelector('.window-select').value === '30d');
+  await popupSet('#window-select', 'all');
+  await popupTexts('.company-name', ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
+  await popupClick('[data-company="Amazon"]');
+  await popupTexts('#practice-questions .question-title', ['Two Sum', ...amazonPractice.slice(1)]);
+  await popupSet('#difficulty-select', 'Easy');
+  await popupSet('#topic-input', 'Tree', 'input');
+  await popupTexts('#practice-questions .question-title', ['Maximum Depth of Binary Tree']);
+  await popupClick('#back-companies');
+  report.popupVerification = 'Actual packaged popup DOM, inspected and operated via Mozilla RDP console; Playwright does not expose this extension-process tab.';
+  report.checks.push('Actual packaged popup displays ranked tags, expansion, full-list search, shared windows and difficulty/topic-filtered practice questions.');
+
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await host.locator('.difficulty-select').selectOption('Medium');
+  await host.locator('.topic-input').fill('Tree');
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
+  const setEnabled = async (enabled) => evaluateConsoleRaw(
+    `document.querySelector('#enabled').checked = ${enabled}; document.querySelector('#enabled').dispatchEvent(new Event('change', { bubbles: true })); 'changed'`, popupConsole);
+  await setEnabled(false);
+  await host.waitFor({ state: 'detached' });
+  await setEnabled(true);
+  await host.locator('.company-view').waitFor({ state: 'visible' });
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
+  assert.equal(await host.locator('.difficulty-select').inputValue(), '');
+  assert.equal(await host.locator('.topic-input').inputValue(), '');
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  report.checks.push('Popup enable/disable updates the open problem; re-enabling resets filtered practice state consistently.');
+
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await host.locator('.topic-input').fill('Tree');
+  await page.evaluate(() => document.getElementById('company-lens-root').remove());
+  await host.locator('.company-view').waitFor({ state: 'visible' });
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
+  assert.equal(await host.locator('.topic-input').inputValue(), '');
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  report.checks.push('Externally removed panels remount with consistent practice state and no pending filter result leakage.');
+
   await page.evaluate(() => history.pushState({}, '', '/problems/not-a-listed-problem/'));
-  await host.locator('h2').filter({ hasText: 'Not A Listed Problem' }).waitFor();
-  report.checks.push('SPA navigation updates the problem title.');
+  await host.locator('.empty').filter({ hasText: 'No company matches in this dataset.' }).waitFor();
   await page.evaluate(() => history.pushState({}, '', '/problemset/'));
   await host.waitFor({ state: 'detached' });
-  report.checks.push('Leaving a problem removes the panel.');
-  report.status = report.companyCount ? 'passed' : 'partial';
+  await page.evaluate(() => history.pushState({}, '', '/problems/%2F/'));
+  await page.waitForTimeout(1000);
+  assert.equal(await host.count(), 0);
+  await page.goto('https://leetcode.cn/contest/weekly-contest-100/problems/two-sum/');
+  await host.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
+  report.checks.push('Unknown problems, non-problem and malformed paths clear old tags; contest and leetcode.cn paths work.');
+  report.status = 'passed';
 } catch (error) {
   report.status = 'failed'; report.error = error.stack; process.exitCode = 1;
   console.error(error.stack);
+  if (rdp) report.debugTargets = rdp.pending().filter((packet) => /target/.test(packet.type || '')).slice(-10);
   if (page) {
     report.finalPanel = await page.locator('#company-lens-root .body').innerText().catch(() => null);
-    await page.screenshot({ path: path.join(output, 'firefox-final.png'), fullPage: true }).catch(() => {});
+    await page.screenshot({ path: path.join(output, 'firefox-final.png'), fullPage: true, animations: 'disabled' }).catch(() => {});
   }
 } finally {
   rdp?.socket.destroy();
-  report.finishedAt = new Date().toISOString();
-  delete report.packets;
-  await writeFile(path.join(output, 'firefox-results.json'), JSON.stringify(report, null, 2) + '\n');
   await context?.close();
+  report.finishedAt = new Date().toISOString();
+  await writeFile(path.join(output, 'firefox-results.json'), JSON.stringify(report, null, 2) + '\n');
 }
 console.log(JSON.stringify(report, null, 2));
