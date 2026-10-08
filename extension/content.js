@@ -34,9 +34,12 @@
 
   const css = `
     :host { all: initial; position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; width: min(344px, calc(100vw - 24px)); font: 13px/1.5 "Segoe UI", sans-serif; color-scheme: light; --paper:#fff; --ink:#162b3b; --muted:#617480; --line:#dfE8eb; --wash:#f4f8f9; --teal:#007b77; --tag:#eaf6f3; --warn:#855815; --warn-bg:#fff7e5; }
+    :host([data-collapsed]) { width:64px; height:64px; }
     :host([data-dark]) { color-scheme: dark; --paper:#19252f; --ink:#e6f0f3; --muted:#a4b5bf; --line:#35454e; --wash:#22323c; --teal:#73d8c8; --tag:#203e40; --warn:#f0cd89; --warn-bg:#3a3325; }
     * { box-sizing: border-box; }
     .card { background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:16px; box-shadow:0 12px 44px #10233329, 0 2px 8px #10233312; overflow:hidden; }
+    .collapsed-bubble { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; width:64px; height:64px; padding:8px; margin:0; color:var(--teal); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 44px #10233329, 0 2px 8px #10233312; }
+    .bubble-count { font:600 12px/1 Consolas, monospace; white-space:nowrap; }
     .header { display:flex; align-items:center; gap:10px; padding:13px 15px; }
     .mark { position:relative; width:22px; height:22px; flex:none; border:2px solid var(--teal); border-radius:8px; }
     .mark::before { content:""; position:absolute; width:6px; height:6px; top:4px; left:4px; border:1.5px solid var(--teal); border-radius:50%; }
@@ -130,6 +133,15 @@
     const style = element('style', null, css);
     const card = element('section', 'card');
     card.setAttribute('aria-label', 'Company Lens company tags');
+    const bubble = element('button', 'collapsed-bubble');
+    bubble.type = 'button';
+    bubble.setAttribute('aria-expanded', 'false');
+    bubble.setAttribute('aria-controls', 'company-lens-body');
+    const bubbleMark = element('span', 'mark');
+    bubbleMark.setAttribute('aria-hidden', 'true');
+    const bubbleCount = element('span', 'bubble-count');
+    bubbleCount.setAttribute('aria-hidden', 'true');
+    bubble.append(bubbleMark, bubbleCount);
     const header = element('div', 'header');
     const mark = element('span', 'mark');
     mark.setAttribute('aria-hidden', 'true');
@@ -219,14 +231,11 @@
     body.append(windowFilter, windowNote, companyView, practiceView, statusBox,
       element('p', 'note', 'Community company reports from liquidslr. Coverage may be incomplete. Company links open the source.'));
     card.append(header, body);
-    shadow.append(style, card);
+    shadow.append(style, card, bubble);
     document.documentElement.append(host);
-    view = { body, title, count, badge, collapse, windowSelect, windowNote, companyView, search, searchWrap, frequencyHeading, list, showCompanies, showCompaniesLabel, empty, practiceView, backCompanies, practiceTitle, difficultySelect, topicInput, practiceSummary, practiceList, statusBox, statusMessage, progress, source, refresh };
-    collapse.addEventListener('click', () => {
-      settings.collapsed = !settings.collapsed;
-      render();
-      api.storage.local.set({ lctSettings: settings }).catch(() => { /* Keep the current session usable. */ });
-    });
+    view = { card, bubble, bubbleCount, body, title, count, badge, collapse, windowSelect, windowNote, companyView, search, searchWrap, frequencyHeading, list, showCompanies, showCompaniesLabel, empty, practiceView, backCompanies, practiceTitle, difficultySelect, topicInput, practiceSummary, practiceList, statusBox, statusMessage, progress, source, refresh };
+    collapse.addEventListener('click', () => setCollapsed(true));
+    bubble.addEventListener('click', () => setCollapsed(false));
     showCompanies.addEventListener('click', () => {
       companiesExpanded = !companiesExpanded;
       renderCompanies();
@@ -259,6 +268,39 @@
     refresh.addEventListener('click', refreshData);
     updateTheme();
     render();
+  }
+
+  function setCollapsed(collapsed) {
+    if (!view) return;
+    settings.collapsed = collapsed;
+    renderCollapsedState();
+    (collapsed ? view.bubble : view.collapse).focus();
+    api.storage.local.set({ lctSettings: settings }).catch(() => { /* Keep the current session usable. */ });
+  }
+
+  function renderCollapsedState() {
+    if (!view) return;
+    const active = host.shadowRoot.activeElement;
+    const collapsed = Boolean(settings.collapsed);
+    const hadCardFocus = active && view.card.contains(active);
+    const hadBubbleFocus = active === view.bubble;
+    host.toggleAttribute('data-collapsed', collapsed);
+    view.card.hidden = collapsed;
+    view.body.hidden = collapsed;
+    view.bubble.hidden = !collapsed;
+    view.collapse.textContent = '−';
+    view.collapse.setAttribute('aria-expanded', String(!collapsed));
+    view.collapse.setAttribute('aria-label', 'Collapse Company Lens');
+    view.collapse.title = 'Collapse';
+    const knownCount = windowAvailable;
+    const companyCount = `${companies.length} ${companies.length === 1 ? 'company' : 'companies'}`;
+    const countLabel = knownCount ? companyCount : loading || status.phase === 'syncing' ? 'Company count loading' : 'Company count unavailable';
+    const windowLabel = windowLabels[selectedWindow()].toLowerCase();
+    view.bubbleCount.textContent = knownCount ? `${companies.length}+` : '…';
+    view.bubble.setAttribute('aria-label', `Expand Company Lens, ${countLabel} for ${windowLabel}`);
+    view.bubble.title = `${countLabel} · ${windowLabel}${status.phase === 'syncing' ? ' · Updating in the background' : ''}`;
+    if (collapsed && hadCardFocus) view.bubble.focus();
+    else if (!collapsed && hadBubbleFocus) view.collapse.focus();
   }
 
   function unmount() {
@@ -368,6 +410,7 @@
     else view.statusMessage.textContent = loading ? 'Connecting to the company dataset…' : 'Live source · saved locally after sync';
     renderCompanyMessage();
     renderPracticeSummary();
+    renderCollapsedState();
   }
 
   function render() {
@@ -378,11 +421,7 @@
     view.windowSelect.value = selectedWindow();
     view.companyView.hidden = Boolean(practiceCompany);
     view.practiceView.hidden = !practiceCompany;
-    view.body.hidden = settings.collapsed;
-    view.collapse.textContent = settings.collapsed ? '+' : '−';
-    view.collapse.setAttribute('aria-expanded', String(!settings.collapsed));
-    view.collapse.setAttribute('aria-label', settings.collapsed ? 'Expand Company Lens' : 'Collapse Company Lens');
-    view.collapse.title = settings.collapsed ? 'Expand' : 'Collapse';
+    renderCollapsedState();
     renderCompanies();
     renderPractice();
     renderStatus();
@@ -556,6 +595,7 @@
       const previousEnabled = settings.enabled;
       const previousWindow = selectedWindow();
       settings = { ...defaults, ...changes.lctSettings.newValue };
+      renderCollapsedState();
       if (!settings.enabled) { requestId++; unmount(); }
       else checkNavigation(previousEnabled !== settings.enabled);
       if (previousWindow !== selectedWindow()) resetWindow();

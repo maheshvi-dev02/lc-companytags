@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
+import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
 
 // Optional browser verification: uses an existing Playwright installation, never
 // downloads a runtime or adds a production dependency. See output/playwright.
@@ -326,11 +326,15 @@ async function exercise(context, extensionUrl, browserName) {
   await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
   results.push('Panel toggles and external removal reset practice state, filter controls, and pending topic input.');
 
-  await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
-  await host.locator('.body').waitFor({ state: 'hidden' });
-  await host.getByRole('button', { name: 'Expand Company Lens' }).click();
-  await host.locator('.body').waitFor({ state: 'visible' });
-  results.push('Collapse/expand works and storage preference changes propagate.');
+  const collapsedGeometry = await exerciseCollapsedBubble(page, { output, browserName,
+    getCollapsed: () => popup.evaluate(async () => Boolean((await chrome.storage.local.get('lctSettings')).lctSettings?.collapsed)),
+    setCollapsed: (collapsed) => popup.evaluate(async (value) => {
+      const { lctSettings } = await chrome.storage.local.get('lctSettings');
+      await chrome.storage.local.set({ lctSettings: { ...lctSettings, collapsed: value } });
+    }, collapsed),
+  });
+  await writeFile(path.join(output, `${browserName}-collapsed-layout.json`), JSON.stringify(collapsedGeometry, null, 2) + '\n');
+  results.push(collapsedGeometry.check);
 
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await page.waitForFunction(() => document.getElementById('company-lens-root')?.hasAttribute('data-dark'));
@@ -417,7 +421,7 @@ async function chromiumRun() {
     const firstPage = await context.newPage();
     const navigationStartedAt = Date.now();
     await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
-    const firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt });
+    const firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt, output, browserName: 'chromium' });
     await firstPage.screenshot({ path: path.join(output, 'chromium-first-install.png'), fullPage: true, animations: 'disabled' });
     const blockedHosts = await worker.evaluate(async () => Promise.all(
       ['https://api.github.com/', 'https://raw.githubusercontent.com/', 'https://codeload.github.com/'].map(async (url) => {

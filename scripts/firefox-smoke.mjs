@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { makeFixture } from './firefox-fixture.mjs';
-import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
+import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
 
 // Installs and exercises the real Firefox MV3 addon. The default is deterministic:
 // a dead proxy blocks extension requests. The packaged snapshot is verified on a
@@ -158,7 +158,7 @@ try {
   const firstPage = await context.newPage();
   const navigationStartedAt = Date.now();
   await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
-  report.firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt });
+  report.firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt, output, browserName: 'firefox' });
   report.firstInstall.addonInstallationToFirstPanelResultsMs = report.firstInstall.startupToFirstPanelResultsMs - (addonInstallationStartedAt - startupStartedAt);
   await firstPage.screenshot({ path: path.join(output, 'firefox-first-install.png'), fullPage: true, animations: 'disabled' });
   report.checks.push(report.firstInstall.check);
@@ -277,14 +277,15 @@ try {
   await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
   report.checks.push('Practice lists sort by frequency, show scores/ranks, exclude the current problem, and support difficulty/topic/no-match filters.');
 
-  await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
-  await host.locator('.body').waitFor({ state: 'hidden' });
-  await host.getByRole('button', { name: 'Expand Company Lens' }).click();
-  await host.locator('.body').waitFor({ state: 'visible' });
+  report.collapsedGeometry = await exerciseCollapsedBubble(page, { output, browserName: 'firefox',
+    getCollapsed: () => evaluateBackground('return Boolean((await browser.storage.local.get("lctSettings")).lctSettings?.collapsed);'),
+    setCollapsed: (collapsed) => evaluateBackground(`const { lctSettings } = await browser.storage.local.get('lctSettings');
+      await browser.storage.local.set({ lctSettings: { ...lctSettings, collapsed: ${collapsed} } }); return 'changed';`),
+  });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await page.waitForFunction(() => document.getElementById('company-lens-root')?.hasAttribute('data-dark'));
   await page.screenshot({ path: path.join(output, 'firefox-problem.png'), fullPage: true, animations: 'disabled' });
-  report.checks.push('Whole-panel collapse and expand work, and the panel follows the page dark theme.');
+  report.checks.push(report.collapsedGeometry.check + ' The expanded panel follows the page dark theme.');
 
   await host.getByRole('button', { name: 'Show all 7 companies' }).click();
   await page.evaluate(() => history.pushState({}, '', '/problems/add-two-numbers/'));

@@ -64,7 +64,22 @@ export async function exerciseBundledPanel(page, expected, timings) {
   assert.ok(firstMeta.includes(`company rank #${firstQuestion.rank}`));
   assert.equal(await host.locator('.practice-questions a').first().getAttribute('href'), firstQuestion.url);
   await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  let bubblePreview;
+  if (timings.output && timings.browserName) {
+    await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
+    const bubble = host.locator('.collapsed-bubble');
+    await bubble.waitFor({ state: 'visible' });
+    await expectTexts(bubble.locator('.bubble-count'), [`${expected.windows.all.length}+`]);
+    const rectangle = await bubble.boundingBox();
+    assert.equal(rectangle.width, 64); assert.equal(rectangle.height, 64);
+    bubblePreview = path.join(timings.output, `${timings.browserName}-first-install-bubble.png`);
+    await page.screenshot({ path: bubblePreview,
+      clip: { x: rectangle.x - 12, y: rectangle.y - 12, width: 88, height: 88 }, animations: 'disabled' });
+    await bubble.click();
+    await host.locator('.body').waitFor({ state: 'visible' });
+  }
   return {
+    bubblePreview,
     startupToFirstPanelResultsMs: readyAt - timings.startupStartedAt,
     navigationToFirstPanelResultsMs: readyAt - timings.navigationStartedAt,
     sourceUpdatedAt: expected.data.sourceUpdatedAt, commit: expected.data.commit,
@@ -110,4 +125,78 @@ export function assertArchiveResult(result, fixture) {
   assert.equal(result.nativeDeflateRaw, true);
   assert.equal(result.fileCount, fixture.expected.fileCount);
   assert.deepEqual(result.sample, fixture.expected.sample);
+}
+
+export async function exerciseCollapsedBubble(page, { output, browserName, setCollapsed, getCollapsed, expectedCount = 7 }) {
+  const host = page.locator('#company-lens-root');
+  const bubble = host.locator('.collapsed-bubble');
+  const expandedWidth = (await host.boundingBox()).width;
+  assert.ok(expandedWidth > 250, 'Expanded panel must retain its full layout.');
+  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('micro');
+  await expectTexts(host.locator('.company-name'), ['Microsoft']);
+  await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
+  await bubble.waitFor({ state: 'visible' });
+  const assertCollapsed = async () => {
+    const hitbox = await host.boundingBox();
+    const button = await bubble.boundingBox();
+    for (const rectangle of [hitbox, button]) {
+      assert.equal(rectangle.width, 64, 'Collapsed visual and pointer hitbox must both be 64px wide.');
+      assert.equal(rectangle.height, 64, 'Collapsed visual and pointer hitbox must both be 64px high.');
+    }
+    assert.equal(await host.locator('.card').isVisible(), false);
+    assert.equal(await host.locator('.header').isVisible(), false);
+    assert.equal(await host.locator('.brand').isVisible(), false);
+    assert.equal(await host.locator('.body').isVisible(), false);
+    assert.equal(await bubble.locator('.mark').isVisible(), true);
+    assert.equal(await bubble.locator('.bubble-count').textContent(), `${expectedCount}+`, 'Count covers every company, including search-hidden and undisclosed rows.');
+    assert.equal(await bubble.evaluate((node) => node.tagName), 'BUTTON');
+    assert.match(await bubble.getAttribute('aria-label'), /^Expand Company Lens/);
+    assert.equal(await bubble.getAttribute('aria-expanded'), 'false');
+    assert.equal(await bubble.getAttribute('aria-controls'), 'company-lens-body');
+    return { hitbox, button, count: await bubble.locator('.bubble-count').textContent() };
+  };
+  const geometry = await assertCollapsed();
+  await page.screenshot({ path: path.join(output, `${browserName}-collapsed.png`), fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: path.join(output, `${browserName}-collapsed-bubble.png`),
+    clip: { x: geometry.button.x - 12, y: geometry.button.y - 12, width: 88, height: 88 }, animations: 'disabled' });
+  const assertExpanded = async () => {
+    await host.locator('.body').waitFor({ state: 'visible' });
+    assert.equal(await bubble.isVisible(), false);
+    assert.equal((await host.boundingBox()).width, expandedWidth);
+    assert.equal(await host.locator('.header').isVisible(), true);
+    assert.equal(await host.locator('.brand').isVisible(), true);
+  };
+  await bubble.click({ position: { x: 8, y: 8 } }); // Whole button, including space outside the icon/count.
+  await assertExpanded();
+  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('');
+  for (const key of ['Enter', 'Space']) {
+    await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
+    await bubble.waitFor({ state: 'visible' });
+    await bubble.focus();
+    await bubble.press(key);
+    await assertExpanded();
+  }
+  await host.getByRole('button', { name: 'Collapse Company Lens' }).click();
+  await bubble.waitFor({ state: 'visible' });
+  let saved = false;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    saved = await getCollapsed();
+    if (saved) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(saved, true, 'Collapse preference must be saved.');
+  await page.reload();
+  await bubble.waitFor({ state: 'visible' });
+  // Wait for cached problem tags to populate the count after document reload.
+  await expectTexts(bubble.locator('.bubble-count'), [`${expectedCount}+`]);
+  await assertCollapsed();
+  await setCollapsed(false);
+  await assertExpanded();
+  await setCollapsed(true);
+  await bubble.waitFor({ state: 'visible' });
+  await assertCollapsed();
+  await setCollapsed(false);
+  await assertExpanded();
+  return { ...geometry, expandedWidth,
+    check: 'Collapsed panel is a 64px square icon/count button with a matching hitbox; full counts, corner clicks, Enter/Space, saved preference and external setting changes work.' };
 }

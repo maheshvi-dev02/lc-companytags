@@ -24,7 +24,7 @@ Firefox removes temporary extensions when it restarts. For permanent installatio
 
 ## Use
 
-The **Company Lens** panel appears on a problem page. It shows the top five companies by source frequency score; **Show all** expands the list and **Show fewer** restores the compact view. Search includes companies hidden from the preview. You can collapse the whole panel while coding. The toolbar popup provides the same company view, controls whether the panel is shown, and offers **Refresh**.
+The **Company Lens** panel appears on a problem page. It shows the top five companies by source frequency score; **Show all** expands the list and **Show fewer** restores the compact view. Search includes companies hidden from the preview. Collapse the panel while coding to a small square bubble with the lens icon and company count, such as **115+**. Click anywhere on the bubble, or focus it and press Enter/Space, to reopen the full panel. The toolbar popup provides the same company view, controls whether the panel is shown, and offers **Refresh**.
 
 Choose a **Time window**: 30 days, 3 months, 6 months, older than 6 months, or all time. Each company shows its frequency score and the problem's rank within that company's selected list. Tied scores share a rank, and missing scores appear last without an invented value.
 
