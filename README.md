@@ -74,7 +74,7 @@ npm run build
 npm test
 ```
 
-Source lives in `extension/`; `scripts/build.mjs` creates both manifests, unpacked folders and ZIPs using only Node built-ins, with checked-in SVG branding and PNG icon exports. Builds use the checked-in snapshot and do not need network access. Before preparing a new release, run `npm run snapshot` to regenerate it from the latest commit-pinned source archive, then build and test. Snapshot generation validates all five complete windows and creates a provenance/checksum manifest. After rebuilding, reload the extension in the browser and refresh LeetCode.
+Source lives in `extension/`; `scripts/build.mjs` creates both manifests, unpacked folders and ZIPs using only Node built-ins, with checked-in PNG brand icon exports. Builds use the checked-in snapshot and do not need network access. Before preparing a new release, run `npm run snapshot` to regenerate it from the latest commit-pinned source archive, then build and test. Snapshot generation validates all five complete windows and creates a provenance/checksum manifest. After rebuilding, reload the extension in the browser and refresh LeetCode.
 
 Optional checks:
 
@@ -105,4 +105,4 @@ npm run test:firefox
 
 ## Brand assets
 
-The Company Lens mark combines a company tag with a simple office building, representing companies associated with coding interview questions. The editable SVG and 16/32/48/128 px toolbar/store icon exports live in `extension/icons/`; the 512 px PNG is available for larger store artwork. Builds copy these assets directly so the toolbar and popup/explorer headers use the same mark.
+The Company Lens mark combines a company tag with a simple office building, representing companies associated with coding interview questions. The image-generated PNG master, its generation prompt, and 16/32/48/128 px toolbar/store icon exports live in `extension/icons/`; the 512 px PNG is available for larger store artwork. The mark uses a simple building outline without windows or punched tag holes. Builds copy these assets directly so the toolbar and popup/explorer headers use the same mark.
