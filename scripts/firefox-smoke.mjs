@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { makeFixture } from './firefox-fixture.mjs';
+import { exercisePanelLogos, exercisePopupLogos } from './browser-logos.mjs';
 import { firefoxExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
 import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
 
@@ -89,6 +90,10 @@ async function evaluateConsoleRaw(text, consoleActor = backgroundConsole) {
   const request = await rdp.send({ to: consoleActor, type: 'evaluateJSAsync', text });
   const response = await rdp.waitFor((packet) => packet.type === 'evaluationResult' && packet.resultID === request.resultID);
   assert.ok(!response.hasException && !response.topLevelAwaitRejected, response.exceptionMessage || JSON.stringify(response));
+  if (response.result?.type === 'longString') {
+    const value = await rdp.send({ to: response.result.actor, type: 'substring', start: 0, end: response.result.length });
+    return value.substring;
+  }
   return response.result;
 }
 
@@ -164,6 +169,8 @@ try {
   await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
   report.firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt, output, browserName: 'firefox' });
   report.firstInstall.addonInstallationToFirstPanelResultsMs = report.firstInstall.startupToFirstPanelResultsMs - (addonInstallationStartedAt - startupStartedAt);
+  report.firstInstall.logos = await exercisePanelLogos(firstPage, expectedBundle.windows.all);
+  report.checks.push(report.firstInstall.logos.check);
   await firstPage.screenshot({ path: path.join(output, 'firefox-first-install.png'), fullPage: true, animations: 'disabled' });
   report.checks.push(report.firstInstall.check);
   const offlineStatus = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);'));
@@ -187,6 +194,8 @@ try {
   assert.deepEqual(freshPopupObserved.names, expectedBundle.windows.all.slice(0, 5).map(({ name }) => name));
   assert.equal(freshPopupObserved.window, 'all');
   assert.match(freshPopupObserved.note, /Bundled snapshot/i);
+  report.firstInstall.popupLogos = await exercisePopupLogos(firefoxExplorerDriver(source => evaluateConsoleRaw(source, freshPopupTarget.target.consoleActor)), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
+  report.checks.push(report.firstInstall.popupLogos.check);
   report.stage = 'Opening explorer from a popup on an unrelated site';
   const unrelatedPage = await context.newPage();
   await unrelatedPage.goto('https://example.com/');

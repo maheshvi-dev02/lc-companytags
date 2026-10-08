@@ -5,6 +5,7 @@
   globalThis.__companyLensActive = true;
   const api = globalThis.browser || globalThis.chrome;
   const core = globalThis.LCTCore;
+  const logos = globalThis.LCTCompanyLogos;
   const defaults = { enabled: true, collapsed: false, window: 'all' };
   const windowLabels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
   let settings = { ...defaults };
@@ -71,6 +72,16 @@
     .companies a { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid transparent; border-radius:6px; padding:4px 9px; font-size:12px; font-weight:600; color:var(--teal); background:var(--tag); text-decoration:none; overflow-wrap:anywhere; }
     .companies a:hover { border-color:var(--teal); }
     .frequency-score { flex:none; color:var(--muted); font:11px/1.5 Consolas,monospace; font-variant-numeric:tabular-nums; }
+    .company-identity { display:flex; align-items:center; gap:8px; min-width:0; }
+    .company-info { min-width:0; }
+    .company-logo { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; flex:0 0 20px; overflow:hidden; border:1px solid #dfe8eb; border-radius:5px; background:#fff; color:#007b77; }
+    .company-logo-fallback { display:block; color:#3c6463; font:600 10px/1 Consolas,monospace; letter-spacing:-.25px; }
+    .company-logo img { display:none; width:100%; height:100%; padding:2px; object-fit:contain; }
+    .company-logo[data-loaded] img { display:block; }
+    .company-logo[data-loaded] .company-logo-fallback { display:none; }
+    .company-heading { display:flex; align-items:center; gap:9px; min-width:0; }
+    .company-heading h2 { min-width:0; }
+    .company-heading .company-logo { width:24px; height:24px; flex-basis:24px; }
     .company-name, .company-rank { display:block; }
     .company-rank { margin-top:1px; color:var(--muted); font-size:9px; font-weight:400; }
     .practice-company { align-self:stretch; border:1px solid var(--line); border-radius:6px; background:transparent; color:var(--teal); padding:4px 7px; font-size:10px; }
@@ -213,6 +224,8 @@
     const backCompanies = element('button', 'back-companies', '← Back to companies');
     backCompanies.type = 'button';
     const practiceTitle = element('h2', 'practice-title');
+    const practiceHeading = element('div', 'company-heading');
+    practiceHeading.append(practiceTitle);
     const practiceFilters = element('div', 'practice-filters');
     const difficultyLabel = element('label', null, 'Difficulty');
     const difficultySelect = element('select', 'difficulty-select');
@@ -234,13 +247,13 @@
     practiceSummary.setAttribute('role', 'status');
     const practiceList = element('ul', 'practice-questions');
     practiceList.setAttribute('aria-label', 'Practice questions sorted by frequency');
-    practiceView.append(backCompanies, element('p', 'eyebrow', 'Company practice'), practiceTitle, practiceFilters, practiceSummary, practiceList);
+    practiceView.append(backCompanies, element('p', 'eyebrow', 'Company practice'), practiceHeading, practiceFilters, practiceSummary, practiceList);
     body.append(windowFilter, windowNote, exploreDataset, companyView, practiceView, statusBox,
       element('p', 'note', 'Community company reports from liquidslr. Coverage may be incomplete. Company links open the source.'));
     card.append(header, body);
     shadow.append(style, card, bubble);
     document.documentElement.append(host);
-    view = { card, bubble, bubbleCount, body, title, count, badge, collapse, windowSelect, windowNote, companyView, search, searchWrap, frequencyHeading, list, showCompanies, showCompaniesLabel, empty, practiceView, backCompanies, practiceTitle, difficultySelect, topicInput, practiceSummary, practiceList, statusBox, statusMessage, progress, source, refresh };
+    view = { card, bubble, bubbleCount, body, title, count, badge, collapse, windowSelect, windowNote, companyView, search, searchWrap, frequencyHeading, list, showCompanies, showCompaniesLabel, empty, practiceView, backCompanies, practiceTitle, practiceHeading, difficultySelect, topicInput, practiceSummary, practiceList, statusBox, statusMessage, progress, source, refresh };
     collapse.addEventListener('click', () => setCollapsed(true));
     bubble.addEventListener('click', () => setCollapsed(false));
     showCompanies.addEventListener('click', () => {
@@ -370,7 +383,9 @@
       const rank = element('span', 'company-rank', Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}` : 'Rank unavailable');
       rank.title = `This problem’s frequency rank within ${company.name} for ${windowLabels[selectedWindow()].toLowerCase()}. Equal scores share a rank.`;
       companyInfo.append(element('span', 'company-name', company.name), rank);
-      link.append(companyInfo, frequency);
+      const identity = element('span', 'company-identity');
+      identity.append(logos.createBadge(company.name), companyInfo);
+      link.append(identity, frequency);
       link.href = sourceLink(company.sourceUrl);
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -480,6 +495,7 @@
   function renderPractice() {
     if (!view || !practiceCompany) return;
     view.practiceTitle.textContent = practiceCompany;
+    view.practiceHeading.replaceChildren(logos.createBadge(practiceCompany), view.practiceTitle);
     renderPracticeSummary();
     view.practiceList.replaceChildren(...practiceQuestions.map(question => {
       const item = element('li');

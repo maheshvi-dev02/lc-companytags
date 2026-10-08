@@ -1,13 +1,14 @@
 import { readFile, writeFile, mkdir, copyFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { deflateSync, gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
 const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
 const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
 assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');
@@ -19,6 +20,20 @@ for (const window of ['all', '30d', '3m', '6m', 'older']) {
   assert.ok(snapshot.windows[window].available && snapshot.windows[window].companyCount === snapshot.companyCount,
     'The bundled snapshot must include complete company coverage in every window');
 }
+const logoCatalog = createRequire(import.meta.url)(path.join(root, 'extension', 'logo-catalog.js'));
+const logoFiles = new Set(Object.values(logoCatalog));
+assert.ok(logoFiles.size > 0, 'The company logo catalog must include bundled assets');
+for (const filename of logoFiles) {
+  assert.match(filename, /^[a-z0-9]+(?:[-_][a-z0-9]+)*\.(?:svg|png)$/, 'Logo filenames must be local and safe');
+  const bytes = await readFile(path.join(root, 'extension', 'logos', filename));
+  if (filename.endsWith('.png')) {
+    assert.ok(bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])), 'Invalid PNG logo: ' + filename);
+  } else {
+    const svg = bytes.toString('utf8');
+    assert.match(svg, /<svg\b/, 'Invalid SVG logo: ' + filename);
+    assert.ok(!/<\s*(?:script|foreignObject|image|use|iframe|object|embed|style|a)\b|\bon[a-z]+\s*=|\b(?:href|src)\s*=|url\s*\(/i.test(svg), 'Logo SVG must contain only local static graphics: ' + filename);
+  }
+}
 const matches = ['https://leetcode.com/*', 'https://www.leetcode.com/*', 'https://leetcode.cn/*', 'https://www.leetcode.cn/*'];
 const common = {
   manifest_version: 3,
@@ -29,7 +44,8 @@ const common = {
   host_permissions: ['https://api.github.com/*', 'https://raw.githubusercontent.com/*', 'https://codeload.github.com/*', ...matches],
   action: { default_title: 'Company Lens', default_popup: 'popup.html', default_icon: {16:'icons/16.png',32:'icons/32.png'} },
   icons: {16:'icons/16.png',32:'icons/32.png',48:'icons/48.png',128:'icons/128.png'},
-  content_scripts: [{ matches, js: ['core.js', 'content.js'], run_at: 'document_idle' }],
+  content_scripts: [{ matches, js: ['core.js', 'logo-catalog.js', 'company-logos.js', 'content.js'], run_at: 'document_idle' }],
+  web_accessible_resources: [{ resources: ['logos/*.svg', 'logos/*.png'], matches }],
   content_security_policy: {extension_pages: "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com"}
 };
 
@@ -94,6 +110,15 @@ async function zip(directory, output) {
   await writeFile(output,Buffer.concat([...local,cd,end]));
 }
 
+async function copyLogoAssets(source, destination) {
+  await mkdir(destination, { recursive: true });
+  for (const entry of await readdir(source, { withFileTypes: true })) {
+    if (entry.isDirectory()) await copyLogoAssets(path.join(source, entry.name), path.join(destination, entry.name));
+    else if (entry.isFile()) await copyFile(path.join(source, entry.name), path.join(destination, entry.name));
+    else throw new Error('Unsupported logo asset entry: ' + entry.name);
+  }
+}
+
 for (const browser of ['chrome','firefox']) {
   const out = path.join(root,'dist',browser);
   await mkdir(path.join(out,'icons'),{recursive:true});
@@ -101,6 +126,7 @@ for (const browser of ['chrome','firefox']) {
     await mkdir(path.dirname(path.join(out,file)), {recursive:true});
     await copyFile(path.join(root,'extension',file),path.join(out,file));
   }
+  await copyLogoAssets(path.join(root, 'extension', 'logos'), path.join(out, 'logos'));
   for (const size of [16,32,48,128]) await writeFile(path.join(out,'icons',`${size}.png`),icon(size));
   const manifest = structuredClone(common);
   if (browser === 'chrome') {

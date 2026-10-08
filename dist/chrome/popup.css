@@ -42,6 +42,16 @@ h2 { font-size:16px; line-height:1.35; letter-spacing:-.2px; font-weight:650; ma
 .companies a { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--tag); color:var(--teal); font-size:12px; font-weight:600; padding:4px 8px; border:1px solid transparent; border-radius:6px; text-decoration:none; overflow-wrap:anywhere; }
 .companies a:hover { border-color:var(--teal); }
 .frequency-score { flex:none; color:var(--muted); font:11px/1.5 Consolas,monospace; font-variant-numeric:tabular-nums; }
+.company-identity { display:flex; align-items:center; gap:8px; min-width:0; }
+.company-info { min-width:0; }
+.company-logo { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; flex:0 0 20px; overflow:hidden; border:1px solid #dfe8eb; border-radius:5px; background:#fff; color:#007b77; }
+.company-logo-fallback { display:block; color:#3c6463; font:600 10px/1 Consolas,monospace; letter-spacing:-.25px; }
+.company-logo img { display:none; width:100%; height:100%; padding:2px; object-fit:contain; }
+.company-logo[data-loaded] img { display:block; }
+.company-logo[data-loaded] .company-logo-fallback { display:none; }
+.company-heading { display:flex; align-items:center; gap:9px; min-width:0; }
+.company-heading h2 { min-width:0; }
+.company-heading .company-logo { width:24px; height:24px; flex-basis:24px; }
 .company-name,.company-rank { display:block; }
 .company-rank { margin-top:1px; color:var(--muted); font-size:9px; font-weight:400; }
 .practice-company { align-self:stretch; border:1px solid var(--line); border-radius:6px; background:transparent; color:var(--teal); padding:4px 7px; font-size:10px; }

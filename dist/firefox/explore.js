@@ -2,6 +2,7 @@
   'use strict';
   const api = globalThis.browser || globalThis.chrome;
   const core = globalThis.LCTCore;
+  const logos = globalThis.LCTCompanyLogos;
   const $ = id => document.getElementById(id);
   const labels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
   const defaults = { enabled: true, collapsed: false, window: 'all' };
@@ -141,7 +142,8 @@
     row.dataset.company = company.name;
     const info = node('div', 'result-info');
     const button = action('company', company.name, company.name);
-    button.className = 'company-title company-name';
+    button.className = 'company-title';
+    button.replaceChildren(logos.createBadge(company.name), node('span', 'company-name', company.name));
     button.setAttribute('aria-label', `View questions for ${company.name}`);
     button.addEventListener('click', () => openDetail({ kind: 'company', name: company.name, title: company.name, sourceUrl: company.sourceUrl }));
     info.append(button);
@@ -220,6 +222,8 @@
     $('detail-back').textContent = previous ? `← Back to ${previous.title}` : `← Back to ${mode === 'problems' ? 'problem' : 'company'} results`;
     $('detail-kind').textContent = frame.kind === 'problem' ? 'Problem companies' : 'Company questions';
     $('detail-title').textContent = frame.title;
+    $('detail-name').classList.toggle('company-heading', frame.kind === 'company');
+    $('detail-name').replaceChildren(...(frame.kind === 'company' ? [logos.createBadge(frame.name), $('detail-title')] : [$('detail-title')]));
     $('detail-context').textContent = frame.kind === 'problem' ? `${frame.difficulty || 'Difficulty unavailable'} · ${labels[windowKey()].toLowerCase()}` : `Every question listed for ${frame.name} · ${labels[windowKey()].toLowerCase()}`;
     $('detail-filters').hidden = frame.kind !== 'company';
     $('detail-results').setAttribute('aria-label', frame.kind === 'problem' ? 'Companies listed for this problem' : 'Company questions sorted by frequency');

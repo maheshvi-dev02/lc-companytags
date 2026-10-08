@@ -30,6 +30,8 @@ Open **Explore dataset** in the toolbar popup or the problem panel to search the
 
 The small company filter on a problem page searches only that problem’s tags; **Explore dataset** searches the whole collection.
 
+Company logos appear beside names in the panel, popup, explorer and company practice headings. Logos are bundled in the extension and work offline, with no calls to third-party logo services while you browse. Companies without a verified asset, or whose image cannot load, show a small initials badge. The bundled catalog includes 277 verified company logos (103 of the 115 companies listed for Two Sum in the current snapshot). Logo credits and source details are included in `extension/logos/catalog.json`.
+
 Choose a **Time window**: 30 days, 3 months, 6 months, older than 6 months, or all time. Each company shows its frequency score and the problem's rank within that company's selected list. Tied scores share a rank, and missing scores appear last without an invented value.
 
 Use **Practice** beside a company to browse more questions from that company in the selected window, sorted by source frequency. Filter the practice list by difficulty or topic, then follow a question to LeetCode. Rankings refer to the full company list, even when filters are applied.

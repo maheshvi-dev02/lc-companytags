@@ -2,6 +2,7 @@
   'use strict';
   const api = globalThis.browser || globalThis.chrome;
   const core = globalThis.LCTCore;
+  const logos = globalThis.LCTCompanyLogos;
   const $ = id => document.getElementById(id);
   const defaults = { enabled: true, collapsed: false, window: 'all' };
   const windowLabels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
@@ -74,7 +75,10 @@
       rank.textContent = Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}` : 'Rank unavailable';
       rank.title = `This problem’s frequency rank within ${company.name} for ${windowLabels[selectedWindow()].toLowerCase()}. Equal scores share a rank.`;
       companyInfo.append(companyName, rank);
-      link.append(companyInfo, frequency);
+      const identity = document.createElement('span');
+      identity.className = 'company-identity';
+      identity.append(logos.createBadge(company.name), companyInfo);
+      link.append(identity, frequency);
       link.href = safeSource(company.sourceUrl);
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -183,6 +187,7 @@
   function renderPractice() {
     if (!practiceCompany) return;
     $('practice-title').textContent = practiceCompany;
+    $('practice-heading').replaceChildren(logos.createBadge(practiceCompany), $('practice-title'));
     renderPracticeSummary();
     $('practice-questions').replaceChildren(...practiceQuestions.map(question => {
       const item = document.createElement('li');

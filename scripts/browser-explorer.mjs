@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { verifyBadges, exerciseBrokenLogo } from './browser-logos.mjs';
 
 // Both drivers operate the actual packaged document. Firefox extension-process
 // tabs are unavailable to Playwright, so its driver uses Mozilla's DOM console.
@@ -12,6 +13,7 @@ export function chromiumExplorerDriver(page) {
     activateWithKeyboard: async (selector) => { await page.locator(selector).focus(); await page.locator(selector).press('Enter'); },
     mutate: (source) => page.evaluate(source),
     screenshot: (filename) => page.screenshot({ path: filename, fullPage: true, animations: 'disabled' }),
+    setColorScheme: (colorScheme) => page.emulateMedia({ colorScheme }),
     setViewport: (viewport) => page.setViewportSize(viewport),
     viewport: () => page.viewportSize(),
     keyboard: 'Native Chromium keyboard events',
@@ -68,6 +70,7 @@ async function expectSummary(ui, selector, total) {
 
 export async function exerciseExplorer(ui, { data, core, output, browserName }) {
   const checks = [];
+  const logos = {};
   const resultProblems = '#results [data-action="problem"]';
   const resultCompanies = '#results .company-title[data-action="company"]';
   const questionTitles = '#detail-results .question-title';
@@ -116,9 +119,18 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   const expectedTags = core.companiesForSlug(data, 'two-sum', 'all');
   await expectCompanies(expectedTags);
   await expectSummary(ui, '#detail-summary', expectedTags.length);
+  logos.twoSum = await verifyBadges(ui, { selector: '#detail-results .company-title > .company-logo', names: expectedTags.map(company => company.name), label: 'View questions for {name}' });
+  assert.ok(logos.twoSum.initials.length > 0, 'Real unmapped source companies must display initials.');
+  if (ui.setColorScheme) {
+    await ui.setColorScheme('dark');
+    await verifyBadges(ui, { selector: '#detail-results .company-title > .company-logo', names: expectedTags.map(company => company.name) });
+    await ui.setColorScheme('light');
+  }
+  logos.brokenLocalImage = await exerciseBrokenLogo(ui);
   await ui.activateWithKeyboard('#detail-results .company-title[data-company="Amazon"]');
   await expectRead(ui, text('#detail-title'), 'Amazon');
   await expectQuestions(questions('Amazon').questions);
+  logos.amazonHeading = await verifyBadges(ui, { selector: '#detail-name > .company-logo', names: ['Amazon'], size: 24, known: true });
   await ui.activateWithKeyboard('#detail-back');
   await expectRead(ui, text('#detail-title'), 'Two Sum');
   await expectCompanies(expectedTags);
@@ -137,6 +149,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await ui.activateWithKeyboard('#mode-companies');
   await ui.fill('#global-search', 'Acko');
   await expectRead(ui, companyNamesGlobal(), ['Acko']);
+  logos.ackoRow = await verifyBadges(ui, { selector: '#results .company-title > .company-logo', names: ['Acko'], known: true, label: 'View questions for {name}' });
   const acko = core.searchCompanies(data, { query: 'Acko', window: 'all' }).companies[0];
   assert.equal(acko.problemCount, 4);
   assert.equal(expectedTags.some(({ name }) => name === 'Acko'), false);
@@ -144,6 +157,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await expectRead(ui, text('#detail-title'), 'Acko');
   await expectQuestions(questions('Acko').questions);
   await expectSummary(ui, '#detail-summary', 4);
+  logos.ackoHeading = await verifyBadges(ui, { selector: '#detail-name > .company-logo', names: ['Acko'], size: 24, known: true });
   if (ui.screenshot) await ui.screenshot(path.join(output, `${browserName}-explorer-acko.png`));
   if (ui.setViewport) {
     const previousViewport = ui.viewport();
@@ -153,6 +167,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
         const node = document.querySelector(selector); const rect = node.getBoundingClientRect();
         return { selector, left: rect.left, right: rect.right, width: rect.width, height: rect.height };
       }) })`);
+    await verifyBadges(ui, { selector: '#detail-name > .company-logo', names: ['Acko'], size: 24, known: true });
     assert.equal(geometry.width, 375);
     assert.ok(geometry.scrollWidth <= geometry.width, 'Explorer must not require horizontal scrolling on a 375px viewport.');
     for (const control of geometry.controls) {
@@ -202,6 +217,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await ui.click('#load-more');
   const first100Companies = await expectRead(ui, companyNamesGlobal(), companyPage.companies.map(({ name }) => name));
   assert.equal(new Set(first100Companies).size, 100);
+  logos.companySearch = await verifyBadges(ui, { selector: '#results .company-title > .company-logo', names: first100Companies, label: 'View questions for {name}' });
   checks.push('Every window exposes all 470 companies, including zero-question CSVs, and global company paging has no duplicates.');
 
   await ui.fill('#global-search', 'Amazon');
@@ -259,5 +275,6 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await ui.fill('#global-search', '');
   await expectRead(ui, problemSlugs(), core.searchProblems(data, { window: 'all', limit: 50 }).problems.map(({ slug }) => slug));
   checks.push('Rapid query edits, Load more during debounce, window changes and Back navigation keep the latest view; stale responses cannot mix pages or reopen a closed view.');
-  return { checks, coverage, twoSumCompanies: expectedTags.length, ackoQuestions: 4, amazonQuestions: 2011, keyboardVerification: ui.keyboard };
+  checks.push('Explorer decodes local SVG/PNG company logos in real search rows and company headings, preserves accessible names, and shows readable initials when a brand is unmapped or a packaged image fails.');
+  return { checks, logos, coverage, twoSumCompanies: expectedTags.length, ackoQuestions: 4, amazonQuestions: 2011, keyboardVerification: ui.keyboard };
 }

@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { exercisePanelLogos, exercisePopupLogos } from './browser-logos.mjs';
 import { chromiumExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
 import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
 
@@ -423,6 +424,7 @@ async function chromiumRun() {
     const navigationStartedAt = Date.now();
     await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
     const firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt, output, browserName: 'chromium' });
+    firstInstall.logos = await exercisePanelLogos(firstPage, expectedBundle.windows.all);
     await firstPage.screenshot({ path: path.join(output, 'chromium-first-install.png'), fullPage: true, animations: 'disabled' });
     const blockedHosts = await worker.evaluate(async () => Promise.all(
       ['https://api.github.com/', 'https://raw.githubusercontent.com/', 'https://codeload.github.com/'].map(async (url) => {
@@ -445,6 +447,7 @@ async function chromiumRun() {
     assert.equal(offlineStatus.hasData, true);
     assert.equal(offlineStatus.dataSource, 'bundled');
     assert.equal(offlineStatus.commit, expectedBundle.data.commit);
+    firstInstall.popupLogos = await exercisePopupLogos(chromiumExplorerDriver(setupPopup), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
     firstInstall.popup = 'Actual packaged popup displays the same bundled all-time tags and source date.';
     await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
     const unrelatedPage = await context.newPage();
@@ -467,7 +470,7 @@ async function chromiumRun() {
     context = await playwright.chromium.launchPersistentContext(profile, deterministicOptions);
     await prepare(context);
     const { results, errors, popup } = await exercise(context, extensionUrl, 'chromium');
-    results.unshift(firstInstall.check, firstInstall.popup, ...explorer.checks,
+    results.unshift(firstInstall.check, firstInstall.popup, firstInstall.logos.check, firstInstall.popupLogos.check, ...explorer.checks,
       'Native browser deflate-raw decoder extracts every real source archive CSV with CRC and Git blob validation.',
       'GitHub API, raw-file and codeload hosts are blocked in the browser resolver, including extension service-worker requests.');
     assert.deepEqual(errors, [], 'Unexpected page errors');

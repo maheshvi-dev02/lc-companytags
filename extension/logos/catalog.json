@@ -1,0 +1,4404 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "repository": "https://github.com/simple-icons/simple-icons",
+      "license": "CC0-1.0",
+      "archiveSha256": "5cbcc78c80246302e19de399c475430567734e1e47381256d00c88b5469387aa"
+    },
+    {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "repository": "https://github.com/simple-icons/simple-icons",
+      "license": "CC0-1.0",
+      "archiveSha256": "5fc074cb4aea23cd920b899662458cf5fa14b207c22a293924855906958c23c7"
+    }
+  ],
+  "companies": {
+    "accenture": {
+      "name": "Accenture",
+      "asset": "accenture.svg"
+    },
+    "acko": {
+      "name": "Acko",
+      "asset": "acko.png"
+    },
+    "activision": {
+      "name": "Activision",
+      "asset": "activision.svg"
+    },
+    "adobe": {
+      "name": "Adobe",
+      "asset": "adobe.svg"
+    },
+    "affirm": {
+      "name": "Affirm",
+      "asset": "affirm.png"
+    },
+    "agoda": {
+      "name": "Agoda",
+      "asset": "agoda.png"
+    },
+    "airbnb": {
+      "name": "Airbnb",
+      "asset": "airbnb.svg"
+    },
+    "airbus se": {
+      "name": "Airbus SE",
+      "asset": "airbus.svg"
+    },
+    "airtel": {
+      "name": "Airtel",
+      "asset": "airtel.svg"
+    },
+    "airwallex": {
+      "name": "Airwallex",
+      "asset": "airwallex.png"
+    },
+    "akamai": {
+      "name": "Akamai",
+      "asset": "akamai.svg"
+    },
+    "altimetrik": {
+      "name": "Altimetrik",
+      "asset": "altimetrik.png"
+    },
+    "amadeus": {
+      "name": "Amadeus",
+      "asset": "amadeus.png"
+    },
+    "amazon": {
+      "name": "Amazon",
+      "asset": "amazon.svg"
+    },
+    "amd": {
+      "name": "AMD",
+      "asset": "amd.svg"
+    },
+    "amdocs": {
+      "name": "Amdocs",
+      "asset": "amdocs.png"
+    },
+    "american express": {
+      "name": "American Express",
+      "asset": "americanexpress.svg"
+    },
+    "anduril": {
+      "name": "Anduril",
+      "asset": "anduril.png"
+    },
+    "aon": {
+      "name": "Aon",
+      "asset": "aon.png"
+    },
+    "apollo.io": {
+      "name": "Apollo.io",
+      "asset": "apolloio.png"
+    },
+    "appfolio": {
+      "name": "AppFolio",
+      "asset": "appfolio.png"
+    },
+    "apple": {
+      "name": "Apple",
+      "asset": "apple.svg"
+    },
+    "arista networks": {
+      "name": "Arista Networks",
+      "asset": "aristanetworks.png"
+    },
+    "asana": {
+      "name": "Asana",
+      "asset": "asana.svg"
+    },
+    "atlassian": {
+      "name": "Atlassian",
+      "asset": "atlassian.svg"
+    },
+    "audible": {
+      "name": "Audible",
+      "asset": "audible.svg"
+    },
+    "autodesk": {
+      "name": "Autodesk",
+      "asset": "autodesk.svg"
+    },
+    "avalara": {
+      "name": "Avalara",
+      "asset": "avalara.png"
+    },
+    "baidu": {
+      "name": "Baidu",
+      "asset": "baidu.svg"
+    },
+    "bank of america": {
+      "name": "Bank of America",
+      "asset": "bankofamerica.svg"
+    },
+    "barclays": {
+      "name": "Barclays",
+      "asset": "barclays.svg"
+    },
+    "blackrock": {
+      "name": "BlackRock",
+      "asset": "blackrock.png"
+    },
+    "blackstone": {
+      "name": "BlackStone",
+      "asset": "blackstone.png"
+    },
+    "blizzard": {
+      "name": "Blizzard",
+      "asset": "blizzard.png"
+    },
+    "block": {
+      "name": "Block",
+      "asset": "block.png"
+    },
+    "bloomberg": {
+      "name": "Bloomberg",
+      "asset": "bloomberg.png"
+    },
+    "bosch": {
+      "name": "Bosch",
+      "asset": "bosch.svg"
+    },
+    "box": {
+      "name": "Box",
+      "asset": "box.svg"
+    },
+    "braze": {
+      "name": "Braze",
+      "asset": "braze.png"
+    },
+    "brex": {
+      "name": "Brex",
+      "asset": "brex.svg"
+    },
+    "bytedance": {
+      "name": "ByteDance",
+      "asset": "bytedance.svg"
+    },
+    "canonical": {
+      "name": "Canonical",
+      "asset": "canonical.svg"
+    },
+    "capgemini": {
+      "name": "Capgemini",
+      "asset": "capgemini.png"
+    },
+    "capital one": {
+      "name": "Capital One",
+      "asset": "capitalone.png"
+    },
+    "chewy": {
+      "name": "Chewy",
+      "asset": "chewy.png"
+    },
+    "cisco": {
+      "name": "Cisco",
+      "asset": "cisco.svg"
+    },
+    "citigroup": {
+      "name": "Citigroup",
+      "asset": "citigroup.png"
+    },
+    "citrix": {
+      "name": "Citrix",
+      "asset": "citrix.svg"
+    },
+    "cloudera": {
+      "name": "Cloudera",
+      "asset": "cloudera.svg"
+    },
+    "cloudflare": {
+      "name": "Cloudflare",
+      "asset": "cloudflare.svg"
+    },
+    "cognizant": {
+      "name": "Cognizant",
+      "asset": "cognizant.svg"
+    },
+    "coinbase": {
+      "name": "Coinbase",
+      "asset": "coinbase.svg"
+    },
+    "comcast": {
+      "name": "Comcast",
+      "asset": "comcast.png"
+    },
+    "confluent": {
+      "name": "Confluent",
+      "asset": "confluent.png"
+    },
+    "coursera": {
+      "name": "Coursera",
+      "asset": "coursera.svg"
+    },
+    "cred": {
+      "name": "CRED",
+      "asset": "cred.png"
+    },
+    "credit karma": {
+      "name": "Credit Karma",
+      "asset": "creditkarma.png"
+    },
+    "criteo": {
+      "name": "Criteo",
+      "asset": "criteo.png"
+    },
+    "crowdstrike": {
+      "name": "CrowdStrike",
+      "asset": "crowdstrike.png"
+    },
+    "databricks": {
+      "name": "Databricks",
+      "asset": "databricks.svg"
+    },
+    "datadog": {
+      "name": "Datadog",
+      "asset": "datadog.svg"
+    },
+    "de shaw": {
+      "name": "DE Shaw",
+      "asset": "deshaw.png"
+    },
+    "delhivery": {
+      "name": "Delhivery",
+      "asset": "delhivery.png"
+    },
+    "deliveroo": {
+      "name": "Deliveroo",
+      "asset": "deliveroo.svg"
+    },
+    "dell": {
+      "name": "Dell",
+      "asset": "dell.svg"
+    },
+    "deloitte": {
+      "name": "Deloitte",
+      "asset": "deloitte.png"
+    },
+    "deutsche bank": {
+      "name": "Deutsche Bank",
+      "asset": "deutschebank.svg"
+    },
+    "devsinc": {
+      "name": "Devsinc",
+      "asset": "devsinc.png"
+    },
+    "disney": {
+      "name": "Disney",
+      "asset": "disney.png"
+    },
+    "docusign": {
+      "name": "Docusign",
+      "asset": "docusign.svg"
+    },
+    "doordash": {
+      "name": "DoorDash",
+      "asset": "doordash.svg"
+    },
+    "dropbox": {
+      "name": "Dropbox",
+      "asset": "dropbox.svg"
+    },
+    "druva": {
+      "name": "Druva",
+      "asset": "druva.png"
+    },
+    "dunzo": {
+      "name": "Dunzo",
+      "asset": "dunzo.svg"
+    },
+    "duolingo": {
+      "name": "Duolingo",
+      "asset": "duolingo.svg"
+    },
+    "dxc technology": {
+      "name": "DXC Technology",
+      "asset": "dxctechnology.png"
+    },
+    "ebay": {
+      "name": "eBay",
+      "asset": "ebay.svg"
+    },
+    "electronic arts": {
+      "name": "Electronic Arts",
+      "asset": "ea.svg"
+    },
+    "epic systems": {
+      "name": "Epic Systems",
+      "asset": "epicsystems.png"
+    },
+    "expedia": {
+      "name": "Expedia",
+      "asset": "expedia.svg"
+    },
+    "ey": {
+      "name": "EY",
+      "asset": "ey.png"
+    },
+    "factset": {
+      "name": "FactSet",
+      "asset": "factset.png"
+    },
+    "fidelity": {
+      "name": "Fidelity",
+      "asset": "fidelity.png"
+    },
+    "fiverr": {
+      "name": "Fiverr",
+      "asset": "fiverr.svg"
+    },
+    "flexport": {
+      "name": "Flexport",
+      "asset": "flexport.png"
+    },
+    "flipkart": {
+      "name": "Flipkart",
+      "asset": "flipkart.svg"
+    },
+    "fortinet": {
+      "name": "Fortinet",
+      "asset": "fortinet.svg"
+    },
+    "freshworks": {
+      "name": "FreshWorks",
+      "asset": "freshworks.png"
+    },
+    "garmin": {
+      "name": "Garmin",
+      "asset": "garmin.svg"
+    },
+    "ge healthcare": {
+      "name": "GE Healthcare",
+      "asset": "gehealthcare.png"
+    },
+    "geico": {
+      "name": "Geico",
+      "asset": "geico.png"
+    },
+    "general motors": {
+      "name": "General Motors",
+      "asset": "generalmotors.svg"
+    },
+    "genpact": {
+      "name": "Genpact",
+      "asset": "genpact.png"
+    },
+    "godaddy": {
+      "name": "GoDaddy",
+      "asset": "godaddy.svg"
+    },
+    "gojek": {
+      "name": "Gojek",
+      "asset": "gojek.svg"
+    },
+    "goldman sachs": {
+      "name": "Goldman Sachs",
+      "asset": "goldmansachs.svg"
+    },
+    "google": {
+      "name": "Google",
+      "asset": "google.svg"
+    },
+    "grab": {
+      "name": "Grab",
+      "asset": "grab.svg"
+    },
+    "grammarly": {
+      "name": "Grammarly",
+      "asset": "grammarly.svg"
+    },
+    "groupon": {
+      "name": "Groupon",
+      "asset": "groupon.svg"
+    },
+    "groww": {
+      "name": "Groww",
+      "asset": "groww.png"
+    },
+    "grubhub": {
+      "name": "Grubhub",
+      "asset": "grubhub.svg"
+    },
+    "gusto": {
+      "name": "Gusto",
+      "asset": "gusto.svg"
+    },
+    "hcl": {
+      "name": "HCL",
+      "asset": "hcl.svg"
+    },
+    "honeywell": {
+      "name": "Honeywell",
+      "asset": "honeywell.svg"
+    },
+    "houzz": {
+      "name": "Houzz",
+      "asset": "houzz.svg"
+    },
+    "hp": {
+      "name": "HP",
+      "asset": "hp.svg"
+    },
+    "hsbc": {
+      "name": "HSBC",
+      "asset": "hsbc.svg"
+    },
+    "huawei": {
+      "name": "Huawei",
+      "asset": "huawei.svg"
+    },
+    "hubspot": {
+      "name": "Hubspot",
+      "asset": "hubspot.svg"
+    },
+    "ibm": {
+      "name": "IBM",
+      "asset": "ibm.svg"
+    },
+    "indeed": {
+      "name": "Indeed",
+      "asset": "indeed.svg"
+    },
+    "informatica": {
+      "name": "Informatica",
+      "asset": "informatica.svg"
+    },
+    "infosys": {
+      "name": "Infosys",
+      "asset": "infosys.svg"
+    },
+    "inmobi": {
+      "name": "InMobi",
+      "asset": "inmobi.png"
+    },
+    "instacart": {
+      "name": "Instacart",
+      "asset": "instacart.svg"
+    },
+    "intel": {
+      "name": "Intel",
+      "asset": "intel.svg"
+    },
+    "intuit": {
+      "name": "Intuit",
+      "asset": "intuit.svg"
+    },
+    "j.p. morgan": {
+      "name": "J.P. Morgan",
+      "asset": "jpmorgan.png"
+    },
+    "jio": {
+      "name": "jio",
+      "asset": "jio.svg"
+    },
+    "juniper networks": {
+      "name": "Juniper Networks",
+      "asset": "junipernetworks.svg"
+    },
+    "juspay": {
+      "name": "Juspay",
+      "asset": "juspay.png"
+    },
+    "kakao": {
+      "name": "Kakao",
+      "asset": "kakao.svg"
+    },
+    "kla": {
+      "name": "KLA",
+      "asset": "kla.png"
+    },
+    "line": {
+      "name": "LINE",
+      "asset": "line.svg"
+    },
+    "linkedin": {
+      "name": "LinkedIn",
+      "asset": "linkedin.svg"
+    },
+    "lowe's": {
+      "name": "Lowe's",
+      "asset": "lowes.png"
+    },
+    "luxoft": {
+      "name": "Luxoft",
+      "asset": "luxoft.png"
+    },
+    "lyft": {
+      "name": "Lyft",
+      "asset": "lyft.svg"
+    },
+    "mapbox": {
+      "name": "Mapbox",
+      "asset": "mapbox.svg"
+    },
+    "mastercard": {
+      "name": "Mastercard",
+      "asset": "mastercard.svg"
+    },
+    "mathworks": {
+      "name": "MathWorks",
+      "asset": "mathworks.png"
+    },
+    "mckinsey": {
+      "name": "McKinsey",
+      "asset": "mckinsey.png"
+    },
+    "meesho": {
+      "name": "Meesho",
+      "asset": "meesho.png"
+    },
+    "mercari": {
+      "name": "Mercari",
+      "asset": "mercari.png"
+    },
+    "meta": {
+      "name": "Meta",
+      "asset": "meta.svg"
+    },
+    "microsoft": {
+      "name": "Microsoft",
+      "asset": "microsoft.svg"
+    },
+    "microstrategy": {
+      "name": "Microstrategy",
+      "asset": "microstrategy.svg"
+    },
+    "miro": {
+      "name": "Miro",
+      "asset": "miro.svg"
+    },
+    "mixpanel": {
+      "name": "Mixpanel",
+      "asset": "mixpanel.svg"
+    },
+    "mobileye": {
+      "name": "Mobileye",
+      "asset": "mobileye.png"
+    },
+    "mongodb": {
+      "name": "MongoDB",
+      "asset": "mongodb.svg"
+    },
+    "morgan stanley": {
+      "name": "Morgan Stanley",
+      "asset": "morganstanley.png"
+    },
+    "msci": {
+      "name": "MSCI",
+      "asset": "msci.png"
+    },
+    "myntra": {
+      "name": "Myntra",
+      "asset": "myntra.png"
+    },
+    "nagarro": {
+      "name": "Nagarro",
+      "asset": "nagarro.png"
+    },
+    "national instruments": {
+      "name": "National Instruments",
+      "asset": "nationalinstruments.png"
+    },
+    "netapp": {
+      "name": "NetApp",
+      "asset": "netapp.svg"
+    },
+    "netease": {
+      "name": "NetEase",
+      "asset": "netease.png"
+    },
+    "netflix": {
+      "name": "Netflix",
+      "asset": "netflix.svg"
+    },
+    "netskope": {
+      "name": "Netskope",
+      "asset": "netskope.png"
+    },
+    "nextdoor": {
+      "name": "Nextdoor",
+      "asset": "nextdoor.svg"
+    },
+    "niantic": {
+      "name": "Niantic",
+      "asset": "niantic.svg"
+    },
+    "nielsen": {
+      "name": "Nielsen",
+      "asset": "nielsen.png"
+    },
+    "nike": {
+      "name": "Nike",
+      "asset": "nike.svg"
+    },
+    "nokia": {
+      "name": "Nokia",
+      "asset": "nokia.svg"
+    },
+    "notion": {
+      "name": "Notion",
+      "asset": "notion.svg"
+    },
+    "nutanix": {
+      "name": "Nutanix",
+      "asset": "nutanix.svg"
+    },
+    "nvidia": {
+      "name": "Nvidia",
+      "asset": "nvidia.svg"
+    },
+    "odoo": {
+      "name": "Odoo",
+      "asset": "odoo.svg"
+    },
+    "okta": {
+      "name": "Okta",
+      "asset": "okta.svg"
+    },
+    "okx": {
+      "name": "OKX",
+      "asset": "okx.svg"
+    },
+    "openai": {
+      "name": "OpenAI",
+      "asset": "openai.svg"
+    },
+    "opentext": {
+      "name": "opentext",
+      "asset": "opentext.svg"
+    },
+    "oracle": {
+      "name": "Oracle",
+      "asset": "oracle.svg"
+    },
+    "otter.ai": {
+      "name": "Otter.ai",
+      "asset": "otterai.png"
+    },
+    "oyo": {
+      "name": "oyo",
+      "asset": "oyo.svg"
+    },
+    "palantir technologies": {
+      "name": "Palantir Technologies",
+      "asset": "palantir.svg"
+    },
+    "palo alto networks": {
+      "name": "Palo Alto Networks",
+      "asset": "paloaltonetworks.svg"
+    },
+    "patreon": {
+      "name": "Patreon",
+      "asset": "patreon.svg"
+    },
+    "paycom": {
+      "name": "Paycom",
+      "asset": "paycom.png"
+    },
+    "paypal": {
+      "name": "PayPal",
+      "asset": "paypal.svg"
+    },
+    "paypay": {
+      "name": "PayPay",
+      "asset": "paypay.png"
+    },
+    "paytm": {
+      "name": "Paytm",
+      "asset": "paytm.svg"
+    },
+    "payu": {
+      "name": "PayU",
+      "asset": "payu.png"
+    },
+    "peloton": {
+      "name": "Peloton",
+      "asset": "peloton.svg"
+    },
+    "persistent systems": {
+      "name": "persistent systems",
+      "asset": "persistentsystems.png"
+    },
+    "phonepe": {
+      "name": "PhonePe",
+      "asset": "phonepe.svg"
+    },
+    "pinterest": {
+      "name": "Pinterest",
+      "asset": "pinterest.svg"
+    },
+    "postmates": {
+      "name": "Postmates",
+      "asset": "postmates.svg"
+    },
+    "publicis sapient": {
+      "name": "Publicis Sapient",
+      "asset": "publicissapient.png"
+    },
+    "pwc": {
+      "name": "Pwc",
+      "asset": "pwc.png"
+    },
+    "qualcomm": {
+      "name": "Qualcomm",
+      "asset": "qualcomm.svg"
+    },
+    "qualtrics": {
+      "name": "Qualtrics",
+      "asset": "qualtrics.svg"
+    },
+    "quora": {
+      "name": "Quora",
+      "asset": "quora.svg"
+    },
+    "rakuten": {
+      "name": "Rakuten",
+      "asset": "rakuten.svg"
+    },
+    "razorpay": {
+      "name": "razorpay",
+      "asset": "razorpay.svg"
+    },
+    "rbc": {
+      "name": "RBC",
+      "asset": "rbc.png"
+    },
+    "reddit": {
+      "name": "Reddit",
+      "asset": "reddit.svg"
+    },
+    "remitly": {
+      "name": "Remitly",
+      "asset": "remitly.png"
+    },
+    "revolut": {
+      "name": "Revolut",
+      "asset": "revolut.svg"
+    },
+    "riot games": {
+      "name": "Riot Games",
+      "asset": "riotgames.svg"
+    },
+    "ripple": {
+      "name": "Ripple",
+      "asset": "ripple.svg"
+    },
+    "rippling": {
+      "name": "Rippling",
+      "asset": "rippling.png"
+    },
+    "rivian": {
+      "name": "Rivian",
+      "asset": "rivian.png"
+    },
+    "robinhood": {
+      "name": "Robinhood",
+      "asset": "robinhood.svg"
+    },
+    "roblox": {
+      "name": "Roblox",
+      "asset": "roblox.svg"
+    },
+    "roche": {
+      "name": "Roche",
+      "asset": "roche.png"
+    },
+    "roku": {
+      "name": "Roku",
+      "asset": "roku.svg"
+    },
+    "salesforce": {
+      "name": "Salesforce",
+      "asset": "salesforce.svg"
+    },
+    "samsara": {
+      "name": "Samsara",
+      "asset": "samsara.png"
+    },
+    "samsung": {
+      "name": "Samsung",
+      "asset": "samsung.svg"
+    },
+    "sap": {
+      "name": "SAP",
+      "asset": "sap.svg"
+    },
+    "sentry": {
+      "name": "Sentry",
+      "asset": "sentry.svg"
+    },
+    "servicenow": {
+      "name": "ServiceNow",
+      "asset": "servicenow.png"
+    },
+    "shopee": {
+      "name": "Shopee",
+      "asset": "shopee.svg"
+    },
+    "shopify": {
+      "name": "Shopify",
+      "asset": "shopify.svg"
+    },
+    "siemens": {
+      "name": "Siemens",
+      "asset": "siemens.svg"
+    },
+    "smartsheet": {
+      "name": "Smartsheet",
+      "asset": "smartsheet.png"
+    },
+    "snowflake": {
+      "name": "Snowflake",
+      "asset": "snowflake.svg"
+    },
+    "sofi": {
+      "name": "SoFi",
+      "asset": "sofi.png"
+    },
+    "sony": {
+      "name": "Sony",
+      "asset": "sony.svg"
+    },
+    "splunk": {
+      "name": "Splunk",
+      "asset": "splunk.svg"
+    },
+    "spotify": {
+      "name": "Spotify",
+      "asset": "spotify.svg"
+    },
+    "sprinklr": {
+      "name": "Sprinklr",
+      "asset": "sprinklr.png"
+    },
+    "squarespace": {
+      "name": "Squarespace",
+      "asset": "squarespace.svg"
+    },
+    "stripe": {
+      "name": "Stripe",
+      "asset": "stripe.svg"
+    },
+    "sumo logic": {
+      "name": "Sumo Logic",
+      "asset": "sumologic.svg"
+    },
+    "swiggy": {
+      "name": "Swiggy",
+      "asset": "swiggy.svg"
+    },
+    "synopsys": {
+      "name": "Synopsys",
+      "asset": "synopsys.png"
+    },
+    "target": {
+      "name": "Target",
+      "asset": "target.svg"
+    },
+    "tcs": {
+      "name": "tcs",
+      "asset": "tcs.svg"
+    },
+    "tech mahindra": {
+      "name": "Tech Mahindra",
+      "asset": "techmahindra.png"
+    },
+    "tekion": {
+      "name": "Tekion",
+      "asset": "tekion.png"
+    },
+    "teradata": {
+      "name": "Teradata",
+      "asset": "teradata.svg"
+    },
+    "tesco": {
+      "name": "Tesco",
+      "asset": "tesco.svg"
+    },
+    "tesla": {
+      "name": "Tesla",
+      "asset": "tesla.svg"
+    },
+    "texas instruments": {
+      "name": "Texas Instruments",
+      "asset": "texasinstruments.png"
+    },
+    "thomson reuters": {
+      "name": "Thomson Reuters",
+      "asset": "thomsonreuters.png"
+    },
+    "thoughtspot": {
+      "name": "thoughtspot",
+      "asset": "thoughtspot.png"
+    },
+    "thoughtworks": {
+      "name": "ThoughtWorks",
+      "asset": "thoughtworks.png"
+    },
+    "tiger analytics": {
+      "name": "Tiger Analytics",
+      "asset": "tigeranalytics.png"
+    },
+    "tiktok": {
+      "name": "TikTok",
+      "asset": "tiktok.svg"
+    },
+    "tinder": {
+      "name": "Tinder",
+      "asset": "tinder.svg"
+    },
+    "toast": {
+      "name": "Toast",
+      "asset": "toast.png"
+    },
+    "toptal": {
+      "name": "Toptal",
+      "asset": "toptal.svg"
+    },
+    "tripadvisor": {
+      "name": "Tripadvisor",
+      "asset": "tripadvisor.svg"
+    },
+    "turing": {
+      "name": "Turing",
+      "asset": "turing.png"
+    },
+    "twilio": {
+      "name": "Twilio",
+      "asset": "twilio.svg"
+    },
+    "twitch": {
+      "name": "Twitch",
+      "asset": "twitch.svg"
+    },
+    "two sigma": {
+      "name": "Two Sigma",
+      "asset": "twosigma.png"
+    },
+    "uber": {
+      "name": "Uber",
+      "asset": "uber.svg"
+    },
+    "uipath": {
+      "name": "UiPath",
+      "asset": "uipath.svg"
+    },
+    "ukg": {
+      "name": "UKG",
+      "asset": "ukg.png"
+    },
+    "unity": {
+      "name": "Unity",
+      "asset": "unity.svg"
+    },
+    "usaa": {
+      "name": "USAA",
+      "asset": "usaa.png"
+    },
+    "valve": {
+      "name": "Valve",
+      "asset": "valve.svg"
+    },
+    "vanguard": {
+      "name": "Vanguard",
+      "asset": "vanguard.png"
+    },
+    "veeva systems": {
+      "name": "Veeva Systems",
+      "asset": "veevasystems.png"
+    },
+    "veritas": {
+      "name": "Veritas",
+      "asset": "veritas.svg"
+    },
+    "verkada": {
+      "name": "Verkada",
+      "asset": "verkada.png"
+    },
+    "vimeo": {
+      "name": "Vimeo",
+      "asset": "vimeo.svg"
+    },
+    "virtusa": {
+      "name": "Virtusa",
+      "asset": "virtusa.png"
+    },
+    "visa": {
+      "name": "Visa",
+      "asset": "visa.svg"
+    },
+    "vk": {
+      "name": "VK",
+      "asset": "vk.svg"
+    },
+    "vmware": {
+      "name": "VMware",
+      "asset": "vmware.svg"
+    },
+    "walmart labs": {
+      "name": "Walmart Labs",
+      "asset": "walmart.svg"
+    },
+    "wayfair": {
+      "name": "Wayfair",
+      "asset": "wayfair.png"
+    },
+    "waymo": {
+      "name": "Waymo",
+      "asset": "waymo.png"
+    },
+    "wells fargo": {
+      "name": "Wells Fargo",
+      "asset": "wellsfargo.svg"
+    },
+    "western digital": {
+      "name": "Western Digital",
+      "asset": "westerndigital.svg"
+    },
+    "wipro": {
+      "name": "Wipro",
+      "asset": "wipro.svg"
+    },
+    "wise": {
+      "name": "Wise",
+      "asset": "wise.svg"
+    },
+    "wish": {
+      "name": "Wish",
+      "asset": "wish.svg"
+    },
+    "wix": {
+      "name": "Wix",
+      "asset": "wix.svg"
+    },
+    "workday": {
+      "name": "Workday",
+      "asset": "workday.png"
+    },
+    "yahoo": {
+      "name": "Yahoo",
+      "asset": "yahoo.png"
+    },
+    "yandex": {
+      "name": "Yandex",
+      "asset": "yandex.png"
+    },
+    "yelp": {
+      "name": "Yelp",
+      "asset": "yelp.svg"
+    },
+    "zalando": {
+      "name": "Zalando",
+      "asset": "zalando.svg"
+    },
+    "zendesk": {
+      "name": "Zendesk",
+      "asset": "zendesk.svg"
+    },
+    "zillow": {
+      "name": "Zillow",
+      "asset": "zillow.svg"
+    },
+    "ziprecruiter": {
+      "name": "ZipRecruiter",
+      "asset": "ziprecruiter.png"
+    },
+    "zoho": {
+      "name": "Zoho",
+      "asset": "zoho.svg"
+    },
+    "zomato": {
+      "name": "Zomato",
+      "asset": "zomato.svg"
+    },
+    "zoom": {
+      "name": "Zoom",
+      "asset": "zoom.svg"
+    },
+    "zscaler": {
+      "name": "ZScaler",
+      "asset": "zscaler.png"
+    }
+  },
+  "assets": {
+    "accenture.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Accenture",
+      "brandSourceUrl": "https://www.accenture.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/accenture.svg",
+      "license": "CC0-1.0",
+      "sha256": "7a1e7ab0f56e1782268d3d3c1ad955883ce7da8f4ccf52ba030ef81689dfb118"
+    },
+    "acko.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Acko",
+      "website": "https://www.acko.com/",
+      "pageUrl": "https://www.acko.com/",
+      "pageTitle": "ACKO Insurance | Buy Car, Bike, Health, Term & Travel Insurance Online",
+      "assetSourceUrl": "https://www.acko.com/favicon.ico",
+      "sourceSha256": "b99ac3ffd564f5eb21bbcd73b7dd306e9bc92cd8654da76b8ac9923ddb320863",
+      "retrievedAt": "2026-10-08T07:50:23.056627Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8a65816c05d699871261d440e9e5af37fb03e68297dd8e579bf06a788eb84a49"
+    },
+    "activision.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Activision",
+      "brandSourceUrl": "https://www.activision.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/activision.svg",
+      "license": "CC0-1.0",
+      "sha256": "9971a89b49b6f78087562e26e845a57a159d0e9a66f83123254b0757ad12d9d1"
+    },
+    "adobe.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Adobe",
+      "brandSourceUrl": "https://www.adobe.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/adobe.svg",
+      "license": "CC0-1.0",
+      "sha256": "66d725b677fd6563eebaea978a029151f5bdec5e7394d0b14ca796399922c22b",
+      "guidelines": "https://developer.adobe.com/developer-distribution/creative-cloud/docs/guides/branding_guidelines"
+    },
+    "affirm.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Affirm",
+      "website": "https://www.affirm.com/",
+      "pageUrl": "https://www.affirm.com/",
+      "pageTitle": "Affirm | Pay over time with flexible payment plans and no fees",
+      "assetSourceUrl": "https://www.affirm.com/favicon.ico",
+      "sourceSha256": "d90b53d7dc992e18a585d6c3d2a071060a1fbe3e58d889c7a4d8839f389be313",
+      "retrievedAt": "2026-10-08T07:50:23.061230Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "69db0b17048ba5679c36e176b28d83054928f68a601d3904902decf71cb9a868"
+    },
+    "agoda.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Agoda",
+      "website": "https://www.agoda.com/",
+      "pageUrl": "https://www.agoda.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.agoda.com/favicon.ico",
+      "sourceSha256": "512e8c3a492200bf51ec013f94e11fea3eac9f691124543bd3dd57e4bb6f868b",
+      "retrievedAt": "2026-10-08T07:50:23.082116Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8e70410928f4abdd3d5d305d0acda5d4a84a74d012e1da1f466e3bb7a1178971"
+    },
+    "airbnb.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Airbnb",
+      "brandSourceUrl": "https://www.airbnb.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/airbnb.svg",
+      "license": "CC0-1.0",
+      "sha256": "5f053e564535069e949802138dbf1e10367fdc5891a87dff6f2e8c1af4c63ee8"
+    },
+    "airbus.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Airbus",
+      "brandSourceUrl": "https://brand.airbus.com/en/asset-library/airbus-logo",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/airbus.svg",
+      "license": "CC0-1.0",
+      "sha256": "3efe1012b7352ffafa59eccb678284fc632f8d67c1eb0dae92d6c629dcf00ec0",
+      "guidelines": "https://brand.airbus.com/en/asset-library/airbus-logo"
+    },
+    "airtel.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Airtel",
+      "brandSourceUrl": "https://www.airtel.in/logo-tune",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/airtel.svg",
+      "license": "CC0-1.0",
+      "sha256": "b94f03cb09eadbc77e547fdddd0873310075601d1af8bd1e3d746e079ded948f"
+    },
+    "airwallex.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Airwallex",
+      "website": "https://www.airwallex.com/",
+      "pageUrl": "https://www.airwallex.com/global",
+      "pageTitle": "Airwallex: Trusted Global Payments & Financial Platform",
+      "assetSourceUrl": "https://www.airwallex.com/favicon.ico",
+      "sourceSha256": "0bfcf07de6095340c6926dd464d13bc6b856dcb35d7fcbb5ae55a64c20f24345",
+      "retrievedAt": "2026-10-08T07:50:23.296994Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "3a5dcd8180e7d4e4973bee5e9ffd71fb855e42cae9aa54ea4db50e2e931a16f9"
+    },
+    "akamai.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Akamai",
+      "brandSourceUrl": "https://www.akamai.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/akamai.svg",
+      "license": "CC0-1.0",
+      "sha256": "2815fd1c60c22fc6ad573edefffce0fdd13a4e3a4cca4430608689c507127f17"
+    },
+    "altimetrik.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Altimetrik",
+      "website": "https://www.altimetrik.com/",
+      "pageUrl": "https://www.altimetrik.com/",
+      "pageTitle": "AI Native Engineering | Building What’s Next | Altimetrik",
+      "assetSourceUrl": "https://www.altimetrik.com/storage/2026/06/cropped-Favicon-icon-512x512-1-32x32.webp",
+      "sourceSha256": "6906562dd845e1e8fee6f1c5d0e3511e42bcddd8b1934d54e4d3b1235bc6324a",
+      "retrievedAt": "2026-10-08T07:50:25.229384Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "e342ae7d1e89e7a386eb7fcf6386cb1c78074e563406275cbe91e7280d5044d9"
+    },
+    "amadeus.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Amadeus",
+      "website": "https://amadeus.com/",
+      "pageUrl": "https://amadeus.com/en",
+      "pageTitle": "Amadeus | It’s how travel works.",
+      "assetSourceUrl": "https://amadeus.com/etc.clientlibs/amadeuswebevo/clientlibs/clientlib-base/resources/icons/amadeus-favicon-16x16.png",
+      "sourceSha256": "ca21c487ac911f2e870259c4b79bdb584991b23dcb17ec10035c47e9d4072793",
+      "retrievedAt": "2026-10-08T07:50:23.907603Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "fc2e5ce28abcffa07a34464082c72b6f75f11e05d6899160c6b695544f2f0407"
+    },
+    "amazon.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Amazon",
+      "brandSourceUrl": "https://www.amazon.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/amazon.svg",
+      "license": "CC0-1.0",
+      "sha256": "0118404aa8a9c8fc79f97d6c6c843ed59dfe912854a12084dc132270ef7e54df"
+    },
+    "amd.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "AMD",
+      "brandSourceUrl": "https://www.amd.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/amd.svg",
+      "license": "CC0-1.0",
+      "sha256": "167c7cf56daf395b3c082ca22b0c17e14d35c926e84286dbfb3459ce888c05b0"
+    },
+    "amdocs.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Amdocs",
+      "website": "https://www.amdocs.com/",
+      "pageUrl": "https://www.amdocs.com/",
+      "pageTitle": "Amdocs digital network transformation communications",
+      "assetSourceUrl": "https://www.amdocs.com/sites/default/files/Favicon-dark_0.png",
+      "sourceSha256": "8ff25c9de37514748ec63bed5cc11bbde9771bfe4af643d5ee15e8777d803ef4",
+      "retrievedAt": "2026-10-08T07:50:23.189946Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "fb78c1cd409b6a7cb7ce9058f600c86b9822a91ca2b82575831aef763647135c"
+    },
+    "americanexpress.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "American Express",
+      "brandSourceUrl": "https://commons.wikimedia.org/wiki/File:American_Express_logo_(2018).svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/americanexpress.svg",
+      "license": "CC0-1.0",
+      "sha256": "8d0cefef877802008ded2621282749b9809c9d3cd1c4cc12289f29711722c12a"
+    },
+    "anduril.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Anduril",
+      "website": "https://www.anduril.com/",
+      "pageUrl": "https://www.anduril.com/",
+      "pageTitle": "Transforming U.S. Defense Capabilities with Advanced Technology | Anduril",
+      "assetSourceUrl": "https://www.anduril.com/assets/favicon/favicon.xxWKiVhdqu.ico",
+      "sourceSha256": "34da642785d5d1eee5e4dfb8dd5e4f3d1eb97a5513f21a9315d804ef0aeb8cab",
+      "retrievedAt": "2026-10-08T07:50:23.614162Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "93236d0064816ae901b00cc5bd315a4f04ffa92e428ced873bf612eaf3c1366b",
+      "renderingBackground": "#17262e"
+    },
+    "aon.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Aon",
+      "website": "https://www.aon.com/",
+      "pageUrl": "https://www.aon.com/en/",
+      "pageTitle": "Better Decisions | Aon",
+      "assetSourceUrl": "https://www.aon.com/lib/icons/favicon.png",
+      "sourceSha256": "a8384bad5f3bf33939bb82474fb955cb37075087776e4d2697eed398426b5ef8",
+      "retrievedAt": "2026-10-08T07:50:24.893490Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "7d515f96adf260f1a3fe2a8c1a0f6b42fbf149b042d4d73a21e8c01a0e606466"
+    },
+    "apolloio.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Apollo.io",
+      "website": "https://www.apollo.io/",
+      "pageUrl": "https://www.apollo.io/",
+      "pageTitle": "The AI GTM System for Go-to-Market Teams | Apollo",
+      "assetSourceUrl": "https://www.apollo.io/favicon.ico",
+      "sourceSha256": "59535da3240101a9d49192eff2d4a7047e694cb6ead8c564e70f4341d31c60f5",
+      "retrievedAt": "2026-10-08T07:50:24.469014Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "bbd4814604fda78c2cc49d7fa4e2b59860d3db1fdcf51d9e9af7343c17b6862a"
+    },
+    "appfolio.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "AppFolio",
+      "website": "https://www.appfolio.com/",
+      "pageUrl": "https://www.appfolio.com/",
+      "pageTitle": "AppFolio: Move Beyond Property Management Software",
+      "assetSourceUrl": "https://learn.appfolio.com/apm/www/favicons/favicon-96x96.png",
+      "sourceSha256": "b198cdad78494644aa3cd8111ba2514046caed084c7571c923a59f180ae9c9a3",
+      "retrievedAt": "2026-10-08T07:50:26.226080Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "cb43dbaa5ba803f9e9a461d5603328f605d78e1cdbbd2a774c6e0f0915cdf0a3"
+    },
+    "apple.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Apple",
+      "brandSourceUrl": "https://www.apple.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/apple.svg",
+      "license": "CC0-1.0",
+      "sha256": "231e79ed85eed2bded6f492e3bd8a0e280b5d7178c4066ae9fec3d5bc79771b3"
+    },
+    "aristanetworks.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Arista Networks",
+      "website": "https://www.arista.com/",
+      "pageUrl": "https://www.arista.com/",
+      "pageTitle": "Client Challenge",
+      "assetSourceUrl": "https://www.arista.com/favicon.ico",
+      "sourceSha256": "22a14622371fb0fe2466df0966cd0051824b7ecf4c74f4f98f5f7866aed48776",
+      "retrievedAt": "2026-10-08T07:50:24.088648Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "63b30ba71f28f3c07a0e4247ad49bed5e4476d4d8c767dfa81d43507247bb414"
+    },
+    "asana.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Asana",
+      "brandSourceUrl": "https://asana.com/brand",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/asana.svg",
+      "license": "CC0-1.0",
+      "sha256": "4138ea19788cf6b08cea6e88655a3c6176f57f868052ae0a27204fc4308e9e87",
+      "guidelines": "https://asana.com/brand"
+    },
+    "atlassian.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Atlassian",
+      "brandSourceUrl": "https://atlassian.design/resources/logo-library",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/atlassian.svg",
+      "license": "CC0-1.0",
+      "sha256": "0405f2a967cf3174e446156717e44bde0fd9dfaf0b30b13615f0ca6ad5cbad86",
+      "guidelines": "https://atlassian.design/foundations/logos"
+    },
+    "audible.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Audible",
+      "brandSourceUrl": "https://commons.wikimedia.org/wiki/File:Audible_logo.svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/audible.svg",
+      "license": "CC0-1.0",
+      "sha256": "ef1deb6fa204d8106a7dccd27ca9a276f91b7257711655353755dd95e990deaf"
+    },
+    "autodesk.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Autodesk",
+      "brandSourceUrl": "https://brand.autodesk.com/brand-system/logo",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/autodesk.svg",
+      "license": "CC0-1.0",
+      "sha256": "85134aa70c02af0cd5231507ccc2fd890ac95495e64d6246ceb31de5a525a79b",
+      "guidelines": "https://brand.autodesk.com/brand-system/logo"
+    },
+    "avalara.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Avalara",
+      "website": "https://www.avalara.com/",
+      "pageUrl": "https://www.avalara.com/us/en/index.html",
+      "pageTitle": "Tax Compliance Software | Avalara",
+      "assetSourceUrl": "https://www.avalara.com/etc.clientlibs/avalara/clientlibs/clientlib-ava-26-site/resources/favicons/favicon.ico",
+      "sourceSha256": "86a22df7dc0d3eec28b4886611427179e7b8286bd5981291be8cc191aad8f900",
+      "retrievedAt": "2026-10-08T07:50:28.173370Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "a66241577d63a442e19f29b5a91f6ec8aa1b8590f39d2f2a66fc0991abc1b067"
+    },
+    "baidu.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Baidu",
+      "brandSourceUrl": "https://www.baidu.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/baidu.svg",
+      "license": "CC0-1.0",
+      "sha256": "2e122f761102e4778502ebdc6c236d871451739cbc8dad865efff814d8da4866"
+    },
+    "bankofamerica.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Bank of America",
+      "brandSourceUrl": "https://www.bankofamerica.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/bankofamerica.svg",
+      "license": "CC0-1.0",
+      "sha256": "1ae358a76eeed2015f4de428e649b313106b6f6bc0ac91c607284dcf403e9f80"
+    },
+    "barclays.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Barclays",
+      "brandSourceUrl": "https://home.barclays",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/barclays.svg",
+      "license": "CC0-1.0",
+      "sha256": "749f00d2f00646da30a0f53a1dc1d014b9ed432630e2837401c16e4eb199d8d5"
+    },
+    "blackrock.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "BlackRock",
+      "website": "https://www.blackrock.com/",
+      "pageUrl": "https://www.blackrock.com/corporate",
+      "pageTitle": "Homepage | BlackRockHome",
+      "assetSourceUrl": "https://www.blackrock.com/favicon.ico",
+      "sourceSha256": "b3bc6c6810d7ddf58a413a1323523dd1b405cfdfa4a1d89eea7d9dc184e33541",
+      "retrievedAt": "2026-10-08T07:50:25.525770Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8d63e94405b84007289edaeb6265bcfe0fcac8d7d003d3d72ce6baba4949df8d"
+    },
+    "blackstone.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "BlackStone",
+      "website": "https://www.blackstone.com/",
+      "pageUrl": "https://www.blackstone.com/",
+      "pageTitle": "Blackstone - The World's Largest Alternative Asset Manager",
+      "assetSourceUrl": "https://www.blackstone.com/wp-content/uploads/sites/2/2020/01/bx-favicon-192.png?w=32",
+      "sourceSha256": "636205070c7507fae45ffe6abfed6f745b1650764ce5d2d137393d763f4959df",
+      "retrievedAt": "2026-10-08T07:50:24.533330Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "c6649b406ec7f78b0c639e549b62299af27725525b7a48eadcb90bc30af99ddd"
+    },
+    "blizzard.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Blizzard",
+      "website": "https://www.blizzard.com/",
+      "pageUrl": "https://www.blizzard.com/en-us/",
+      "pageTitle": "Blizzard Entertainment",
+      "assetSourceUrl": "https://d3ukkjpihy42k4.cloudfront.net/images/favicon.b50a2b7ffcd4631c52d2b61e5d6fec8757e5b81a.ico",
+      "sourceSha256": "28b421f519d38bd65f4f91bc06669ccc1a09eb1ef982245bb2b6ed818f3892a4",
+      "retrievedAt": "2026-10-08T07:50:27.207226Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "f8a7d36cc81a0126831aec98403cd234704262886097847b9bce09c1e190b9a8"
+    },
+    "block.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Block",
+      "website": "https://block.xyz/",
+      "pageUrl": "https://block.xyz/",
+      "pageTitle": "BlockBlock logo",
+      "assetSourceUrl": "https://block.xyz/brand_reskin/favicon/reskin-064p.png",
+      "sourceSha256": "c98357604c67c9736b4ced8998a6fd26c7e6231b1ed630543c5cf78a4afaf806",
+      "retrievedAt": "2026-10-08T07:50:27.923947Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "d8ab67967cd2853a9835b35f10b9240ed508dd640ad24ae5e0bd30d05467cc6c"
+    },
+    "bloomberg.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Bloomberg",
+      "website": "https://www.bloomberg.com/",
+      "pageUrl": "https://www.bloomberg.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.bloomberg.com/favicon.ico",
+      "sourceSha256": "fd1ace0f3033ff036069e86ffec8806531ed3465ccb7d16d27dea0f6d368cbbb",
+      "retrievedAt": "2026-10-08T07:54:21.698400Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "c9cbeb8d3845da3874bbb3e33bd9003dcbebea59da6bb612f2e3745f58d0ecdb"
+    },
+    "bosch.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Bosch",
+      "brandSourceUrl": "https://www.bosch.de",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/bosch.svg",
+      "license": "CC0-1.0",
+      "sha256": "284c293da4c03a5fd59ae2dde9480bf4d9b0ee0f8838dda44618685b5ddee87f"
+    },
+    "box.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Box",
+      "brandSourceUrl": "https://www.box.com/en-gb/about-us/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/box.svg",
+      "license": "CC0-1.0",
+      "sha256": "0cbd2cb1db0f33740d32cf4f396ca8c796deb80964657ee2d797630de61122ed",
+      "guidelines": "https://www.box.com/en-gb/about-us/press"
+    },
+    "braze.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Braze",
+      "website": "https://www.braze.com/",
+      "pageUrl": "https://www.braze.com/",
+      "pageTitle": "Braze Customer Engagement Platform",
+      "assetSourceUrl": "https://www.braze.com/favicon.ico",
+      "sourceSha256": "3700828be7d798834476889d747f3df3f24c3a3138235e37d11a063877cc5f6b",
+      "retrievedAt": "2026-10-08T07:50:25.826720Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "4b2f91b92e1333c8b3c8bba212edcb3902e220cfa8081764af8049a2c299183c"
+    },
+    "brex.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Brex",
+      "brandSourceUrl": "https://www.brex.com/journal/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/brex.svg",
+      "license": "CC0-1.0",
+      "sha256": "e7e997abf6f030368b6c303408e4048fa6379ee00516176c97f55b5170cd1782"
+    },
+    "bytedance.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "ByteDance",
+      "brandSourceUrl": "https://www.bytedance.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/bytedance.svg",
+      "license": "CC0-1.0",
+      "sha256": "e6b973f73ad63e584d8c032e3b0e6a73a77d0792ffa60ec107a93f66098c6c8a"
+    },
+    "canonical.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Canonical",
+      "brandSourceUrl": "https://design.ubuntu.com/resources",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/canonical.svg",
+      "license": {
+        "type": "CC-BY-SA-3.0"
+      },
+      "sha256": "e7b31bc044fb4e8fc063e46fe8e93669086fc0cb99a217703c06458340fce3fc",
+      "guidelines": "https://design.ubuntu.com/brand/"
+    },
+    "capgemini.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Capgemini",
+      "website": "https://www.capgemini.com/",
+      "pageUrl": "https://www.capgemini.com/",
+      "pageTitle": "Capgemini - Make it real.",
+      "assetSourceUrl": "https://www.capgemini.com/wp-content/uploads/2025/10/cropped-Capgemini_spade_32x32.png?w=192",
+      "sourceSha256": "45a78eab81bda2b12d9cbc880032c04d17b1c8aed8ea84878805deb065f1fb81",
+      "retrievedAt": "2026-10-08T07:50:25.868643Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "f39d15651853e81cc384b70e886e07f68455eed0054cefaa053be4e4153c6aa3"
+    },
+    "capitalone.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Capital One",
+      "website": "https://www.capitalone.com/",
+      "pageUrl": "https://www.capitalone.com/",
+      "pageTitle": "Capital One | Credit Cards, Checking, Savings & Auto Loans",
+      "assetSourceUrl": "https://www.capitalone.com/favicon.ico",
+      "sourceSha256": "5f2123af80970c0478de7f373c9d861d886e070592ebcd55fa372d8dfc9752ec",
+      "retrievedAt": "2026-10-08T07:50:26.148444Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "a46f5dc88d1760571e3626dfee123748aac36a8b0187fef26ea44fc14abc4dc0"
+    },
+    "chewy.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Chewy",
+      "website": "https://www.chewy.com/",
+      "pageUrl": "https://www.chewy.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.chewy.com/favicon.ico",
+      "sourceSha256": "9000153d5c85e22e8379920af980af048f5d2d410ba55a0df9ec5e032e831dd7",
+      "retrievedAt": "2026-10-08T07:54:22.394454Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "4b44ea0c39d7ca87290828c822c8083bab61fe00b922c2889193a78d1419c41d"
+    },
+    "cisco.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Cisco",
+      "brandSourceUrl": "https://www.cisco.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/cisco.svg",
+      "license": "CC0-1.0",
+      "sha256": "ea95d5b7335ffbeceb26ab1115bdd319d104b210d3a8ba4a4fb9434b2c42e96b"
+    },
+    "citigroup.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Citigroup",
+      "website": "https://www.citigroup.com/",
+      "pageUrl": "https://www.citigroup.com/global?utm_source=Iterable&utm_source=iterable&utm_medium=email&utm_medium=email&utm_campaign=em_25RC_WeekOf_Sat_Noon_092725&utm_content=25rc&utm_term=tbd",
+      "pageTitle": "Citi | Global Investment Bank and Financial Services",
+      "assetSourceUrl": "https://www.citigroup.com/favicon.ico",
+      "sourceSha256": "8003c445f0c3d2de99ecaf87db4874a3a69fb979a03785e5bc88abe5489010f0",
+      "retrievedAt": "2026-10-08T07:50:29.467923Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "5313d62a02eab1da5289f5d946a2028010198857a37bd4789d0b65de1e7f2120"
+    },
+    "citrix.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Citrix",
+      "brandSourceUrl": "https://brand.citrix.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/citrix.svg",
+      "license": "CC0-1.0",
+      "sha256": "ca785ba6b585a2a712742114d69f4693fc876aaffffefe95f6546d1935827725"
+    },
+    "cloudera.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Cloudera",
+      "brandSourceUrl": "https://www.cloudera.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/cloudera.svg",
+      "license": "CC0-1.0",
+      "sha256": "cf5ebf48eabbec9c6d2c6b231ef662b90fdf7963a57a021c500825ed0dd03be7"
+    },
+    "cloudflare.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Cloudflare",
+      "brandSourceUrl": "https://www.cloudflare.com/logo/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/cloudflare.svg",
+      "license": "CC0-1.0",
+      "sha256": "0a0635079ae0152fe6636b25299e5665d674d6841dbfd11de36efdb457cf0fef",
+      "guidelines": "https://www.cloudflare.com/trademark/"
+    },
+    "cognizant.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Cognizant",
+      "brandSourceUrl": "https://www.cognizant.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/cognizant.svg",
+      "license": "CC0-1.0",
+      "sha256": "cba477c4cbf59a8e679c5119bce2f3f71f4e158b7bac0f632db896277b60e3d4"
+    },
+    "coinbase.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Coinbase",
+      "brandSourceUrl": "https://www.coinbase.com/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/coinbase.svg",
+      "license": "CC0-1.0",
+      "sha256": "e70dafbb493abf61a63251792a409c412e8ece813c49d975ca0e48b21d04d692"
+    },
+    "comcast.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Comcast",
+      "website": "https://corporate.comcast.com/",
+      "pageUrl": "https://corporate.comcast.com/",
+      "pageTitle": "Comcast Corporation",
+      "assetSourceUrl": "https://corporate.comcast.com/resources/corporate/assets/img/favicon.png",
+      "sourceSha256": "0ada292307efa9c9dfa0b2d360c558b6b436a7bbe29e00534f490993d3bfbb28",
+      "retrievedAt": "2026-10-08T07:50:27.098966Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "46d0e357c8e6ab8c6bca499207de5ebf2fb5e30b3867d908f64c401ffc976be1"
+    },
+    "confluent.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Confluent",
+      "website": "https://www.confluent.io/",
+      "pageUrl": "https://www.confluent.io/",
+      "pageTitle": "Confluent | The Data Streaming Platform",
+      "assetSourceUrl": "https://www.confluent.io/favicon.ico",
+      "sourceSha256": "6949865a09b591cd847c53f0e5acb59565a6f1391792b601822c3c7fd7e32f0e",
+      "retrievedAt": "2026-10-08T07:50:27.920250Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "47e16acca81895a40f5e59768fa79664dc6075fa95befeb636bdbbf34e56716f"
+    },
+    "coursera.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Coursera",
+      "brandSourceUrl": "https://about.coursera.org/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/coursera.svg",
+      "license": "CC0-1.0",
+      "sha256": "7adeca537697df2df8775bce44257580998ff745e859b4601f02795a32033531"
+    },
+    "cred.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "CRED",
+      "website": "https://cred.club/",
+      "pageUrl": "https://cred.club/",
+      "pageTitle": "CRED. not everyone gets it.",
+      "assetSourceUrl": "https://web-images.credcdn.in/v2/_next/assets/icons/logo.png",
+      "sourceSha256": "471e0789111cb2cadeab16daab3d89e4380155daba076121baad83df3f0c1979",
+      "retrievedAt": "2026-10-08T07:50:27.366488Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "bfe9b425a171c2fe3a3b4ea423ec6fddecb45653f3080784aa2c041817027a93"
+    },
+    "creditkarma.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Credit Karma",
+      "website": "https://www.creditkarma.com/",
+      "pageUrl": "https://www.creditkarma.com/Error_Credit_Karma.htm?referenceerror=18.f392017.1791445829.5f366be",
+      "pageTitle": "Error | Credit Karma",
+      "assetSourceUrl": "https://www.creditkarma.com/favicon.ico",
+      "sourceSha256": "7d3ae2aedc1b985339a5bb79712414eb427515f19a43e963d24f0450c7181a18",
+      "retrievedAt": "2026-10-08T07:50:27.967601Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "f33aefcbc5220d01b50d71cea598467913d73d61e2e04374d29846a84bcba809"
+    },
+    "criteo.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Criteo",
+      "website": "https://www.criteo.com/",
+      "pageUrl": "https://www.criteo.com/",
+      "pageTitle": "The Global Commerce Intelligence Platform",
+      "assetSourceUrl": "https://www.criteo.com/wp-content/themes/criteo2017/img/defaultico.png",
+      "sourceSha256": "edd7bb2d00704c3bea588dd5bc27a5ee6c4c81876401b9ad9e930c8bdcf272c0",
+      "retrievedAt": "2026-10-08T07:50:27.614129Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "4516a3646ec9c90ee52dcd9705a6d79c63528f8510e85016e98d044909cf2196"
+    },
+    "crowdstrike.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "CrowdStrike",
+      "website": "https://www.crowdstrike.com/",
+      "pageUrl": "https://www.crowdstrike.com/en-us/",
+      "pageTitle": "CrowdStrike: We Stop Breaches with AI-native Cybersecurity",
+      "assetSourceUrl": "https://www.crowdstrike.com/etc.clientlibs/crowdstrike/clientlibs/crowdstrike-common/resources/favicon.ico",
+      "sourceSha256": "9b24aef7f1f536c9a5dbf4fd94bcd37e372737765f9d0530f1cd286f255b764c",
+      "retrievedAt": "2026-10-08T07:50:29.209319Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "01ad1ad905844dc9565d75e8b90a9c5eee8d2ff577c18bca252b18e856b55f5d"
+    },
+    "databricks.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Databricks",
+      "brandSourceUrl": "https://www.databricks.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/databricks.svg",
+      "license": "CC0-1.0",
+      "sha256": "7017b687ae0c145d827e66908e27e1b6c4216e4f270a9e48c9b1cab3159df679",
+      "guidelines": "https://brand.databricks.com/Styleguide/Guide/"
+    },
+    "datadog.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Datadog",
+      "brandSourceUrl": "https://www.datadoghq.com/about/resources",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/datadog.svg",
+      "license": "CC0-1.0",
+      "sha256": "168df4a42abbbaf13374b7239827d3d547da05f830eccd832b213620cf4f90f6",
+      "guidelines": "https://www.datadoghq.com/about/resources/"
+    },
+    "delhivery.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Delhivery",
+      "website": "https://www.delhivery.com/",
+      "pageUrl": "https://www.delhivery.com/",
+      "pageTitle": "Logistics, Parcel Delivery & Supply Chain Solutions - Delhivery",
+      "assetSourceUrl": "https://www.delhivery.com/favicon.png",
+      "sourceSha256": "7d61d3f96c9682d29acb73226b2d2e7471bca551b2aaa4af0eb3878f19b791f6",
+      "retrievedAt": "2026-10-08T07:50:27.903306Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "ec96ad231698fa36f53951f89c342d9fe841c91a122d23b808eee4adeab13155"
+    },
+    "deliveroo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Deliveroo",
+      "brandSourceUrl": "https://deliveroo.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/deliveroo.svg",
+      "license": "CC0-1.0",
+      "sha256": "5c03e421b4ffc69709a28efbd503cf899b393da0feb1e0d0f3d2b327b00336ff"
+    },
+    "dell.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Dell",
+      "brandSourceUrl": "https://www.dell.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/dell.svg",
+      "license": "CC0-1.0",
+      "sha256": "9a70fc1855a81ba3c9d65d107d477cbf19db790d34e82e6ad3b846c05f758fcf",
+      "guidelines": "https://brand.delltechnologies.com/logos/"
+    },
+    "deloitte.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Deloitte",
+      "website": "https://www.deloitte.com/",
+      "pageUrl": "https://www.deloitte.com/in/en.html",
+      "pageTitle": "Deloitte | Audit, Consulting, Financial, Risk Management, Tax Services",
+      "assetSourceUrl": "https://www.deloitte.com/content/dam/assets-shared/icons/in/favicon.ico",
+      "sourceSha256": "334ae0b965f6a52f87500ee87443a5a8c30b952842aec14e44db3e03d12c856b",
+      "retrievedAt": "2026-10-08T07:50:28.557010Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "9098eeb2b018aa42a14be79d94f97a27643e4f6b836c1035c4a6173f45952edf"
+    },
+    "deshaw.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "DE Shaw",
+      "website": "https://www.deshaw.com/",
+      "pageUrl": "https://www.deshaw.com/",
+      "pageTitle": "The D. E. Shaw Group",
+      "assetSourceUrl": "https://www.deshaw.com/favicon.ico",
+      "sourceSha256": "47e399af344ddeac75e853962fce3d2824accdeb1d242f1ed86a027c9ea73923",
+      "retrievedAt": "2026-10-08T07:50:28.765603Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "c7a0d0cb963af0ea94d341b4b9651d55eb1547c5757521efc3300064eb085ffc"
+    },
+    "deutschebank.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Deutsche Bank",
+      "brandSourceUrl": "https://www.db.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/deutschebank.svg",
+      "license": "CC0-1.0",
+      "sha256": "08ec9527ad971c2dd174a9c6e6ce63f774278458a103601221af0be7e14966d2"
+    },
+    "devsinc.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Devsinc",
+      "website": "https://www.devsinc.com/",
+      "pageUrl": "https://devsinc.com/",
+      "pageTitle": "Engineering the next era of digital businesses | Devsinc",
+      "assetSourceUrl": "https://devsinc.com/favicon.ico",
+      "sourceSha256": "f8b433565e9a4cfa3483246274deed8ef176a3a67f23c3928c14ffb9fb4cb232",
+      "retrievedAt": "2026-10-08T07:50:29.851917Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "7f20938f22b00330104505524b1d39a3bbbbe3bbb7091fe9ee53b0487c058fcf"
+    },
+    "disney.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Disney",
+      "website": "https://thewaltdisneycompany.com/",
+      "pageUrl": "https://thewaltdisneycompany.com/",
+      "pageTitle": "The Walt Disney Company",
+      "assetSourceUrl": "https://thewaltdisneycompany.com/app/uploads/2026/01/icon-512x512-1.png",
+      "sourceSha256": "35b2316ecde11357ee2c8a01dd80fd62bef59e1f5d5aa1d0e78831e32219df99",
+      "retrievedAt": "2026-10-08T07:50:32.349621Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "6f8e56e6968773b8cefdf0636e1865bd3ffd3cb7845ad81efc273b68fdeef00c"
+    },
+    "docusign.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "DocuSign",
+      "brandSourceUrl": "https://www.docusign.com/sites/all/themes/custom/docusign/favicons/mstile-310x310.png",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/docusign.svg",
+      "license": "CC0-1.0",
+      "sha256": "02a10b16eaed289e445d8b7990f208cfcafce0138ea58314cf497b16e2f24207"
+    },
+    "doordash.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "DoorDash",
+      "brandSourceUrl": "https://www.doordash.com/about/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/doordash.svg",
+      "license": "CC0-1.0",
+      "sha256": "d396c6375ce64e93505b756d5578f68fd9330839b9ae75210ce2b7a9ac781d8b"
+    },
+    "dropbox.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Dropbox",
+      "brandSourceUrl": "https://www.dropbox.com/branding",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/dropbox.svg",
+      "license": "CC0-1.0",
+      "sha256": "dc698cfbfcd23fe9fc012fe2636d54da8ceecc3ced92c49e9f0642308169a311"
+    },
+    "druva.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Druva",
+      "website": "https://www.druva.com/",
+      "pageUrl": "https://www.druva.com/",
+      "pageTitle": "Druva Resilience Cloud | Fully Managed SaaS Platform | Druva",
+      "assetSourceUrl": "https://www.druva.com/etc.clientlibs/druvaincprogram/clientlibs/clientlib-site/resources/images/site-icon.webp",
+      "sourceSha256": "9f1030854ca871dad4636bfd78722d16c8a5b996e6280caf11c1f1f59e4bdee6",
+      "retrievedAt": "2026-10-08T07:50:32.321390Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "bd8f86ea6547438a26212cfbd6c7f17ec4a02efef9121df6dc4d9ea5518026bc"
+    },
+    "dunzo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Dunzo",
+      "brandSourceUrl": "https://www.dunzo.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/dunzo.svg",
+      "license": "CC0-1.0",
+      "sha256": "3beba5d2169a8f83fe535e62e031bdb1e29ee3f37b0e5c7abc5a61365e5313d4"
+    },
+    "duolingo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Duolingo",
+      "brandSourceUrl": "https://design.duolingo.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/duolingo.svg",
+      "license": "CC0-1.0",
+      "sha256": "a461a7f861600f23e9b34ed291c766055ddfb333c488143f5e3fa8179af541ed",
+      "guidelines": "https://design.duolingo.com"
+    },
+    "dxctechnology.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "DXC Technology",
+      "website": "https://dxc.com/",
+      "pageUrl": "https://dxc.com/",
+      "pageTitle": "DXC Technology | Impossible Delivered | Enterprise Technology & Innovation Solutions",
+      "assetSourceUrl": "https://dxc.com/etc.clientlibs/dxc/clientlibs/clientlib-site/resources/images/favicon-16x16.png",
+      "sourceSha256": "89e966f5810e8e1a09d4c89542f4d473d0a6d6fbc02a5f633cb4412049ead666",
+      "retrievedAt": "2026-10-08T07:50:30.233089Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "b8b0ef8441d9c88c8c4de072b83e27fca88be895b5e13b0215fcc725be087711"
+    },
+    "ea.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "EA",
+      "brandSourceUrl": "https://www.ea.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/ea.svg",
+      "license": "CC0-1.0",
+      "sha256": "2877c30b7e2cfd24a6f73118fdab2bba2bf56380213353058c75c253580e5a02"
+    },
+    "ebay.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "eBay",
+      "brandSourceUrl": "https://go.developer.ebay.com/logos",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/ebay.svg",
+      "license": "CC0-1.0",
+      "sha256": "e85de0c6b99c1c501a4ddcef857a63b8a46a226f53750a7d1e280e4e1694eb96"
+    },
+    "epicsystems.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Epic Systems",
+      "website": "https://www.epic.com/",
+      "pageUrl": "https://www.epic.com/",
+      "pageTitle": "Epic | ...With the patient at the heartVisit EpicShareVisit Epic ResearchVisit CosmosVisit MyChartLearn about the technologies available for integration with EpicVisit UserWebVisit ShowroomVisit Epic.comVisit EpicShareVisit Epic ResearchVisit CosmosVisit MyChartLearn about the technologies available for integration with EpicVisit UserWebVisit Showroom",
+      "assetSourceUrl": "https://www.epic.com/favicon.ico?favicon.1yp9yjd-_y3-b.ico",
+      "sourceSha256": "7a5d20c38ee6cf598cc344ef3fc542f68896a94728e263cc402fd59a1b3be4d6",
+      "retrievedAt": "2026-10-08T07:50:29.766974Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "9078e8043456f85591c653ac660ddd0631a340a41190aeff137507a9d97dec82"
+    },
+    "expedia.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Expedia",
+      "brandSourceUrl": "https://brandfolder.com/portals/brand-expedia",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/expedia.svg",
+      "license": "CC0-1.0",
+      "sha256": "3c87c6cecf7f34fe9d192a01e86b7ad70deff7a76217a1c1f29fa473caa5d2ff",
+      "guidelines": "https://brandfolder.com/portals/brand-expedia"
+    },
+    "ey.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "EY",
+      "website": "https://www.ey.com/",
+      "pageUrl": "https://www.ey.com/en_in",
+      "pageTitle": "EY - India | Shape the future with confidence",
+      "assetSourceUrl": "https://www.ey.com/content/dam/ey-unified-site/icon/ey-favicon.jpg",
+      "sourceSha256": "0b82acdfdbb3a58fdfb9b849f5195d14cd491b3368db54ab6250389848cf0c2e",
+      "retrievedAt": "2026-10-08T07:50:31.217865Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "ee2b6c75654b9f1e37c3c8873e592f8baa14347b82cf1de121cf53cdbfbd92e4"
+    },
+    "factset.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "FactSet",
+      "website": "https://www.factset.com/",
+      "pageUrl": "https://www.factset.com/",
+      "pageTitle": "FactSet | Financial Data, Market Analytics & AI Solutions",
+      "assetSourceUrl": "https://www.factset.com/favicon.ico",
+      "sourceSha256": "6fc85cc2ebf0a3386a921d477f7d941238cf779818ec7c9c9684374c7982ba1f",
+      "retrievedAt": "2026-10-08T07:50:30.641478Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "bd1671889fd100ef7de38c47c95a2e6f0df7e67acf0673d5b3960ddb74f9c23d"
+    },
+    "fidelity.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Fidelity",
+      "website": "https://www.fidelity.com/",
+      "pageUrl": "https://www.fidelity.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.fidelity.com/favicon.ico",
+      "sourceSha256": "2a252a3b62e775f04b35745157e51c0ab3f00bf2235e0c1f062600782d98ca85",
+      "retrievedAt": "2026-10-08T07:54:21.870587Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "e2720fa40711e54a630ad740d0011ecbe70a267efb07ea2b78e3845ea9745d51"
+    },
+    "fiverr.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Fiverr",
+      "brandSourceUrl": "https://www.fiverr.com/press-kit",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/fiverr.svg",
+      "license": "CC0-1.0",
+      "sha256": "dcef7822cfc6218810e2f517e390d05a5fde95e9f601f32c8223619ae87a55e8"
+    },
+    "flexport.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Flexport",
+      "website": "https://www.flexport.com/",
+      "pageUrl": "https://www.flexport.com/",
+      "pageTitle": "Freight Forwarding & Supply Chain Platform | Flexport | FlexportFlexportFlexport",
+      "assetSourceUrl": "https://www.flexport.com/favicon.ico",
+      "sourceSha256": "c12e02a68fa778e77178b981c3c3d77df949684cd5ae0c73c18984ac293814f9",
+      "retrievedAt": "2026-10-08T07:50:30.839078Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "2f26641f5473121eb385accf4402ac41efdd027d9c929bf1c80864454d2b0208"
+    },
+    "flipkart.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Flipkart",
+      "brandSourceUrl": "https://www.flipkart.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/flipkart.svg",
+      "license": "CC0-1.0",
+      "sha256": "42f58b54ecbd48dc5fa38fcfe13d54a06ec32cf7112dc220ff7da9c5e26085ce"
+    },
+    "fortinet.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Fortinet",
+      "brandSourceUrl": "https://www.fortinet.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/fortinet.svg",
+      "license": "CC0-1.0",
+      "sha256": "243f0ed072cb5a54a39d6d378e47d0553dad8373340ea323b8ac8e2ccc6187f2"
+    },
+    "freshworks.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "FreshWorks",
+      "website": "https://www.freshworks.com/",
+      "pageUrl": "https://www.freshworks.com/",
+      "pageTitle": "AI-Powered Customer & Employee Service Software | Freshworks",
+      "assetSourceUrl": "https://www.freshworks.com/favicons/favicon-16x16.png",
+      "sourceSha256": "d54fa6fa1efeaea82865eef553dd3aa3960756dbbad965889551f43a92fb97b9",
+      "retrievedAt": "2026-10-08T07:50:30.658863Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "3e2e1618fe11f11a8da3a90e2423a315e0a2eaafe0fa092725d80afbf81b8d08"
+    },
+    "garmin.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Garmin",
+      "brandSourceUrl": "https://creative.garmin.com/styleguide/logo/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/garmin.svg",
+      "license": "CC0-1.0",
+      "sha256": "0635579c38b9d9b3f8ce9e864f105e10be18aa909eb2ce25127e99e5eaf6a624",
+      "guidelines": "https://creative.garmin.com/styleguide/brand/"
+    },
+    "gehealthcare.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "GE Healthcare",
+      "website": "https://www.gehealthcare.com/",
+      "pageUrl": "https://www.gehealthcare.com/en-us",
+      "pageTitle": "English | GE HealthCare (United States)ico-caret-right",
+      "assetSourceUrl": "https://www.gehealthcare.com/etc.clientlibs/gehealthcare/clientlibs/clientlib-site/resources/favicons/favicon-16x16.png",
+      "sourceSha256": "30c1ab56cf96b8681428169ae257f09090343c11a3d0a740d8a6ca1254fef58e",
+      "retrievedAt": "2026-10-08T07:50:30.637280Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "7d61ff6b2dd2b97fd9e146c5923e5478a5c67c41bb30b58b54bee5f12f3d8dd7"
+    },
+    "geico.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Geico",
+      "website": "https://www.geico.com/",
+      "pageUrl": "https://www.geico.com/",
+      "pageTitle": "An Insurance Company For Your Car And More | GEICO",
+      "assetSourceUrl": "https://www.geico.com/favicon.ico?aa55dd60d3f7931a",
+      "sourceSha256": "bf4cb729c1f44daa732954f0bf9e71b031b4d6c7f52e9dce52d48e9577f01e35",
+      "retrievedAt": "2026-10-08T07:50:34.553551Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "0ffad699e4ff98f844e19c322e85954ad9784a6afe9dfbe983d690211f229882"
+    },
+    "generalmotors.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "General Motors",
+      "brandSourceUrl": "https://www.gm.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/generalmotors.svg",
+      "license": "CC0-1.0",
+      "sha256": "f0bc4310b8eaccffe39f973146360d50f26c0d5c09796184eea3203ff8e902eb"
+    },
+    "genpact.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Genpact",
+      "website": "https://www.genpact.com/",
+      "pageUrl": "https://www.genpact.com/",
+      "pageTitle": "The Agentic Operations company | Genpact",
+      "assetSourceUrl": "https://www.genpact.com/etc.clientlibs/genpact/clientlibs/clientlib-site/resources/icon-192x192.png",
+      "sourceSha256": "c5602261a081489f68be15c487adbbc6579b1c65685358bfa187c4db3b88b94b",
+      "retrievedAt": "2026-10-08T07:50:33.318524Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "05c990c671432c07f22c5ccbe2e4a6821a99c0b7a52994f0e4fcc5e1daa1f94f"
+    },
+    "godaddy.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "GoDaddy",
+      "brandSourceUrl": "https://aboutus.godaddy.net/newsroom/media-resources/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/godaddy.svg",
+      "license": "CC0-1.0",
+      "sha256": "74b84cb14b8f5ac818c3521a216294bd2dc027f80002eed4b1db3686718619c9",
+      "guidelines": "https://aboutus.godaddy.net/newsroom/media-resources/"
+    },
+    "gojek.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Gojek",
+      "brandSourceUrl": "https://gojek.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/gojek.svg",
+      "license": "CC0-1.0",
+      "sha256": "f1a749bbf83286cff9a4d5d579da22f4b68fc89b2571f6234d65ae2c495d2954",
+      "guidelines": "https://gojek.design"
+    },
+    "goldmansachs.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Goldman Sachs",
+      "brandSourceUrl": "https://design.gs.com/brand/goldman-sachs-logo",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/goldmansachs.svg",
+      "license": "CC0-1.0",
+      "sha256": "dd08e341e5a7f550735851084145efc8c635d1cba35ac9debc2729d7e079dcf2",
+      "guidelines": "https://design.gs.com/brand/goldman-sachs-logo"
+    },
+    "google.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Google",
+      "brandSourceUrl": "https://partnermarketinghub.withgoogle.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/google.svg",
+      "license": "CC0-1.0",
+      "sha256": "0bf2f93fd573b0bc3dd54fa2c5242cd9ef3d30c83d8b41e3dd5193faf6865895",
+      "guidelines": "https://about.google/brand-resource-center/brand-elements/"
+    },
+    "grab.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Grab",
+      "brandSourceUrl": "https://en.wikipedia.org/wiki/File:Grab_(application)_logo.svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/grab.svg",
+      "license": "CC0-1.0",
+      "sha256": "94d66a933c304b26bede53c9e8887edf14c01007fd03692cb5edefe221074be4"
+    },
+    "grammarly.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Grammarly",
+      "brandSourceUrl": "https://www.grammarly.com/media-assets",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/grammarly.svg",
+      "license": "CC0-1.0",
+      "sha256": "f2ed9ac4af068910c340a1947380b2ee593f7d3afc54808091d4046ce512c265"
+    },
+    "groupon.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Groupon",
+      "brandSourceUrl": "https://about.groupon.com/press/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/groupon.svg",
+      "license": "CC0-1.0",
+      "sha256": "b1d95e30d959a5ecd3289aa06d5d1be0e37ffe7580535760e85944b85cee1764",
+      "guidelines": "https://about.groupon.com/press/"
+    },
+    "groww.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Groww",
+      "website": "https://groww.in/",
+      "pageUrl": "https://groww.in/",
+      "pageTitle": "Groww - Online Demat, Trading and Direct Mutual Fund Investment in India",
+      "assetSourceUrl": "https://groww.in/favicon32x32-groww.ico",
+      "sourceSha256": "564693601684b13988e40ffec631ebc8432a19f46213f5fb9dca4a8fd38dcd30",
+      "retrievedAt": "2026-10-08T07:50:31.452640Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8d9e958eea9ee3dbfb713b7d1a0d8d9cdff9c8fc21ed453f054ed5a2c8938997"
+    },
+    "grubhub.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Grubhub",
+      "brandSourceUrl": "https://www.grubhub.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/grubhub.svg",
+      "license": "CC0-1.0",
+      "sha256": "56bbf7f32e4aebc51552d2d4e1f1b70c016580b6a4e1a18a05d5a294f088079b"
+    },
+    "gusto.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Gusto",
+      "brandSourceUrl": "https://gusto.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/gusto.svg",
+      "license": "CC0-1.0",
+      "sha256": "ea949be5d26a1176e7ca3946d33c18ab016db37af2655ac8c03da5b1a7461046"
+    },
+    "hcl.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "HCL",
+      "brandSourceUrl": "https://www.hcl.com/brand-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/hcl.svg",
+      "license": "CC0-1.0",
+      "sha256": "a21d450f4f1b45429eebcb2eb3c4f67c4700a7c6b6ddd8c728515c487ce357fc",
+      "guidelines": "https://www.hcl.com/brand-guidelines"
+    },
+    "honeywell.svg": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Honeywell",
+      "website": "https://www.honeywell.com/",
+      "pageUrl": "https://www.honeywell.com/us/en",
+      "pageTitle": "Honeywell Technologies: Leading the Autonomy ShiftLinkedInFacebookYouTubeInstagram",
+      "assetSourceUrl": "https://www.honeywell.com/content/dam/honcorp/us-en/common-assets/logos/hon-honeywell-technologies-logo-mini.svg",
+      "sourceSha256": "823300af349de3ea47fbfbe3905d906d8c6104bcc05dd9ac27ca335bc862dd11",
+      "retrievedAt": "2026-10-08T07:54:22.817736Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8fa1687adee83d5050eee9e2c883e9f5654b8e5ba31f3579299353e4f88826a1"
+    },
+    "houzz.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Houzz",
+      "brandSourceUrl": "https://www.houzz.com/logoGuidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/houzz.svg",
+      "license": "CC0-1.0",
+      "sha256": "b54971720b660151077d212c8e80138c3efae58f4933a4165b187e942cc27cbd",
+      "guidelines": "https://www.houzz.com/logoGuidelines"
+    },
+    "hp.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "HP",
+      "brandSourceUrl": "https://brandcentral.hp.com/us/en/elements/hp-logo.html",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/hp.svg",
+      "license": "CC0-1.0",
+      "sha256": "547c73fffcdad704492ddb3e8d427748ad5a585728106f68f7a9c26974f1494d",
+      "guidelines": "https://brandcentral.hp.com/us/en/elements/hp-logo.html"
+    },
+    "hsbc.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "HSBC",
+      "brandSourceUrl": "https://www.hsbc.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/hsbc.svg",
+      "license": "CC0-1.0",
+      "sha256": "66adeaa60ce0a76661024b2f99a68a50dbd74fc24952389e0dd41d80c19ce137",
+      "guidelines": "https://www.hsbc.com/terms-and-conditions"
+    },
+    "huawei.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Huawei",
+      "brandSourceUrl": "https://e.huawei.com/ph/material/partner/0a72728b864949c48b22106454352483",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/huawei.svg",
+      "license": "CC0-1.0",
+      "sha256": "66ff12bf2645afbdc9701658b6019b58e1f6d464a4b9ae2c35f4ac6240ac71c6",
+      "guidelines": "https://e.huawei.com/ph/material/partner/0a72728b864949c48b22106454352483"
+    },
+    "hubspot.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "HubSpot",
+      "brandSourceUrl": "https://www.hubspot.com/style-guide",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/hubspot.svg",
+      "license": "CC0-1.0",
+      "sha256": "47e00773ce59ef6f4bfc5165f0af88cb58cd08a4423161e4f35ccdb7fe028e4d",
+      "guidelines": "https://www.hubspot.com/style-guide"
+    },
+    "ibm.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "IBM",
+      "brandSourceUrl": "https://www.ibm.com/design/language/ibm-logos/8-bar/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/ibm.svg",
+      "license": "CC0-1.0",
+      "sha256": "a7d9670f81ec0def4c7a90fa8cbb769fc383bed28bc4888572d88080c09a73c7",
+      "guidelines": "https://www.ibm.com/design/language/ibm-logos/8-bar/"
+    },
+    "indeed.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Indeed",
+      "brandSourceUrl": "https://indeed.design/resources",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/indeed.svg",
+      "license": "CC0-1.0",
+      "sha256": "711fe2010b439414a60f6f3fbb9b42e2b8aa1c23c52a4c5ecbce042ee61ca88f"
+    },
+    "informatica.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Informatica",
+      "brandSourceUrl": "https://www.informatica.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/informatica.svg",
+      "license": "CC0-1.0",
+      "sha256": "7b9ed8485d500ea80558e2da3fb770914f7085fd4afd423560b3e2c1504d75db"
+    },
+    "infosys.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Infosys",
+      "brandSourceUrl": "https://www.infosys.com/newsroom/journalist-resources/infosyslogo.html",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/infosys.svg",
+      "license": "CC0-1.0",
+      "sha256": "ebc2c0d220c939b1d89e06eaf4ea94d06d15b78f09694294a8dc793774a0f0bc"
+    },
+    "inmobi.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "InMobi",
+      "website": "https://www.inmobi.com/",
+      "pageUrl": "https://www.inmobi.com/",
+      "pageTitle": "Redefining the mobile experience for consumers",
+      "assetSourceUrl": "https://web.inmobicdn.net/website/website/6.0.1/v6/img/favicon.ico",
+      "sourceSha256": "0b6c752f09a8c285721bee6577fa2fb3921dfa15a04ca2049f3b9608d33310a4",
+      "retrievedAt": "2026-10-08T07:50:33.774709Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "e0d601c2f9a6691aa6c2faa5bca9f1a00d316424bbd66e0fa180f07845db8477"
+    },
+    "instacart.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Instacart",
+      "brandSourceUrl": "https://www.instacart.com/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/instacart.svg",
+      "license": "CC0-1.0",
+      "sha256": "3ab720860b2df8262c516417e6a345e5874444e3642cd163545dd489d93a21f2"
+    },
+    "intel.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Intel",
+      "brandSourceUrl": "https://www.intel.com/content/www/us/en/newsroom/resources/press-kits-intel-overview.html",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/intel.svg",
+      "license": "CC0-1.0",
+      "sha256": "b9bf022a683dadc480490c092a2444500798013bbb703a74960f94ec51b13295"
+    },
+    "intuit.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Intuit",
+      "brandSourceUrl": "https://www.intuit.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/intuit.svg",
+      "license": "CC0-1.0",
+      "sha256": "8f48f2f4fea3af847720c9708c59c10e8cc729a2cf1a46dcd4ef7c999e114196",
+      "guidelines": "https://www.intuit.com/company/press-room/logos"
+    },
+    "jio.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Jio",
+      "brandSourceUrl": "https://commons.wikimedia.org/wiki/File:Reliance_Jio_Logo.svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/jio.svg",
+      "license": "CC0-1.0",
+      "sha256": "5a34eb1c75729a235c01427fffa0c1a44f0d20393ddea5497567df4effb27490"
+    },
+    "jpmorgan.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "J.P. Morgan",
+      "website": "https://www.jpmorgan.com/",
+      "pageUrl": "https://www.jpmorgan.com/global",
+      "pageTitle": "J.P. Morgan | Official Website",
+      "assetSourceUrl": "https://www.jpmorgan.com/etc.clientlibs/cws/clientlibs/clientlib-base/resources/jpm/images/jpm-favicon.ico",
+      "sourceSha256": "1a993c0e89ba68d3126e388ebb0737489fc807cbe5ec1757e67a932ae91fe0a7",
+      "retrievedAt": "2026-10-08T07:50:33.420739Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "bdbbf4bd000ab9f524ad4172fd7c23d8ede41e3a18ab154b7e9a88a71e994379"
+    },
+    "junipernetworks.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Juniper Networks",
+      "brandSourceUrl": "https://www.juniper.net/us/en/company/press-center/images/image-library/logos/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/junipernetworks.svg",
+      "license": "CC0-1.0",
+      "sha256": "22e5de84fe993489787fbc824816d8a0543735917957786aea3ddeb91260ae1d",
+      "guidelines": "https://www.juniper.net/us/en/company/press-center/images/image-library/logos/"
+    },
+    "juspay.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Juspay",
+      "website": "https://juspay.in/",
+      "pageUrl": "https://juspay.io/in",
+      "pageTitle": "Juspay | Global Payments Operating System",
+      "assetSourceUrl": "https://juspay.io/favicon.png",
+      "sourceSha256": "5a3316b4b79e2af7dd44dcb39f59f99e327547aea1b428d5b56ac62a9a85e64f",
+      "retrievedAt": "2026-10-08T07:50:33.151395Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "816bc1f3ba26061d8b7661b8899828b9b28a826e36856b38ac066dc3520b1ec0"
+    },
+    "kakao.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Kakao",
+      "brandSourceUrl": "https://www.kakaocorp.com/kakao/introduce/ci",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/kakao.svg",
+      "license": "CC0-1.0",
+      "sha256": "733fb4978ab8af2eb57103cbe6b7132753b340a142e9840804a6b24e6dc4461b"
+    },
+    "kla.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "KLA",
+      "website": "https://www.kla.com/",
+      "pageUrl": "https://www.kla.com/",
+      "pageTitle": "KLA | Leaders in Process Control & Yield Management",
+      "assetSourceUrl": "https://www.kla.com/wp-content/uploads/android-chrome-256x256-100x100.png",
+      "sourceSha256": "70f17fa4589bc8a35c0b9c97c6d3e0cbec704054f6a0c428b195067d5aa37702",
+      "retrievedAt": "2026-10-08T07:50:36.835253Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "583a07430635ab9de866dc7c88020f1ae7f9024b797db6f4f0e3544c687aa0a9"
+    },
+    "line.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "LINE",
+      "brandSourceUrl": "https://line.me/en/logo",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/line.svg",
+      "license": "CC0-1.0",
+      "sha256": "4fc1fa89267efc3459cb7fd26873077c7fa9890f7047472b0024df08bd0e0c94",
+      "guidelines": "https://line.me/en/logo"
+    },
+    "linkedin.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "LinkedIn",
+      "brandSourceUrl": "https://brand.linkedin.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/linkedin.svg",
+      "license": "CC0-1.0",
+      "sha256": "abb3d6919d2070277f0fd856dcb0c0a68149f76450fdeebcda8ef2a3dd2da88e",
+      "guidelines": "https://brand.linkedin.com/policies"
+    },
+    "lowes.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Lowe's",
+      "website": "https://www.lowes.com/",
+      "pageUrl": "https://www.lowes.com/",
+      "pageTitle": "Access Denied",
+      "assetSourceUrl": "https://www.lowes.com/favicon.ico",
+      "sourceSha256": "6f0bffe60a6d1196d9cc38d142757c21f93de8524851449c3eb90c7e7b8e8e02",
+      "retrievedAt": "2026-10-08T07:50:33.668950Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "3b1e8a0dc3df57708c16c42bf37cec8bf4a237653cfe991d0ed890ca9b9dc7f1"
+    },
+    "luxoft.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Luxoft",
+      "website": "https://www.luxoft.com/",
+      "pageUrl": "https://www.luxoft.com/",
+      "pageTitle": "Software Engineering and Digital Transformation Company | DXC Luxoft",
+      "assetSourceUrl": "https://www.luxoft.com/theme/luxoft/static/images/favicon/96x96px.png",
+      "sourceSha256": "c27ec550168cf500baaa6f89038ad6e108eb2757c57f5fe2f1c4629dc1691914",
+      "retrievedAt": "2026-10-08T07:50:35.112322Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "b2c1be15222efe8ed12c6662030dfdf2b8058a4ab3380ee936907f8c64c3cc4a"
+    },
+    "lyft.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Lyft",
+      "brandSourceUrl": "https://www.lyft.com/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/lyft.svg",
+      "license": "CC0-1.0",
+      "sha256": "8c12642bc70e923b0308cbb921e52c4edd25b28d50eaeb8d52f6db16e2c9f0f6"
+    },
+    "mapbox.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Mapbox",
+      "brandSourceUrl": "https://www.mapbox.com/about/press/brand-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/mapbox.svg",
+      "license": "CC0-1.0",
+      "sha256": "59ba89a7c0d4aaf725b1d3641e2c4052c23fdcccadafd34a92b9cb52bdebfac7",
+      "guidelines": "https://www.mapbox.com/about/press/brand-guidelines"
+    },
+    "mastercard.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "MasterCard",
+      "brandSourceUrl": "https://www.mastercard.com/brandcenter/us/en/download-artwork.html",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/mastercard.svg",
+      "license": "CC0-1.0",
+      "sha256": "0dbbcdd8e6a0beaa568d65d027859bc4b16e11815afbf94415e66899ecc4b448",
+      "guidelines": "https://www.mastercard.com/brandcenter/us/en/brand-requirements/mastercard.html"
+    },
+    "mathworks.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "MathWorks",
+      "website": "https://www.mathworks.com/",
+      "pageUrl": "https://www.mathworks.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.mathworks.com/favicon.ico",
+      "sourceSha256": "ef0eca8b5b903f6460c1ceb874e578f8dad3bbdec8dd6b19c3c3af452a18d40d",
+      "retrievedAt": "2026-10-08T07:54:22.271546Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "3ec59bbe788f6f113c8ff17f73eb4677796834272db551856fd2ecb776f0f23d"
+    },
+    "mckinsey.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "McKinsey",
+      "website": "https://www.mckinsey.com/",
+      "pageUrl": "https://www.mckinsey.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.mckinsey.com/favicon.ico",
+      "sourceSha256": "3f75bff719a89628166e38ceda9d5d6ddceab213b3e431ef492f34a9170a32ed",
+      "retrievedAt": "2026-10-08T07:54:37.582321Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "94a752cecb8a5c9e742bd561e75d895f4e20ca631933238556a8a37dcae4b15a"
+    },
+    "meesho.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Meesho",
+      "website": "https://www.meesho.com/",
+      "pageUrl": "https://www.meesho.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.meesho.com/favicon.ico",
+      "sourceSha256": "b246d5f13f98eb823d5a0f7be9dac98ed27229044a1600f0b4fa992ef3c82071",
+      "retrievedAt": "2026-10-08T07:54:22.349794Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "3559fc570f70ca37ec00241c1ff0108b791396e55f19490669de92c74636685a"
+    },
+    "mercari.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Mercari",
+      "website": "https://about.mercari.com/",
+      "pageUrl": "https://about.mercari.com/",
+      "pageTitle": "株式会社メルカリ",
+      "assetSourceUrl": "https://about.mercari.com/favicon.ico",
+      "sourceSha256": "57c731de56f33a5903b47e77ac86d6a9817608d903201b0e5f0422cfd39a03fb",
+      "retrievedAt": "2026-10-08T07:50:35.226353Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "9dc0ec618bdc75dfb0cd94d3a6f065a7201357aeadc4fa578cde039c2d04c531"
+    },
+    "meta.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Meta",
+      "brandSourceUrl": "https://www.meta.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/meta.svg",
+      "license": "CC0-1.0",
+      "sha256": "f24608cfadc17c5fd612a5fc7b417fbe5cf740df1e79774ece6800e77504eb3b",
+      "guidelines": "https://www.facebook.com/brand/resources/meta/company-brand"
+    },
+    "microsoft.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Microsoft",
+      "brandSourceUrl": "https://developer.microsoft.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/microsoft.svg",
+      "license": "CC0-1.0",
+      "sha256": "5ef8803e6f183732dcc6f45a96057e34384a90bf9b794a6a576e39404a5f3251",
+      "guidelines": "https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks"
+    },
+    "microstrategy.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "MicroStrategy",
+      "brandSourceUrl": "https://www.microstrategy.com/en/company/press-kit",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/microstrategy.svg",
+      "license": "CC0-1.0",
+      "sha256": "83a2d04ed41db54a25c2c664f7b1bce2674e5cfa54fd31c8968a892efbbe5323",
+      "guidelines": "https://www.microstrategy.com/en/company/press-kit"
+    },
+    "miro.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Miro",
+      "brandSourceUrl": "https://miro.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/miro.svg",
+      "license": "CC0-1.0",
+      "sha256": "bcef628d7c634515be6791e57c7fdd61877d5b55a338ba5069171d9d0d5d38ec"
+    },
+    "mixpanel.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Mixpanel",
+      "brandSourceUrl": "https://mixpanel.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/mixpanel.svg",
+      "license": "CC0-1.0",
+      "sha256": "20d8ce5634ef5dc583e5f516b244279007a67fb197f5328ccc603574b40e3265",
+      "guidelines": "https://brand.mixpanel.com"
+    },
+    "mobileye.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Mobileye",
+      "website": "https://www.mobileye.com/",
+      "pageUrl": "https://www.mobileye.com/",
+      "pageTitle": "Mobileye | Driver Assist and Autonomous Driving Technologies",
+      "assetSourceUrl": "https://www.mobileye.com/favicon.ico",
+      "sourceSha256": "739ef8122301f0209a6fdcdad61bddcace654718c7e4d0b1658cb707f74ae002",
+      "retrievedAt": "2026-10-08T07:50:35.282934Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "7f94bb49e77a092651305a4a422961030b12b54b99b941fa0adac81295982d3f"
+    },
+    "mongodb.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "MongoDB",
+      "brandSourceUrl": "https://www.mongodb.com/pressroom",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/mongodb.svg",
+      "license": "CC0-1.0",
+      "sha256": "fca401745ffe2bea0d3806ee9c3c1cd6fd41dd98927e9ae8198a7a6fc99cd0d4"
+    },
+    "morganstanley.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Morgan Stanley",
+      "website": "https://www.morganstanley.com/",
+      "pageUrl": "https://www.morganstanley.com/",
+      "pageTitle": "Morgan Stanley | Global Leader in Financial Services",
+      "assetSourceUrl": "https://www.morganstanley.com/etc.clientlibs/msdotcomr4/clientlibs/components/site/resources/img/favicon-32x32.png",
+      "sourceSha256": "dc8fe15bf09d5256c0ce9926f3c03daeb2232427e4e32c310985ea7795fa01cc",
+      "retrievedAt": "2026-10-08T07:50:34.435822Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "350dd44c30529ffc7c6983a7aae38875bb67b1eec1bd6ab18df6b1c3bcbe107a"
+    },
+    "msci.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "MSCI",
+      "website": "https://www.msci.com/",
+      "pageUrl": "https://www.msci.com/",
+      "pageTitle": "Bringing clarity to investment decisions | MSCI",
+      "assetSourceUrl": "https://www.msci.com/_next/static/media/favicon-16x16.71f10eb6.png",
+      "sourceSha256": "b720a11ea1f51212648555b8421c0e41fa96a672db6cc122f85dd21647144fab",
+      "retrievedAt": "2026-10-08T07:50:36.088023Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "5f085c711f8bc0d3e1eaea2a8c53960f2c4b5b3888dfba7a535a6d64fefee257"
+    },
+    "myntra.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Myntra",
+      "website": "https://www.myntra.com/",
+      "pageUrl": "https://www.myntra.com/",
+      "pageTitle": "Online Shopping for Women, Men, Kids Fashion & Lifestyle - Myntra",
+      "assetSourceUrl": "https://constant.myntassets.com/www/icons/favicon.ico",
+      "sourceSha256": "1a13061de4b029b811739ec5f5722979038bada6f6eb7b8a52c0be2ff4a81f38",
+      "retrievedAt": "2026-10-08T07:50:35.661142Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "431000e6cd8e7f68be14ec58b2f0437843d0a0d5503100869f5e7ff5ce29856a"
+    },
+    "nagarro.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Nagarro",
+      "website": "https://www.nagarro.com/",
+      "pageUrl": "https://www.nagarro.com/en/",
+      "pageTitle": "Nagarro: AI, digital engineering & enterprise transformation",
+      "assetSourceUrl": "https://www.nagarro.com/hubfs/favicon-1.ico",
+      "sourceSha256": "c4d4ab7926022065fa11acb76b434616d4372429badc27f3611d177c916e6d47",
+      "retrievedAt": "2026-10-08T07:50:39.248317Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "43708ce700d0398217f78b12ce4542844416894d967823740e99923816533d44"
+    },
+    "nationalinstruments.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "National Instruments",
+      "website": "https://www.ni.com/",
+      "pageUrl": "https://www.ni.com/en.html",
+      "pageTitle": "NI Test & Measurement Solutions from Emerson - NI",
+      "assetSourceUrl": "https://www.ni.com/favicon-16x16.png",
+      "sourceSha256": "9dbf6ac19bba4b9b6a5288d910e13d2cdea4ca3baa8f1f53a7495e19fb352f63",
+      "retrievedAt": "2026-10-08T07:50:36.548115Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "00df3cf3b0744ab0b207473e2458d01250cd457f737a7cb0fc22fd65a96292a5"
+    },
+    "netapp.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "NetApp",
+      "brandSourceUrl": "https://www.netapp.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/netapp.svg",
+      "license": "CC0-1.0",
+      "sha256": "9f294715081c527b0771e436cf97b1e4647d2510508cd96524c610c2bf8b6dae",
+      "guidelines": "https://www.netapp.com/company/legal/trademark-guidelines/"
+    },
+    "netease.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "NetEase",
+      "website": "https://www.neteasegames.com/",
+      "pageUrl": "https://www.neteasegames.com/",
+      "pageTitle": "NetEase Games",
+      "assetSourceUrl": "https://www.neteasegames.com/favicon.ico",
+      "sourceSha256": "f5717a87d283e8ccdc3f05f6eb86d272762e74c5678396ee4ada8c0246e220b6",
+      "retrievedAt": "2026-10-08T07:50:37.840700Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8785a8d8263266ba6df9d3ee85eb42264e8d0134084b2f21a2e91ea9b1b8c84f"
+    },
+    "netflix.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Netflix",
+      "brandSourceUrl": "https://brand.netflix.com/en/assets/logos",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/netflix.svg",
+      "license": "CC0-1.0",
+      "sha256": "58e9141e7b39b02759d5a285574e3938095e8fffbce83697d7f953609be39041",
+      "guidelines": "https://brand.netflix.com/en/assets/logos"
+    },
+    "netskope.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Netskope",
+      "website": "https://www.netskope.com/",
+      "pageUrl": "https://www.netskope.com/",
+      "pageTitle": "Netskope: modern security and networking for the cloud and AI era",
+      "assetSourceUrl": "https://www.netskope.com/wp-content/uploads/2019/04/cropped-favicon-192x192.png",
+      "sourceSha256": "3b435436c6fe203b27c25193dc598675df128e0f70d2690990a4136e37e7010b",
+      "retrievedAt": "2026-10-08T07:50:36.598030Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "c58fc28ef5290668b8af7370fac8d4e01632da9a19691d2e8080e633417886ed"
+    },
+    "nextdoor.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Nextdoor",
+      "brandSourceUrl": "https://about.nextdoor.com/us-media/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/nextdoor.svg",
+      "license": "CC0-1.0",
+      "sha256": "a20e5b8dd27c9db015ccfac3ffa0704a89fd6f9e7d1148e79ed2b4080b8bb742"
+    },
+    "niantic.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Niantic",
+      "brandSourceUrl": "https://nianticlabs.com/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/niantic.svg",
+      "license": "CC0-1.0",
+      "sha256": "9a6a700176e992727ebc9da3e8a53d46c884c83bc7b613b6550548936e1e3ee4"
+    },
+    "nielsen.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Nielsen",
+      "website": "https://www.nielsen.com/",
+      "pageUrl": "https://www.nielsen.com/",
+      "pageTitle": "Nielsen | Audience Is Everything®Nielsen | Audience Is Everything®",
+      "assetSourceUrl": "https://www.nielsen.com/wp-content/uploads/sites/2/2021/10/cropped-nielsen_favicon_512x512-1.png?w=192",
+      "sourceSha256": "687ef61005ba5187041b495a8a43aa1892ca052d37ca10c5898829e882876c30",
+      "retrievedAt": "2026-10-08T07:50:37.226204Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "66279f4cbd3b297d8425b1643eee56e0a434633312276e3ad6cb5581b1cfb99f"
+    },
+    "nike.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Nike",
+      "brandSourceUrl": "https://www.nike.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/nike.svg",
+      "license": "CC0-1.0",
+      "sha256": "5f29a8139e5fc410e338bac73dd6806d4dc930fda5aa6f9c843ec924dacaa4e4"
+    },
+    "nokia.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Nokia",
+      "brandSourceUrl": "https://www.nokia.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/nokia.svg",
+      "license": "CC0-1.0",
+      "sha256": "69ae4b6647bdcc7273c50c474fe88742eea970a32ee14a7e548e58f0cef7db93"
+    },
+    "notion.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Notion",
+      "brandSourceUrl": "https://www.notion.so",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/notion.svg",
+      "license": "CC0-1.0",
+      "sha256": "201bca327bb1cdb5f05bd9b03a536f218f20a4c57c8ba49c823ce7123e5276bc"
+    },
+    "nutanix.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Nutanix",
+      "brandSourceUrl": "https://www.nutanix.com/content/dam/nutanix/en/cmn/documents/nutanix-brandbook.pdf",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/nutanix.svg",
+      "license": "CC0-1.0",
+      "sha256": "1eee1585054d6f99a392ce70941c6171242475cccb7a192ff4921db10bbf01f5"
+    },
+    "nvidia.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "NVIDIA",
+      "brandSourceUrl": "https://www.nvidia.com/en-us",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/nvidia.svg",
+      "license": "CC0-1.0",
+      "sha256": "0f77b210f64623ab66cbe2de998805c55a60f746bb227034a10717ec319cc071"
+    },
+    "odoo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Odoo",
+      "brandSourceUrl": "https://www.odoo.com/page/brand-assets",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/odoo.svg",
+      "license": "CC0-1.0",
+      "sha256": "2c6473e836d91f7473916e476689796118ddb18332d78631032a2d2ddc43f40a",
+      "guidelines": "https://www.odoo.com/page/brand-assets"
+    },
+    "okta.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Okta",
+      "brandSourceUrl": "https://www.okta.com/press-room/media-assets/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/okta.svg",
+      "license": "CC0-1.0",
+      "sha256": "db308707ba9daaf2b926fe177039c3c6df54a10133fe4d0695360ba7db111614",
+      "guidelines": "https://www.okta.com/terms-of-use-for-okta-content/"
+    },
+    "okx.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "OKX",
+      "brandSourceUrl": "https://commons.wikimedia.org/wiki/File:OKX_logo.svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/okx.svg",
+      "license": "CC0-1.0",
+      "sha256": "cce3f31667fb05967a8412800a261c102bb91a02283bc4a86489c74aa2ab9f0d"
+    },
+    "openai.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "OpenAI",
+      "brandSourceUrl": "https://openai.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/openai.svg",
+      "license": "CC0-1.0",
+      "sha256": "f137a43f5d40557e24bc391b2465623bb8e5ae4139489afba091c010aa7a3669"
+    },
+    "opentext.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "OpenText",
+      "brandSourceUrl": "https://www.opentext.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/opentext.svg",
+      "license": "CC0-1.0",
+      "sha256": "74bc0bf0d8f951e99f71a7bdf1000270a62e7451165d97138bc6b21cbd29e191"
+    },
+    "oracle.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Oracle",
+      "brandSourceUrl": "https://www.oracle.com/opn/index.html",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/oracle.svg",
+      "license": "CC0-1.0",
+      "sha256": "6d51e752e043af2dc575850a438f21323b9f49354617540384eab99cc19ad601",
+      "guidelines": "https://www.oracle.com/legal/logos.html"
+    },
+    "otterai.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Otter.ai",
+      "website": "https://otter.ai/",
+      "pageUrl": "https://otter.ai/",
+      "pageTitle": "Otter Meeting Agent - AI Notetaker, Transcription, Insights",
+      "assetSourceUrl": "https://cdn.prod.website-files.com/618e9316785b3582a5178502/618e94bcbca88b51e2ad81f7_favicon.png",
+      "sourceSha256": "35ecb4b6ff1f901155345fcc531eb04264c717b0b1f7157d564c45ee74f0dfc7",
+      "retrievedAt": "2026-10-08T07:50:39.065084Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "d3d1169ed95c746c43b6ff9b829fa5e8b33b57bf1e107d1bb9cb62a66e6b67af"
+    },
+    "oyo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "OYO",
+      "brandSourceUrl": "https://www.oyorooms.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/oyo.svg",
+      "license": "CC0-1.0",
+      "sha256": "b9501e270d2b69e6f195eda89cd0e1735cab7d1baaed8faaa0893290efeef5be"
+    },
+    "palantir.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Palantir",
+      "brandSourceUrl": "https://github.com/palantir/conjure/blob/1b0d450dc52c4822b4c9d1da8c61ad7f78855fe5/docs/media/palantir-logo.svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/palantir.svg",
+      "license": "CC0-1.0",
+      "sha256": "e9366c794c6cc76700c73e3523a4af40a78cca1c2c799a1136ddf659fc69932d"
+    },
+    "paloaltonetworks.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Palo Alto Networks",
+      "brandSourceUrl": "https://www.paloaltonetworks.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/paloaltonetworks.svg",
+      "license": "CC0-1.0",
+      "sha256": "ca9b5ebb8ab0a078f8c9b5412f76394ad05feae05121292dd946c8f3e286915b",
+      "guidelines": "https://www.paloaltonetworks.com/company/brand"
+    },
+    "patreon.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Patreon",
+      "brandSourceUrl": "https://www.patreon.com/brand",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/patreon.svg",
+      "license": "CC0-1.0",
+      "sha256": "14b4b16ece79875ed0abfdfc40351475c8c4211b427df54a14ef4103adceda0b",
+      "guidelines": "https://www.patreon.com/brand"
+    },
+    "paycom.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Paycom",
+      "website": "https://www.paycom.com/",
+      "pageUrl": "https://www.paycom.com/",
+      "pageTitle": "The #1 HR and Payroll Software | PaycomPaycom® LogoPaycom® LogoPaycom® Logo",
+      "assetSourceUrl": "https://www.paycom.com/favicon.ico?v=3.0",
+      "sourceSha256": "bedb81d0dc4ddbaa38e4bc26b8f6d09d97811d690dacb81c6c4f80cdc4bf208e",
+      "retrievedAt": "2026-10-08T07:50:40.288061Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "033e1ceaf0973fedcdcc7a8c2679539a516a77b66f5a53a8b3523cf251064d38"
+    },
+    "paypal.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "PayPal",
+      "brandSourceUrl": "https://www.paypal.com/us",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/paypal.svg",
+      "license": "CC0-1.0",
+      "sha256": "f001cc2597a17bb99283437e74f7374faafe32215eaac23fd4d9584de670240a",
+      "guidelines": "https://newsroom.paypal-corp.com/media-resources"
+    },
+    "paypay.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "PayPay",
+      "website": "https://paypay.ne.jp/",
+      "pageUrl": "https://paypay.ne.jp/",
+      "pageTitle": "PayPay - QRコードで支払うキャッシュレス決済のスマホアプリ",
+      "assetSourceUrl": "https://paypay.ne.jp/uploads/2022/03/cropped-cropped-paypay-192x192.png",
+      "sourceSha256": "0ab10522e615b0011f8d39726ea4fb5fbf0e380e83fb89177fa9e03250c8b32f",
+      "retrievedAt": "2026-10-08T07:50:38.874107Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "0098662c6fdc9d9936ecb84512e287cad82da34cc87c18f0cbe70e2ddcf551af"
+    },
+    "paytm.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Paytm",
+      "brandSourceUrl": "https://paytm.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/paytm.svg",
+      "license": "CC0-1.0",
+      "sha256": "505cbcc095d029a929b33e725ca31948db939bfccfb386fbdd5652be26a13b33"
+    },
+    "payu.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "PayU",
+      "website": "https://corporate.payu.com/",
+      "pageUrl": "https://corporate.payu.com/",
+      "pageTitle": "Financial Services for Emerging Markets | PayU GlobalPayU Global",
+      "assetSourceUrl": "https://corporate.payu.com/wp-content/uploads/2020/05/cropped-PAYU_LOGO_SQUARE_LIME-e1589274472992-32x32.jpg",
+      "sourceSha256": "b43537da412df52e69a1640729fddb69d21237a7ec1ef44be216875ef0219031",
+      "retrievedAt": "2026-10-08T07:50:41.353337Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8c343524ec808342ef5117da283149a45db0e61aad55cc5907f7f3c9cc4d9b14"
+    },
+    "peloton.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Peloton",
+      "brandSourceUrl": "https://press.onepeloton.com/#logos",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/peloton.svg",
+      "license": "CC0-1.0",
+      "sha256": "937eb5ec1c699a7467441351c231bcc050cb701b49f2ba16b8762f911b810edb"
+    },
+    "persistentsystems.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "persistent systems",
+      "website": "https://www.persistent.com/",
+      "pageUrl": "https://www.persistent.com/",
+      "pageTitle": "Re(AI)magining the World: AI & Digital Engineering with Persistent",
+      "assetSourceUrl": "https://www.persistent.com/wp-content/uploads/2020/09/persistent-logo-favicon-icon-1.ico",
+      "sourceSha256": "e4b6d5faebb70e4fd65ac90da856008198c7c10e73050425d454a877e5ee3d2d",
+      "retrievedAt": "2026-10-08T07:50:42.820866Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "f519c2fbb1998fd409826a4dfeca77058cc29aa79a64143c8a674ec22ceae382"
+    },
+    "phonepe.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "PhonePe",
+      "brandSourceUrl": "https://www.phonepe.com/press/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/phonepe.svg",
+      "license": "CC0-1.0",
+      "sha256": "9dcdc45732eeaf482e1263011ef9efc886850ae8c50b616fe3df296208784ac4"
+    },
+    "pinterest.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Pinterest",
+      "brandSourceUrl": "https://business.pinterest.com/en/brand-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/pinterest.svg",
+      "license": "CC0-1.0",
+      "sha256": "aae59cc28074696d0d6e3486419ef5c95180a5a584826ebf9c88e79d3640b2a1",
+      "guidelines": "https://business.pinterest.com/en/brand-guidelines"
+    },
+    "postmates.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Postmates",
+      "brandSourceUrl": "https://postmates.com/press-and-media",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/postmates.svg",
+      "license": "CC0-1.0",
+      "sha256": "0b03d6bfe3eeec5d5dd340159f019a1dd0277f528910b62c7cc337e4bb1bc9c0"
+    },
+    "publicissapient.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Publicis Sapient",
+      "website": "https://www.publicissapient.com/",
+      "pageUrl": "https://www.publicissapient.com/",
+      "pageTitle": "AI Solutions for the Enterprise",
+      "assetSourceUrl": "https://www.publicissapient.com/etc.clientlibs/ps-redesign/clientlibs/clientlib-site/resources/icons/favicon-48x48.png",
+      "sourceSha256": "602d7e3258641c9d82c7997d49e15feea68af9676158ac8724747125cec6eb1c",
+      "retrievedAt": "2026-10-08T07:50:40.231534Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "975d8ed7e9c7d2d0bc216be5d635e3b1b01323a933ff0159944251817409f1bd"
+    },
+    "pwc.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Pwc",
+      "website": "https://www.pwc.com/",
+      "pageUrl": "https://www.pwc.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.pwc.com/favicon.ico",
+      "sourceSha256": "e9f698997d5ab98afeb24fc818327e8e66d2b736ea1f426aa3c1962e64b8d300",
+      "retrievedAt": "2026-10-08T07:54:22.739075Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "0ad31fb35696f91288e9ae039c3f224f4e102395b528e2633e0949899ab93544"
+    },
+    "qualcomm.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Qualcomm",
+      "brandSourceUrl": "https://www.qualcomm.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/qualcomm.svg",
+      "license": "CC0-1.0",
+      "sha256": "cf19e0274d0129a34a0ff664e79a0e53c2b96c4ca100ca5f5afcd7adac04aafa"
+    },
+    "qualtrics.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Qualtrics",
+      "brandSourceUrl": "https://www.qualtrics.com/brand-book",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/qualtrics.svg",
+      "license": "CC0-1.0",
+      "sha256": "224a56a3b727b4a75a5650033d31251fd2a6034cd51bd4862a33bfedc7d44100",
+      "guidelines": "https://www.qualtrics.com/brand-book"
+    },
+    "quora.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Quora",
+      "brandSourceUrl": "https://www.quora.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/quora.svg",
+      "license": "CC0-1.0",
+      "sha256": "9e9fbaa98c3161e2b4792858ee4586868391df601dd223f4dbd1c5ff5e51c325"
+    },
+    "rakuten.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Rakuten",
+      "brandSourceUrl": "https://global.rakuten.com/corp/news/media",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/rakuten.svg",
+      "license": "CC0-1.0",
+      "sha256": "1585e639c7e0df77b418e71322225e3c41f02bd85cd050829aa924a29b25956e",
+      "guidelines": "https://global.rakuten.com/corp/news/media"
+    },
+    "razorpay.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Razorpay",
+      "brandSourceUrl": "https://razorpay.com/newsroom/brand-assets/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/razorpay.svg",
+      "license": "CC0-1.0",
+      "sha256": "d001c6cca46dab90fba4582dc11bed9fae8185e5c34a890c90e2c25e681e5dda",
+      "guidelines": "https://razorpay.com/newsroom/brand-assets/"
+    },
+    "rbc.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "RBC",
+      "website": "https://www.rbc.com/",
+      "pageUrl": "https://www.rbc.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.rbc.com/favicon.ico",
+      "sourceSha256": "4ce04021dcad4967eb75870b28569d812455223682a6dfd6aa948115944c692d",
+      "retrievedAt": "2026-10-08T07:50:41.220827Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "7c558086b394a57f41e68fa097c4121635c75b589ee33f0f569828c7f438a9c9"
+    },
+    "reddit.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Reddit",
+      "brandSourceUrl": "https://www.redditinc.com/brand",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/reddit.svg",
+      "license": "CC0-1.0",
+      "sha256": "74fa190a11ffb77cabecce548d0471293c611a55fd96dc955695d7a1cf0f6c94",
+      "guidelines": "https://www.redditinc.com/brand"
+    },
+    "remitly.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Remitly",
+      "website": "https://www.remitly.com/",
+      "pageUrl": "https://www.remitly.com/",
+      "pageTitle": "Send or Transfer Money Online with Remitly",
+      "assetSourceUrl": "https://media.remitly.io/favicon_48x48.Sv52ZGOCClWtzsgL.png",
+      "sourceSha256": "7b4ed611bc20ec5abd1ac8a87f67d345fa52375fa5429766aab5af89978e59f7",
+      "retrievedAt": "2026-10-08T07:50:41.639110Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "88ef8c727cd501f3650a27fd5f7ce87e80ecacab570af1502eae4035b620163c"
+    },
+    "revolut.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Revolut",
+      "brandSourceUrl": "https://developer.revolut.com/docs/resources/marketing-assets-guidelines/marketing-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/revolut.svg",
+      "license": "CC0-1.0",
+      "sha256": "4b82ad5c68e39fee464f2eff1fcec1bbf1c49fcf5a8202af8746a90755b23e89"
+    },
+    "riotgames.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Riot Games",
+      "brandSourceUrl": "https://www.riotgames.com/en/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/riotgames.svg",
+      "license": "CC0-1.0",
+      "sha256": "c6f970b251e373be3ed6e1e44ef2326466fbe1ab1489cebedb19d4b49d8544d7"
+    },
+    "ripple.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Ripple",
+      "brandSourceUrl": "https://www.ripple.com/media-kit/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/ripple.svg",
+      "license": "CC0-1.0",
+      "sha256": "f31401723e0e5a2ad7b5246199aa391766252935b066ffb758e61e4d53f7ef2a",
+      "guidelines": "https://brand.ripple.com/document/44#/foundations/logo"
+    },
+    "rippling.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Rippling",
+      "website": "https://www.rippling.com/",
+      "pageUrl": "https://www.rippling.com/",
+      "pageTitle": "Rippling: #1 Workforce Management System | HR, IT, FinanceRippling",
+      "assetSourceUrl": "https://www.rippling.com/favicons/favicon-16x16.png",
+      "sourceSha256": "9acce33ead0cd5ddd44c8b2ebb51a11c7a18881dd83963794db4ddbdbb591520",
+      "retrievedAt": "2026-10-08T07:50:41.184928Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "6da3ff4d3859c5047487a3690e1c065f87f0a046b406211fb7357b4b4880f73a"
+    },
+    "rivian.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Rivian",
+      "website": "https://rivian.com/",
+      "pageUrl": "https://rivian.com/",
+      "pageTitle": "Rivian: Electric Vehicles Designed For Adventure",
+      "assetSourceUrl": "https://rivian.com/favicon.ico",
+      "sourceSha256": "48edf9dd5232a9c358bec47879ef1c1b9ca9a48bfe1371f29a62d4f87833412e",
+      "retrievedAt": "2026-10-08T07:50:43.843674Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "c78362e18c183249bd9a697ee7c0e3f928ca1ddb209765b46a8e3f86cb59e395"
+    },
+    "robinhood.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Robinhood",
+      "brandSourceUrl": "https://press.robinhood.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/robinhood.svg",
+      "license": "CC0-1.0",
+      "sha256": "0f5e3a402fdd7a2182d41ded29ec6a07d0f31d2e4e3b7321885bb4827ee99eab"
+    },
+    "roblox.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Roblox",
+      "brandSourceUrl": "https://www.roblox.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/roblox.svg",
+      "license": "CC0-1.0",
+      "sha256": "b721332a05ba193299b60ee0b7cbf5e14d9ee8048c6fd46ebae92408f26e8d90",
+      "guidelines": "https://en.help.roblox.com/hc/en-us/articles/115001708126-Roblox-Name-and-Logo-Community-Usage-Guidelines"
+    },
+    "roche.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Roche",
+      "website": "https://www.roche.com/",
+      "pageUrl": "https://www.roche.com/",
+      "pageTitle": "Roche - Doing now what patients need next",
+      "assetSourceUrl": "https://www.roche.com/favicon.ico",
+      "sourceSha256": "ff62f5ce0e0884e7772a1abcd299ce8b0db9614e9328c1b9af29b006b9bd4a6d",
+      "retrievedAt": "2026-10-08T07:50:43.380838Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "e8e07face7596d60996e0b69e832541753455a6ddf2136fad4c786a35ea0f602"
+    },
+    "roku.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Roku",
+      "brandSourceUrl": "https://www.roku.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/roku.svg",
+      "license": "CC0-1.0",
+      "sha256": "4b3efc343c2ffb8faa353c7f9f661150b437c5d1eee95de2171b42406f819230",
+      "guidelines": "https://docs.roku.com/published/trademarkguidelines/en/ca"
+    },
+    "salesforce.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Salesforce",
+      "brandSourceUrl": "https://brand.salesforce.com/content/logo-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/salesforce.svg",
+      "license": "CC0-1.0",
+      "sha256": "2fd32889d57eaf7e51fb487298ba9c2358c95e7f23e3e3224e7b34574ee25e12",
+      "guidelines": "https://brand.salesforce.com/content/logo-guidelines"
+    },
+    "samsara.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Samsara",
+      "website": "https://www.samsara.com/",
+      "pageUrl": "https://www.samsara.com/",
+      "pageTitle": "Samsara | The Connected Operations Platform",
+      "assetSourceUrl": "https://www.samsara.com/favicon.ico",
+      "sourceSha256": "feb1d8ee2f4c2c055f80440998b2044ebdff1ba9e0b3081f92cba9121a2c8ce8",
+      "retrievedAt": "2026-10-08T07:50:43.598084Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "4fc9469796744674a907fc7c2d7d855c77b3148c341735d96be979d11fac585f"
+    },
+    "samsung.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Samsung",
+      "brandSourceUrl": "https://www.samsung.com/us/about-us/brand-identity/logo/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/samsung.svg",
+      "license": "CC0-1.0",
+      "sha256": "d9f6e2cf5621566de8bf2a6a3439bf3de690c1ba8ec465b025455c85f5c69b10",
+      "guidelines": "https://www.samsung.com/us/about-us/brand-identity/logo/"
+    },
+    "sap.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "SAP",
+      "brandSourceUrl": "https://www.sap.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/sap.svg",
+      "license": "CC0-1.0",
+      "sha256": "e7e5c4dba04ca227dc50a58050ad6ba77ae2ae9a3c23831e110fe12873c7ccd6"
+    },
+    "sentry.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Sentry",
+      "brandSourceUrl": "https://sentry.io/branding/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/sentry.svg",
+      "license": "CC0-1.0",
+      "sha256": "f4122865338a48bc4d302925815458627ed0350ff4584f63e70c79e5ce34bb3f"
+    },
+    "servicenow.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "ServiceNow",
+      "website": "https://www.servicenow.com/",
+      "pageUrl": "https://www.servicenow.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.servicenow.com/favicon.ico",
+      "sourceSha256": "dc396aed077e7beff58d741b036a1c15fb6607f2531dea18dda47087645c868a",
+      "retrievedAt": "2026-10-08T07:54:38.277009Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "e1414d6f955266d5e4ed60049194d0f41873f064f311d08e33931b2a57352dc7"
+    },
+    "shopee.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Shopee",
+      "brandSourceUrl": "https://shopee.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/shopee.svg",
+      "license": "CC0-1.0",
+      "sha256": "be0b06eaf6b95b7f85ce931d525b5866ef39e04f630aceb09dca0eaaae21d285"
+    },
+    "shopify.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Shopify",
+      "brandSourceUrl": "https://www.shopify.com/brand-assets",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/shopify.svg",
+      "license": "CC0-1.0",
+      "sha256": "128155f3286f20fdb17b27c4ce24944092608b7473ba6d10a438c987c6d0bb32",
+      "guidelines": "https://www.shopify.com/brand-assets"
+    },
+    "siemens.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Siemens",
+      "brandSourceUrl": "https://siemens.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/siemens.svg",
+      "license": "CC0-1.0",
+      "sha256": "9a5037cf1703bf76118433ab2b3834576b8af245e89e6a4a107143204c4326d3"
+    },
+    "smartsheet.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Smartsheet",
+      "website": "https://www.smartsheet.com/",
+      "pageUrl": "https://www.smartsheet.com/",
+      "pageTitle": "Work Management Platform | Smartsheet",
+      "assetSourceUrl": "https://www.smartsheet.com/sites/default/files/favicons/favicon-16x16.png",
+      "sourceSha256": "730413b3d84f53ed1fe7d329db75a24c01a4a07f9cb0cfc595c5ceefd19dfa8e",
+      "retrievedAt": "2026-10-08T07:50:42.378636Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "53848efccab09c3745fce4843d560a48048d35f83760856589d7d1c14c6990ee"
+    },
+    "snowflake.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Snowflake",
+      "brandSourceUrl": "https://www.snowflake.com/brand-guidelines/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/snowflake.svg",
+      "license": "CC0-1.0",
+      "sha256": "fee1d13b7f342a913a1e595a76939466e3e0ac759a1a1ad3020be6b600b7f008",
+      "guidelines": "https://www.snowflake.com/brand-guidelines/"
+    },
+    "sofi.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "SoFi",
+      "website": "https://www.sofi.com/",
+      "pageUrl": "https://www.sofi.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.sofi.com/favicon.ico",
+      "sourceSha256": "5a8530df469313ea3145d4f6b15ae1bb1c69a0f9a6241c78781e3b38aba0af01",
+      "retrievedAt": "2026-10-08T07:54:23.272876Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "e834f1711b5d7513640c2b438a0b6522f42daa9e29a3a167ff51e8b3cbf3b64c"
+    },
+    "sony.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Sony",
+      "brandSourceUrl": "https://www.sony.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/sony.svg",
+      "license": "CC0-1.0",
+      "sha256": "7e65dbf602e0471802443368eeb4951b9b4650e2de48f98c5798a18d47adf478"
+    },
+    "splunk.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Splunk",
+      "brandSourceUrl": "https://www.splunk.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/splunk.svg",
+      "license": "CC0-1.0",
+      "sha256": "e49aefd2b8164ecc4e1f104b330a117a652d59e48a2e7596afc63eabbfd6e101"
+    },
+    "spotify.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Spotify",
+      "brandSourceUrl": "https://developer.spotify.com/documentation/general/design-and-branding/#using-our-logo",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/spotify.svg",
+      "license": "CC0-1.0",
+      "sha256": "eff1e024ab5f155c0b4f7ba785399662034247759dd8daa9f92d5bfbf5bc0c39",
+      "guidelines": "https://developer.spotify.com/documentation/general/design-and-branding/#using-our-logo"
+    },
+    "sprinklr.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Sprinklr",
+      "website": "https://www.sprinklr.com/",
+      "pageUrl": "https://www.sprinklr.com/",
+      "pageTitle": "Sprinklr: The Definitive AI-Native Customer Experience Platform",
+      "assetSourceUrl": "https://www.sprinklr.com/images/favicon-32x32.png",
+      "sourceSha256": "36830aae36fdc2a46ff37f1c727af916d203f7619dd0cc4ec81876b1b357f4f8",
+      "retrievedAt": "2026-10-08T07:50:44.900275Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "732049692d26939070302d24eab3599c1294986e5c45609039965ce9227f0e80"
+    },
+    "squarespace.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Squarespace",
+      "brandSourceUrl": "https://www.squarespace.com/logo-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/squarespace.svg",
+      "license": "CC0-1.0",
+      "sha256": "1db40840d8b7f09903bb6e5c975c6f14bef32750b45cf8cdc384820ee3342ade",
+      "guidelines": "https://www.squarespace.com/brand-guidelines"
+    },
+    "stripe.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Stripe",
+      "brandSourceUrl": "https://stripe.com/newsroom/information",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/stripe.svg",
+      "license": "CC0-1.0",
+      "sha256": "7fb52645a1f46eeba4403002c5a5b5bb00774081c616ebbce09e16c3d078511d"
+    },
+    "sumologic.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Sumo Logic",
+      "brandSourceUrl": "https://sites.google.com/sumologic.com/sumo-logic-brand/home",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/sumologic.svg",
+      "license": "CC0-1.0",
+      "sha256": "8137984c3b235de06ef0b084d78d6529e8c2d6e5273e0b56ffaaabac47a2e916",
+      "guidelines": "https://sites.google.com/sumologic.com/sumo-logic-brand/home"
+    },
+    "swiggy.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Swiggy",
+      "brandSourceUrl": "https://www.swiggy.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/swiggy.svg",
+      "license": "CC0-1.0",
+      "sha256": "e7f5592726efe8755e31f1902ec8edadc7c45429ae536911a561772b004733a9"
+    },
+    "synopsys.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Synopsys",
+      "website": "https://www.synopsys.com/",
+      "pageUrl": "https://www.synopsys.com/",
+      "pageTitle": "Synopsys | EDA Tools, Semiconductor IP & Systems Verification",
+      "assetSourceUrl": "https://www.synopsys.com/etc.clientlibs/synopsys/clientlibs/synopsys-pagelibs/resources/images/favicon.ico",
+      "sourceSha256": "5a16e89c005a10e3bd483fdc24765895435b5f73ea64b90feb7049430b6b22f7",
+      "retrievedAt": "2026-10-08T07:50:43.397273Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "d2c8aa592861aeb7b0eacad88ea27b8eba06a252dce3e3a33d5dd35ac5a04960"
+    },
+    "target.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Target",
+      "brandSourceUrl": "https://www.target.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/target.svg",
+      "license": "CC0-1.0",
+      "sha256": "bde2521b031585a434854d45a79d4165871ae669103d1e0a2aad6a431aee9d9a"
+    },
+    "tcs.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Tata Consultancy Services",
+      "brandSourceUrl": "https://www.tcs.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/tcs.svg",
+      "license": "CC0-1.0",
+      "sha256": "3b65b5b6fab80a3201164fbf971260f4aca98c546055fef0dedcc5167451f0ce"
+    },
+    "techmahindra.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Tech Mahindra",
+      "website": "https://www.techmahindra.com/",
+      "pageUrl": "https://www.techmahindra.com/",
+      "pageTitle": "Tech Mahindra | Scale at SpeedTech MahindraTech Mahindra",
+      "assetSourceUrl": "https://www.techmahindra.com/themes/custom/techm/favicon/web-app-manifest-192x192.png",
+      "sourceSha256": "99d910edee8276473c3fcead690f35a4ba9e570be737e2e1d68d94047efbc2cd",
+      "retrievedAt": "2026-10-08T07:50:43.897031Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "956a5dee17d4fb816b1bfb159056d433dd392cb0835394a101e8e038fc32726e"
+    },
+    "tekion.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Tekion",
+      "website": "https://tekion.com/",
+      "pageUrl": "https://tekion.com/",
+      "pageTitle": "Tekion | End-to-End AI-Native Automotive Retail Platform",
+      "assetSourceUrl": "https://cdn.prod.website-files.com/685291c1265e608fdfed1a69/68e7f41ac01572a44412b8a3_TAP_Fav_Icon.png",
+      "sourceSha256": "a0dd8d5f52aea8c9ec6eb98ab0a515d4407f4364bd0c7975415ed43ef640a094",
+      "retrievedAt": "2026-10-08T07:50:43.887202Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "9354bc6bdb0515aa3db5a95fce3a0ead2d9db61d1565a3c9c65a70db1ca063eb"
+    },
+    "teradata.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Teradata",
+      "brandSourceUrl": "https://github.com/Teradata/teradata.github.io/blob/0fb3886aaeefea7bea4951c300f49ac8f9c2476f/src/assets/icons/teradata-icon.svg",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/teradata.svg",
+      "license": "CC0-1.0",
+      "sha256": "973199bbed72c337f6ccaa6fec9d1457fd057f5be0e5d1b3f492f03014589418"
+    },
+    "tesco.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Tesco",
+      "brandSourceUrl": "https://www.tesco.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/tesco.svg",
+      "license": "CC0-1.0",
+      "sha256": "b6f1026143533e2706fbfab4be886a0ad9cba7616dcdfe5df3fb691090981886"
+    },
+    "tesla.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Tesla",
+      "brandSourceUrl": "https://www.tesla.com/tesla-gallery",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/tesla.svg",
+      "license": "CC0-1.0",
+      "sha256": "4f825bc5540ed4d9544e13b0e37015f3c3f8ca535b2ea66cd13163f6056a209c"
+    },
+    "texasinstruments.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Texas Instruments",
+      "website": "https://www.ti.com/",
+      "pageUrl": "https://www.ti.com/",
+      "pageTitle": "Analog | Embedded processing | Semiconductor company |  TI.com",
+      "assetSourceUrl": "https://www.ti.com/favicon.ico",
+      "sourceSha256": "905f08bd5e32ed9cabc222fb912696192697cca6082c37b19f212f9a5e0b3285",
+      "retrievedAt": "2026-10-08T07:50:44.444176Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "6ac9b1bc2e0f71568b55749d226c644db48c864b1785120713da3e38d262d6a4"
+    },
+    "thomsonreuters.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Thomson Reuters",
+      "website": "https://www.thomsonreuters.com/",
+      "pageUrl": "https://www.thomsonreuters.com/en",
+      "pageTitle": "Purpose-built technology | Thomson ReutersThomson Reuters",
+      "assetSourceUrl": "https://www.thomsonreuters.com/favicon.ico",
+      "sourceSha256": "3ceed549e912a62efcce446e8b1eeccc26d3bd118e399dba26940bd847404920",
+      "retrievedAt": "2026-10-08T07:50:47.931912Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "1656b95f3b1ac4b0cdd1f2a92246bdf6f694587a23d111bdb9f8337f828d1e36"
+    },
+    "thoughtspot.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "thoughtspot",
+      "website": "https://www.thoughtspot.com/",
+      "pageUrl": "https://www.thoughtspot.com/",
+      "pageTitle": "ThoughtSpot Agentic Analytics Platform",
+      "assetSourceUrl": "https://www.thoughtspot.com/favicon.ico",
+      "sourceSha256": "3d11b86206b9c723ce690651097e1ef3e08211c9046628aa1df5fbba030c1bc3",
+      "retrievedAt": "2026-10-08T07:50:44.930236Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "8dea92f067ad73c09275580f2952c3160a4cb92b0af3252497f621059bfb174e"
+    },
+    "thoughtworks.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "ThoughtWorks",
+      "website": "https://www.thoughtworks.com/",
+      "pageUrl": "https://www.thoughtworks.com/",
+      "pageTitle": "Thoughtworks: A leading technology consultancy | Thoughtworks",
+      "assetSourceUrl": "https://www.thoughtworks.com/etc.clientlibs/thoughtworks/clientlibs/clientlib-site/resources/images/favicon32x32.png",
+      "sourceSha256": "b3742725194db4a5f8d60110e1e6b3591cd755403d9e0a9d5d457ff9323b8ded",
+      "retrievedAt": "2026-10-08T07:50:44.733753Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "213252d363e0fdadde812219d72c5dc7ca9247a7c902ae41b3c5b808236a4590"
+    },
+    "tigeranalytics.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Tiger Analytics",
+      "website": "https://www.tigeranalytics.com/",
+      "pageUrl": "https://www.tigeranalytics.com/",
+      "pageTitle": "AI & Advanced Analytics Solutions for Enterprises | Tiger Analytics",
+      "assetSourceUrl": "https://www.tigeranalytics.com/wp-content/uploads/2023/09/favicon-Tiger-Analytics_-150x150.png",
+      "sourceSha256": "6bb2476d01ea6360544c68754f3ded14e3290d45f0a306a909f5a7459ca2beac",
+      "retrievedAt": "2026-10-08T07:50:45.469622Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "a547c20ab1c5739fe2b6a12f1bbcadbd7f869bce043680c3b79b0956f7391e7f"
+    },
+    "tiktok.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "TikTok",
+      "brandSourceUrl": "https://tiktok.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/tiktok.svg",
+      "license": "CC0-1.0",
+      "sha256": "5d1614b747605f2a8c28f56beec32f4281870cf713929f2f6b7707f6564beddb"
+    },
+    "tinder.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Tinder",
+      "brandSourceUrl": "https://www.gotinder.com/press",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/tinder.svg",
+      "license": "CC0-1.0",
+      "sha256": "25cf4866eeb2f3393dc2d4da422c1d4968795a71ee54d6193a12ee060ea3ec21"
+    },
+    "toast.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Toast",
+      "website": "https://pos.toasttab.com/",
+      "pageUrl": "https://pos.toasttab.com/",
+      "pageTitle": "Toast POS",
+      "assetSourceUrl": "https://d2w1ef2ao9g8r9.cloudfront.net/images/icons/favicon.ico",
+      "sourceSha256": "6ccd4ed4e218892a30263412bdcd9c03a71610be97be38d2c9418259c350145a",
+      "retrievedAt": "2026-10-08T07:50:49.872767Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "487c49bb130e19b278b47e3c3d2ff56b3c1e0287be5d3e627e8a721e6412cdd6"
+    },
+    "toptal.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Toptal",
+      "brandSourceUrl": "https://www.toptal.com/branding",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/toptal.svg",
+      "license": "CC0-1.0",
+      "sha256": "c84c61a2678aeb275a6937ea8424cb7089ccf66769d5774e338ca65ea99db0bf"
+    },
+    "tripadvisor.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Tripadvisor",
+      "brandSourceUrl": "https://tripadvisor.mediaroom.com/logo-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/tripadvisor.svg",
+      "license": "CC0-1.0",
+      "sha256": "4376f8ffd16ea46182610301bb16acf53d586f3ebb7b54108e9800f0707d4ff4",
+      "guidelines": "https://tripadvisor.mediaroom.com/logo-guidelines"
+    },
+    "turing.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Turing",
+      "website": "https://www.turing.com/",
+      "pageUrl": "https://www.turing.com/",
+      "pageTitle": "Turing Talents | Top Compensation & Flexible Remote Work",
+      "assetSourceUrl": "https://www.turing.com/favicon.ico",
+      "sourceSha256": "71cce28778cef2ec8836ca28aabb06fb5cfc1feae1207cbec0a3952e21be6636",
+      "retrievedAt": "2026-10-08T07:50:45.466158Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "a525adf38c143040a9cfd13f065ebfa2dacd4250ec908cade38fab76aa4ad504"
+    },
+    "twilio.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Twilio",
+      "brandSourceUrl": "https://www.twilio.com/company/brand",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/twilio.svg",
+      "license": "CC0-1.0",
+      "sha256": "01a6d5ed150f0bf72a9f8588be7f6712fdd820965bbef82576583ccc138ce357"
+    },
+    "twitch.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Twitch",
+      "brandSourceUrl": "https://brand.twitch.tv",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/twitch.svg",
+      "license": "CC0-1.0",
+      "sha256": "8f014acbd77a44c53754fa0f77422fdc210d349d6064d5654d97ade5d224e985",
+      "guidelines": "https://brand.twitch.tv"
+    },
+    "twosigma.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Two Sigma",
+      "website": "https://www.twosigma.com/",
+      "pageUrl": "https://www.twosigma.com/",
+      "pageTitle": "Home - Two Sigma",
+      "assetSourceUrl": "https://www.twosigma.com/wp-content/themes/tsmb/assets/public/img/favicon-180x180.png",
+      "sourceSha256": "45b150420e6792e37ae72ad4ee677a15295985de768f4494997c3b062d466fff",
+      "retrievedAt": "2026-10-08T07:50:46.543427Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "0a992f80490bfdb4651a7517aa6456ad2235506f28e2a95059184abb36602ff9"
+    },
+    "uber.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Uber",
+      "brandSourceUrl": "https://assets.uber.com/d/k4nuxdZ8MC7E/logos/collection/151",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/uber.svg",
+      "license": "CC0-1.0",
+      "sha256": "81e7f4c74bdc4b7b1a2d0a3fa110597235ad9abfa2a6d4065fc4b8349625c074",
+      "guidelines": "https://assets.uber.com/d/k4nuxdZ8MC7E/user-guide#/user-guide/terms-of-use"
+    },
+    "uipath.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "UiPath",
+      "brandSourceUrl": "https://www.uipath.com/newsroom",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/uipath.svg",
+      "license": "CC0-1.0",
+      "sha256": "38a49f16de093d3a8bfc7ea0d3b41383efaa93469c24cfeeae740fad9b486eb2",
+      "guidelines": "https://brandguidelines.uipath.com"
+    },
+    "ukg.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "UKG",
+      "website": "https://www.ukg.com/",
+      "pageUrl": "https://www.ukg.com/",
+      "pageTitle": "UKG - HR, pay, and workforce management | UKGUKG Company LogoyoutubeUKG Company Logoyoutube",
+      "assetSourceUrl": "https://www.ukg.com/themes/custom/ukg_theme/icons/favicons/favicon-32x32.png",
+      "sourceSha256": "7956372a460bffdde5c06e055ec97b5c2b89f699dca790dac3050848ab62a5d8",
+      "retrievedAt": "2026-10-08T07:50:46.666820Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "9f950ea130a6cf175c3a79139038fa5b67afde9dfbbc94c0f54884746b9b33ed"
+    },
+    "unity.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Unity",
+      "brandSourceUrl": "https://brand.unity.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/unity.svg",
+      "license": "CC0-1.0",
+      "sha256": "111eb4cd9f5f5ea55895fc5a1172de8dc45700f73f1a24ee01d9455abef114e0",
+      "guidelines": "https://unity.com/legal/branding-trademarks"
+    },
+    "usaa.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "USAA",
+      "website": "https://www.usaa.com/",
+      "pageUrl": "https://www.usaa.com/?akredirect=true",
+      "pageTitle": "Enable Cookies  | USAA | USAA",
+      "assetSourceUrl": "https://www.usaa.com/favicon.ico",
+      "sourceSha256": "f9d9506eca356d8fe633f7142233db80cfa48c4c797f12156570283853527b56",
+      "retrievedAt": "2026-10-08T07:50:49.988237Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "62b02b95d46027b5e7dfac8f756d9041b5c18fe1677c61da9631ac4642d766da"
+    },
+    "valve.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Valve",
+      "brandSourceUrl": "https://www.valvesoftware.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/valve.svg",
+      "license": "CC0-1.0",
+      "sha256": "4e6fe06ce06c71aa2b7006421d3d54854e379500ed862418d776085612757cf0"
+    },
+    "vanguard.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Vanguard",
+      "website": "https://corporate.vanguard.com/",
+      "pageUrl": "https://corporate.vanguard.com/",
+      "pageTitle": "Investment Insights and Company Information  | Vanguard",
+      "assetSourceUrl": "https://corporate.vanguard.com/etc.clientlibs/corporatesite/clientlibs/clientlib-site/resources/icons/vanguardLogos/favicon.ico",
+      "sourceSha256": "5cffa84be6843f729fc633bfea97fc0e55b0fcefd4d04187524768e3c3dccd4b",
+      "retrievedAt": "2026-10-08T07:50:47.580609Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "65fbbd9ad5fc3277500f6fa46e6b55f5d587398f197886d4c98500bbc03deab3"
+    },
+    "veevasystems.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Veeva Systems",
+      "website": "https://www.veeva.com/",
+      "pageUrl": "https://www.veeva.com/",
+      "pageTitle": "Veeva Systems | The Industry Cloud for Life Sciences",
+      "assetSourceUrl": "https://www.veeva.com/wp-content/themes/veeva2015/favicon.ico",
+      "sourceSha256": "14aa6693280443a2e6b2a8659556373b4da227d418cf50f004b2192b9e1066eb",
+      "retrievedAt": "2026-10-08T07:50:48.450730Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "251063fb624e8b161c6f661f0f4246660659b68bf13e87d0f073e0c8907c9cf7"
+    },
+    "veritas.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Veritas",
+      "brandSourceUrl": "https://my.veritas.com/cs/groups/partner/documents/styleguide/mdaw/mdq5/~edisp/tus3cpeapp3855186572.pdf",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/veritas.svg",
+      "license": "CC0-1.0",
+      "sha256": "c39257cf8d5130eb6e0ba1f39ce159a44c4298c4e4fdb1cd64f8ee39373325f1"
+    },
+    "verkada.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Verkada",
+      "website": "https://www.verkada.com/",
+      "pageUrl": "https://www.verkada.com/",
+      "pageTitle": "Security Systems for the Modern Enterprise | Verkada",
+      "assetSourceUrl": "https://www.verkada.com/icon1.png?icon1.2qk-j9v8uy50n.png",
+      "sourceSha256": "359c4b8cd5686b92f58c269777ecb7c22aefae87534c83939c1580e00ad47800",
+      "retrievedAt": "2026-10-08T07:50:48.716307Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "a14ec71804c113d3da11c967eb833828c1a3a8910f4f792d3160b96ce86349e8"
+    },
+    "vimeo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Vimeo",
+      "brandSourceUrl": "https://press.vimeo.com/brand-guidelines",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/vimeo.svg",
+      "license": "CC0-1.0",
+      "sha256": "691f84346cbf34736b214188ca15d27f99c6f5d2716a6ad58bf55c4dc6114fc8",
+      "guidelines": "https://press.vimeo.com/brand-guidelines"
+    },
+    "virtusa.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Virtusa",
+      "website": "https://www.virtusa.com/",
+      "pageUrl": "https://www.virtusa.com/",
+      "pageTitle": "",
+      "assetSourceUrl": "https://www.virtusa.com/favicon.ico",
+      "sourceSha256": "7d92e9c29e4597a528bb0c39e01adc5fdca843da3f8363d26816d49cd0141f9c",
+      "retrievedAt": "2026-10-08T07:54:23.706669Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "7e4005e49fdbe65aedf113061ad46cb450a2543f63ae9bfd13a9abeb4bfa6114"
+    },
+    "visa.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Visa",
+      "brandSourceUrl": "https://merchantsignageeu.visa.com/product.asp?dptID=696",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/visa.svg",
+      "license": "CC0-1.0",
+      "sha256": "738a8d1343535b5280f594c2f7abf806487df43a9dad68592094ebe7232f7812"
+    },
+    "vk.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "VK",
+      "brandSourceUrl": "https://vk.com/brand",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/vk.svg",
+      "license": "CC0-1.0",
+      "sha256": "21e85fefe0a985d7e49437874ef5fc534790ecd41f0f9f9e106ed67a31979bfe",
+      "guidelines": "https://vk.com/brand"
+    },
+    "vmware.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "VMware",
+      "brandSourceUrl": "https://myvmware.workspaceair.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/vmware.svg",
+      "license": "CC0-1.0",
+      "sha256": "d9d8a0bd7e7294ebdb4d96fcabc9dd470b56712ad53e4a543fe47867dadf7782"
+    },
+    "walmart.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Walmart",
+      "brandSourceUrl": "https://corporate.walmart.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/walmart.svg",
+      "license": "CC0-1.0",
+      "sha256": "bedeadd0d48dafa8293fb45993b4805c05a93a844a129ae5c239d3076c4573db",
+      "guidelines": "https://one.walmart.com/content/people-experience/associate-brand-center.html"
+    },
+    "wayfair.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Wayfair",
+      "website": "https://www.wayfair.com/",
+      "pageUrl": "https://www.wayfair.com/",
+      "pageTitle": "Wayfair.com - Online Home Store for Furniture, Decor, Outdoors & MoreWayfairAllModernBirch LaneJoss & MainPerigoldWayfairWayfairSearchSearchPrevious SlideNext SlidePrevious SlideNext SlidePrevious SlideNext Slide",
+      "assetSourceUrl": "https://assets.wfcdn.com/st4/stores/common/mobile/touch_icons/wayfair_192x192.png",
+      "sourceSha256": "9624fb9f8f8e24983f9211257ce57c70364fd372f981cd8fbcf120057fb8b39b",
+      "retrievedAt": "2026-10-08T07:50:50.347087Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "6e77566fda9f5b0bbd62eee4d036fb60194662e7d15f84422d8b29d960a78552"
+    },
+    "waymo.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Waymo",
+      "website": "https://waymo.com/",
+      "pageUrl": "https://waymo.com/",
+      "pageTitle": "Waymo - Self-Driving Cars - Autonomous Vehicles - Ride-Hail",
+      "assetSourceUrl": "https://waymo.com/favicon.png",
+      "sourceSha256": "eb0f68a78480f6bbfd8e8101b767097cb44c78a5626aaacbbdd9f9fd0f334772",
+      "retrievedAt": "2026-10-08T07:50:52.071730Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "c2fc028e6ac29ef4b4148c07c0177699f8b66405c3a7aee9d730ac9b521c69cc"
+    },
+    "wellsfargo.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Wells Fargo",
+      "brandSourceUrl": "https://www.wellsfargo.com/about",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/wellsfargo.svg",
+      "license": "CC0-1.0",
+      "sha256": "d5ed28820cc79eef86afaf785240aabe816bffa651e149a6178521fb74fc6e43"
+    },
+    "westerndigital.svg": {
+      "provider": "Simple Icons",
+      "version": "11.15.0",
+      "revision": "0af835e2949a9222965522780e5e0810d3c53382",
+      "brandTitle": "Western Digital",
+      "brandSourceUrl": "https://www.westerndigital.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/westerndigital.svg",
+      "license": "CC0-1.0",
+      "sha256": "e4644ba40407e3b9f30997170dec71adfad761237bd47e1d33ef527ef7574c16"
+    },
+    "wipro.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Wipro",
+      "brandSourceUrl": "https://www.wipro.com/content/dam/nexus/en/service-lines/applications/latest-thinking/state-of-cybersecurity-report-2019.pdf",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/wipro.svg",
+      "license": "CC0-1.0",
+      "sha256": "32db009326d4fdd34146561fc53ed9589baf78b0adcb201b58997da003bba282"
+    },
+    "wise.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Wise",
+      "brandSourceUrl": "https://wise.design/foundations/logo",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/wise.svg",
+      "license": "CC0-1.0",
+      "sha256": "e3a7a6eaa6ce9b64c23b9334faaceee098b0c0b6dce0d709d1d08faf125c1ea0",
+      "guidelines": "https://wise.design/foundations/logo"
+    },
+    "wish.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Wish",
+      "brandSourceUrl": "https://wish.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/wish.svg",
+      "license": "CC0-1.0",
+      "sha256": "484a592bc4352c0ff5af8746b1c9471f1b899f077d602d3d17299d3dada429f2"
+    },
+    "wix.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Wix",
+      "brandSourceUrl": "https://www.wix.com/about/design-assets",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/wix.svg",
+      "license": "CC0-1.0",
+      "sha256": "3df1c5a1c2393e80d19858a6118cddd1693ee98c3e5b19c2be6acb820c96f886",
+      "guidelines": "https://www.wix.com/about/design-assets"
+    },
+    "workday.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Workday",
+      "website": "https://www.workday.com/",
+      "pageUrl": "https://www.workday.com/",
+      "pageTitle": "The Enterprise AI Platform for HR, Finance, and IT | Workday",
+      "assetSourceUrl": "https://www.workday.com/favicon.ico",
+      "sourceSha256": "191c6208283772cc7287e4b6ecc19b06bce92b0963bf3c763245d4bd267d02eb",
+      "retrievedAt": "2026-10-08T07:50:49.399371Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "77554008d3d6e53f29ae97894518ec1d51c9a237f7d13b1b5ced9e8e0dad2b1a"
+    },
+    "yahoo.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Yahoo",
+      "website": "https://www.yahoo.com/",
+      "pageUrl": "https://www.yahoo.com/",
+      "pageTitle": "Yahoo | Mail, Weather, Search, Politics, News, Finance, Sports & Videos",
+      "assetSourceUrl": "https://s.yimg.com/cv/apiv2/icons/yahoo.png",
+      "sourceSha256": "51d4f1be8a9d95ac0d0e31a8ecceb954d5c0b9578591930541242dc2a4f060cb",
+      "retrievedAt": "2026-10-08T07:50:50.654473Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "77c4bd49a6998a022724aaaa051773f2a1e03716564b720c422f623b53aac459"
+    },
+    "yandex.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "Yandex",
+      "website": "https://yandex.com/",
+      "pageUrl": "https://yandex.com/",
+      "pageTitle": "Yandex — fast Internet search",
+      "assetSourceUrl": "https://yastatic.net/s3/home-static/_/nova3/CXZ471pd.png",
+      "sourceSha256": "438e805293101533938cacf1977826cc4b1e54e44ff46f0e24885c376fc26dcb",
+      "retrievedAt": "2026-10-08T07:50:52.053064Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "bca98f98b444334b2cf217f02e232d61ffe968f68f4dcabb64ebe1cac6c67c69"
+    },
+    "yelp.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Yelp",
+      "brandSourceUrl": "https://www.yelp.com/brand",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/yelp.svg",
+      "license": "CC0-1.0",
+      "sha256": "80e4a171a7b263828b8580f03df1f7321cebcf9a044c10271c5a9b5115d987ea",
+      "guidelines": "https://www.yelp.com/brand"
+    },
+    "zalando.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Zalando",
+      "brandSourceUrl": "https://www.zalando.co.uk",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/zalando.svg",
+      "license": "CC0-1.0",
+      "sha256": "3b0ca80f98d8a52099400d6d995d905de3efe5984cf41c02d8903d149b9ece00"
+    },
+    "zendesk.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Zendesk",
+      "brandSourceUrl": "https://brandland.zendesk.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/zendesk.svg",
+      "license": "CC0-1.0",
+      "sha256": "bda9175f2f71d3afdcf1333ae19813f111378963d8ccbdf02c13d8fda3f08ef1",
+      "guidelines": "https://brandland.zendesk.com"
+    },
+    "zillow.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Zillow",
+      "brandSourceUrl": "https://www.zillow.com",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/zillow.svg",
+      "license": "CC0-1.0",
+      "sha256": "47378cc7583e747c6fbf2774c8fe66a185ec0cc731af8408cced9faf0994f35d"
+    },
+    "ziprecruiter.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "ZipRecruiter",
+      "website": "https://www.ziprecruiter.com/",
+      "pageUrl": "https://www.ziprecruiter.in/",
+      "pageTitle": "Job Search - Millions of Jobs Hiring Near You | ZipRecruiter IndiaFacebookTwitterLinkedinInstagram",
+      "assetSourceUrl": "https://www.ziprecruiter.in/uploads/tenant/favicon/11270/ico_zipchair.png?v=20260319",
+      "sourceSha256": "902945e11a779820e87be984531d9fba41892d22ded905350f8598e0b892eb1d",
+      "retrievedAt": "2026-10-08T07:50:51.207949Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "4e3b5578067501a1f3804e8a86615a8371b59c47f004c11b955c66f8cd2f7cbc"
+    },
+    "zoho.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Zoho",
+      "brandSourceUrl": "https://www.zoho.com/branding",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/zoho.svg",
+      "license": "CC0-1.0",
+      "sha256": "5c6a31de4f95a3695fd84b6430ecf40967e8cf037288494884d2745d9ed32fb8"
+    },
+    "zomato.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Zomato",
+      "brandSourceUrl": "https://www.zomato.com/business/apps",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/zomato.svg",
+      "license": "CC0-1.0",
+      "sha256": "e0ce3fc1e9afe6cce50b75a0e1e32aeb8d81b6a44947279d96c8800d30d585cf"
+    },
+    "zoom.svg": {
+      "provider": "Simple Icons",
+      "version": "16.34.0",
+      "revision": "98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d",
+      "brandTitle": "Zoom",
+      "brandSourceUrl": "https://brand.zoom.us/media-library/",
+      "assetSourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/98820a4dc8c363ca72fa2c0d294ea4a0a9bba75d/icons/zoom.svg",
+      "license": "CC0-1.0",
+      "sha256": "c6611597253a3b19bf4e6086d70981889f343b27774cafaee1d3416dc1a6e7ac",
+      "guidelines": "https://brand.zoom.us/usage-legal/"
+    },
+    "zscaler.png": {
+      "provider": "official-site-favicon",
+      "brandTitle": "ZScaler",
+      "website": "https://www.zscaler.com/",
+      "pageUrl": "https://www.zscaler.com/",
+      "pageTitle": "Leading Cloud Enterprise Security Provider for Zero Trust",
+      "assetSourceUrl": "https://www.zscaler.com/favicons/favicon-32x32.ico",
+      "sourceSha256": "b7eff4b4361c8058fbe407d9e1e0e14f425df85f01cd295f6e1ac1271a3ff6bc",
+      "retrievedAt": "2026-10-08T07:50:50.851759Z",
+      "license": "Brand trademark; official site favicon, used to identify the company.",
+      "sha256": "80606dcaa58c1fc1a3632af1565ba407e1a5b93eee4feeb2cdca24a628271b78"
+    }
+  },
+  "unmappedCompanies": [
+    "Accolite",
+    "Akuna Capital",
+    "Alibaba",
+    "Analytics quotient",
+    "AppDynamics",
+    "Applied Intuition",
+    "AQR Capital Management",
+    "Arcesium",
+    "athenahealth",
+    "Attentive",
+    "Aurora",
+    "Avito",
+    "Axon",
+    "Bentley Systems",
+    "BharatPe",
+    "BILL Holdings",
+    "BitGo",
+    "blinkit",
+    "BNY Mellon",
+    "Bolt",
+    "Booking.com",
+    "BP",
+    "Bridgewater Associates",
+    "Cadence",
+    "Careem",
+    "CARS24",
+    "carwale",
+    "Cashfree",
+    "CEDCOSS",
+    "Celigo",
+    "Chime",
+    "ciena",
+    "Circle",
+    "Citadel",
+    "Clari",
+    "Cleartrip",
+    "CME Group",
+    "Coforge",
+    "Cohesity",
+    "Commvault",
+    "Compass",
+    "ConsultAdd",
+    "Coupang",
+    "Coveo",
+    "Cruise",
+    "CTC",
+    "CureFit",
+    "CVENT",
+    "Darwinbox",
+    "Dataminr",
+    "DeltaX",
+    "DevRev",
+    "Devtron",
+    "Directi",
+    "DP world",
+    "Dream11",
+    "DRW",
+    "EarnIn",
+    "Edelweiss Group",
+    "EPAM Systems",
+    "Faire",
+    "Fastenal",
+    "Flexera",
+    "fourkites",
+    "FPT",
+    "Freecharge",
+    "Gameskraft",
+    "GE Digital",
+    "Graviton",
+    "GSA Capital",
+    "GSN Games",
+    "Guidewire",
+    "Harness",
+    "HashedIn",
+    "Hertz",
+    "Highspot",
+    "HiLabs",
+    "Hive",
+    "Hiver",
+    "Hotstar",
+    "HPE",
+    "Hudson River Trading",
+    "Hulu",
+    "IIT Bombay",
+    "IMC",
+    "INDmoney",
+    "Info Edge",
+    "instabase",
+    "IVP",
+    "IXL",
+    "Jane Street",
+    "josh technology",
+    "Jump Trading",
+    "Karat",
+    "Komprise",
+    "Larsen & Toubro",
+    "Lendingkart Technologies",
+    "Lenskart",
+    "Licious",
+    "Liftoff",
+    "LiveRamp",
+    "LTI",
+    "Lucid",
+    "Machine Zone",
+    "MakeMyTrip",
+    "MAQ Software",
+    "Media.net",
+    "Millennium",
+    "Mindtickle",
+    "MindTree",
+    "Mitsogo",
+    "Moengage",
+    "Moloco",
+    "Mountblue",
+    "Moveworks",
+    "National Payments Corporation of India",
+    "Navan",
+    "Navi",
+    "NCR",
+    "Netsuite",
+    "NinjaCart",
+    "Nordstrom",
+    "Nuro",
+    "Nykaa",
+    "Ola Cabs",
+    "Opendoor",
+    "Optiver",
+    "Optum",
+    "Ozon",
+    "peak6",
+    "Pocket Gems",
+    "Point72",
+    "Pony.ai",
+    "PornHub",
+    "Poshmark",
+    "PubMatic",
+    "Pure Storage",
+    "QBurst",
+    "redbus",
+    "Rokt",
+    "Rubrik",
+    "Scale AI",
+    "ShareChat",
+    "SIG",
+    "Sigmoid",
+    "Slice",
+    "smartnews",
+    "Snap",
+    "Snapdeal",
+    "Societe Generale",
+    "Softwire",
+    "SOTI",
+    "SoundHound",
+    "Squarepoint Capital",
+    "StackAdapt",
+    "Stackline",
+    "Tanium",
+    "Tejas Networks",
+    "Tencent",
+    "The Trade Desk",
+    "ThousandEyes",
+    "Tinkoff",
+    "Tower Research Capital",
+    "Trexquant",
+    "Trilogy",
+    "Turo",
+    "Turvo",
+    "TuSimple",
+    "UBS",
+    "Upstart",
+    "Urban Company",
+    "Verily",
+    "Virtu Financial",
+    "Warnermedia",
+    "WatchGuard",
+    "Wealthfront",
+    "WeRide",
+    "Whatnot",
+    "WinZO",
+    "Wissen Technology",
+    "Works Applications",
+    "WorldQuant",
+    "X",
+    "Yext",
+    "Zenefits",
+    "Zepto",
+    "Zeta",
+    "zeta suite",
+    "Zluri",
+    "Zoox",
+    "Zopsmart",
+    "ZS Associates",
+    "Zynga"
+  ],
+  "ambiguousNames": [
+    "Aurora",
+    "Bolt",
+    "Circle",
+    "Compass",
+    "Hive",
+    "Lucid",
+    "Slice",
+    "X"
+  ],
+  "aliases": {
+    "Airbus SE": "Airbus",
+    "Electronic Arts": "EA",
+    "Palantir Technologies": "Palantir",
+    "tcs": "Tata Consultancy Services",
+    "Walmart Labs": "Walmart"
+  }
+}
