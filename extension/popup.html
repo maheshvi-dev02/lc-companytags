@@ -13,6 +13,8 @@
     <span class="edition">COMMUNITY</span>
   </header>
   <main>
+    <button id="explore-dataset" class="explore-dataset" type="button">Explore dataset <span aria-hidden="true">↗</span></button>
+    <p class="explore-hint">Search any problem or company.</p>
     <label class="setting" for="enabled">
       <span><strong>Show on problem pages</strong><span class="setting-hint">A compact card beside your practice.</span></span>
       <input type="checkbox" id="enabled" checked role="switch">
@@ -24,7 +26,7 @@
       <p class="eyebrow">Current problem</p>
       <h2 id="problem-title">Open a LeetCode problem</h2>
       <p id="problem-summary" class="muted">Company tags appear as you browse problem pages.</p>
-      <label id="search-wrap" class="search" hidden><input type="search" id="search" placeholder="Find a company" aria-label="Filter company names" autocomplete="off"></label>
+      <label id="search-wrap" class="search" hidden><input type="search" id="search" placeholder="Filter this problem’s companies" aria-label="Filter company names" autocomplete="off"></label>
       <p id="frequency-heading" class="frequency-heading" tabindex="0" hidden></p>
       <ul id="companies" class="companies" aria-label="Companies listed for this problem"></ul>
       <button id="show-companies" class="show-companies" type="button" aria-controls="companies" aria-expanded="false" hidden><span id="show-companies-label"></span><span class="chevron" aria-hidden="true"></span></button>

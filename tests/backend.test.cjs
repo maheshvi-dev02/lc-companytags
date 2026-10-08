@@ -865,3 +865,257 @@ test('old v2 stages migrate completed records once and resume without metadata o
   assert.equal(savedAmazon.length, 1, 'legacy completed records are migrated to a chunk once');
   assert.equal(storage.values.lctStage, null);
 });
+
+function globalExplorerFixture() {
+  const source = sourceFixture();
+  source.files = [];
+  source.csvByPath = {};
+  const acko = [
+    { slug: 'group-anagrams', title: 'Group Anagrams', frequency: 90, difficulty: 'Medium', topics: ['Array', 'Hash Table'] },
+    { slug: 'longest-substring-without-repeating-characters', title: 'Longest Substring Without Repeating Characters', frequency: 90, difficulty: 'Medium', topics: ['String'] },
+    { slug: 'minimum-window-substring', title: 'Minimum Window Substring', frequency: 0, difficulty: 'Hard', topics: ['String'] },
+    { slug: 'valid-anagram', title: 'Valid Anagram', frequency: null, difficulty: 'Easy', topics: ['String'] }
+  ];
+  const amazon = [
+    { slug: 'two-sum', title: 'Two Sum', frequency: 100, difficulty: 'Easy', topics: ['Array', 'Hash Table'] },
+    { slug: 'two-sum-ii-input-array-is-sorted', title: 'Two Sum II - Input Array Is Sorted', frequency: 80, difficulty: 'Easy', topics: ['Two Pointers'] },
+    { slug: 'advanced-two-sum-variant', title: 'Advanced Two Sum Variant', frequency: 60, difficulty: 'Hard', topics: ['Graph'] },
+    { slug: 'group-anagrams', title: 'Group Anagrams', frequency: 40, difficulty: 'Medium', topics: ['Array', 'Hash Table'] },
+    { slug: 'contains-duplicate', title: 'Contains Duplicate', frequency: 0, difficulty: 'Easy', topics: ['Array'] }
+  ];
+  const large = Array.from({ length: 153 }, (_, index) => ({
+    slug: 'exercise-' + String(index).padStart(3, '0'), title: 'Exercise ' + String(index).padStart(3, '0'),
+    frequency: index < 150 ? 100 - Math.floor(index / 2) : index === 150 ? 0 : null,
+    difficulty: ['Easy', 'Medium', 'Hard'][index % 3], topics: [index % 2 ? 'Graph' : 'Array']
+  }));
+  const add = (name, window, rows) => addWindow(source, name, window, rows, BLOB_A);
+  add('Acko', 'all', acko);
+  add('Amazon', 'all', amazon);
+  add('Acko Labs', 'all', []);
+  add('Zeta Practice', 'all', large);
+  add('Acko', '30d', [acko[3]]);
+  add('Amazon', '30d', [amazon[0]]);
+  add('Acko Labs', '30d', []);
+  add('Zeta Practice', '30d', []);
+  add('Recent Only', '30d', [{ slug: 'recent-question', title: 'Recent Question', frequency: 55, difficulty: 'Hard', topics: ['Graph'] }]);
+  const files = core.selectWindowFiles({ truncated: false, tree: source.files });
+  const parsed = Object.fromEntries(files.map((file) => [file.path, {
+    sha: file.sha, records: core.parseCompanyRecords(source.csvByPath[file.path])
+  }]));
+  const data = core.buildData(files, parsed, SHA_A, '2026-08-16T22:18:35Z', new Date(FIXED_NOW).toISOString());
+  const storage = memoryStorage({ lctData: data, lctStatus: { phase: 'idle', lastCheckedAt: new Date(FIXED_NOW).toISOString(), dataSource: 'live' } });
+  return { source, data, storage, service: makeService(storage, source) };
+}
+
+test('global company lookup finds Acko beyond the active problem and exposes all four questions', async () => {
+  const { service, source } = globalExplorerFixture();
+  assert.deepEqual((await service.getCompanies('two-sum')).map((company) => company.name), ['Amazon']);
+  const found = await service.searchCompanies({ query: 'aCKo' });
+  assert.equal(found.available, true);
+  assert.equal(found.total, 2);
+  assert.deepEqual(found.companies.map((company) => [company.name, company.problemCount]), [['Acko', 4], ['Acko Labs', 0]]);
+  const practice = await service.getPractice({ company: 'Acko' });
+  assert.equal(practice.total, 4);
+  assert.deepEqual(practice.questions.map((question) => question.slug), [
+    'group-anagrams', 'longest-substring-without-repeating-characters', 'minimum-window-substring', 'valid-anagram'
+  ]);
+  assert.ok(practice.questions.some((question) => question.slug === 'minimum-window-substring'), 'global lists retain a question even when it is the active problem');
+  assert.equal(source.calls.length, 0, 'global lookup uses only the already loaded cache');
+});
+
+test('problem lookup matches titles, slugs and all query tokens, ranking exact and prefix results first', async () => {
+  const { service, source } = globalExplorerFixture();
+  const expected = ['two-sum', 'two-sum-ii-input-array-is-sorted', 'advanced-two-sum-variant'];
+  for (const query of ['Two Sum', 'TWO-SUM', '  two   SUM  ']) {
+    const result = await service.searchProblems({ query });
+    assert.equal(result.total, 3);
+    assert.deepEqual(result.problems.map((problem) => problem.slug), expected);
+  }
+  const tokens = await service.searchProblems({ query: 'SUM TWO' });
+  assert.deepEqual(new Set(tokens.problems.map((problem) => problem.slug)), new Set(expected), 'every token may match independently of its order');
+  assert.deepEqual((await service.searchProblems({ query: 'INPUT sorted' })).problems.map((problem) => problem.slug), ['two-sum-ii-input-array-is-sorted']);
+  const easy = await service.searchProblems({ query: 'two sum', difficulty: 'eAsY' });
+  assert.deepEqual(easy.problems.map((problem) => problem.slug), expected.slice(0, 2));
+  const row = (await service.searchProblems({ query: 'group-anagrams' })).problems[0];
+  assert.deepEqual([row.title, row.difficulty, row.companyCount, row.url], ['Group Anagrams', 'Medium', 2, 'https://leetcode.com/problems/group-anagrams/']);
+  assert.equal(source.calls.length, 0);
+});
+
+test('company search follows the selected window, includes empty source files, and omits missing source files', async () => {
+  const { service, source } = globalExplorerFixture();
+  const all = await service.searchCompanies();
+  assert.equal(all.total, 4);
+  assert.deepEqual(all.companies.map((company) => company.name), ['Acko', 'Acko Labs', 'Amazon', 'Zeta Practice']);
+  assert.deepEqual(all.companies.map((company) => company.problemCount), [4, 0, 5, 153]);
+  assert.equal((await service.searchCompanies({ query: 'labs ACK' })).companies[0].name, 'Acko Labs');
+  assert.equal((await service.searchCompanies({ query: 'recent' })).total, 0);
+  const recent = await service.searchCompanies({ window: '30d' });
+  assert.equal(recent.total, 5);
+  assert.deepEqual(recent.companies.map((company) => [company.name, company.problemCount]), [
+    ['Acko', 1], ['Acko Labs', 0], ['Amazon', 1], ['Recent Only', 1], ['Zeta Practice', 0]
+  ]);
+  assert.match(recent.companies.find((company) => company.name === 'Recent Only').sourceUrl, /1\.%20Thirty%20Days\.csv$/);
+  assert.equal((await service.searchProblems({ window: '30d' })).total, 3);
+  const noQuestions = await service.getPractice({ company: 'Acko Labs' });
+  assert.equal(noQuestions.available, true);
+  assert.equal(noQuestions.total, 0);
+  assert.deepEqual(noQuestions.questions, []);
+  assert.equal(source.calls.length, 0);
+});
+
+test('global problem and company pages cover the entire cache without duplicate or skipped results', async () => {
+  const { service, source } = globalExplorerFixture();
+  const slugs = [];
+  let offset = 0;
+  while (true) {
+    const page = await service.searchProblems({ offset, limit: 37 });
+    assert.equal(page.total, 161);
+    assert.equal(page.offset, offset);
+    assert.equal(page.limit, 37);
+    slugs.push(...page.problems.map((problem) => problem.slug));
+    if (!page.hasMore) break;
+    assert.equal(page.problems.length, 37);
+    offset += 37;
+  }
+  const expected = [
+    'two-sum', 'two-sum-ii-input-array-is-sorted', 'advanced-two-sum-variant', 'contains-duplicate',
+    'group-anagrams', 'longest-substring-without-repeating-characters', 'minimum-window-substring', 'valid-anagram',
+    ...Array.from({ length: 153 }, (_, index) => 'exercise-' + String(index).padStart(3, '0'))
+  ];
+  assert.equal(slugs.length, expected.length);
+  assert.deepEqual(new Set(slugs), new Set(expected));
+  assert.equal(new Set(slugs).size, slugs.length);
+  const first = await service.searchCompanies({ offset: 0, limit: 2 });
+  const second = await service.searchCompanies({ offset: 2, limit: 2 });
+  assert.equal(first.hasMore, true);
+  assert.equal(second.hasMore, false);
+  assert.deepEqual([...first.companies, ...second.companies].map((company) => company.name), ['Acko', 'Acko Labs', 'Amazon', 'Zeta Practice']);
+  const pastEnd = await service.searchProblems({ offset: 1000, limit: 37 });
+  assert.deepEqual(pastEnd.problems, []);
+  assert.equal(pastEnd.total, 161);
+  assert.equal(pastEnd.hasMore, false);
+  assert.equal(source.calls.length, 0);
+});
+
+test('company question pagination reveals all records while preserving source ranks, ties, zero and unknown scores', async () => {
+  const { service, source } = globalExplorerFixture();
+  const questions = [];
+  for (let offset = 0; ; offset += 37) {
+    const page = await service.getPractice({ company: 'Zeta Practice', offset, limit: 37 });
+    assert.equal(page.total, 153);
+    assert.equal(page.offset, offset);
+    questions.push(...page.questions);
+    if (!page.hasMore) break;
+  }
+  assert.deepEqual(questions.map((question) => question.slug), Array.from({ length: 153 }, (_, index) => 'exercise-' + String(index).padStart(3, '0')));
+  assert.equal(new Set(questions.map((question) => question.slug)).size, 153);
+  assert.deepEqual(questions.slice(0, 4).map((question) => [question.frequency, question.rank]), [[100, 1], [100, 1], [99, 3], [99, 3]]);
+  assert.deepEqual(questions.slice(-3).map((question) => [question.frequency, question.rank]), [[0, 151], [null, null], [null, null]]);
+  const acko = await service.getPractice({ company: 'Acko' });
+  assert.deepEqual(acko.questions.map((question) => [question.frequency, question.rank]), [[90, 1], [90, 1], [0, 3], [null, null]]);
+  assert.equal(source.calls.length, 0);
+});
+
+test('query, difficulty, topic and offset filters compose without renumbering company ranks', async () => {
+  const { service, source } = globalExplorerFixture();
+  const result = await service.getPractice({ company: 'Zeta Practice', query: 'exercise 1', difficulty: 'medium', topic: 'ARRAY', offset: 2, limit: 3 });
+  assert.equal(result.total, 11, 'substring tokens also match Exercise 010 and Exercise 016');
+  assert.equal(result.hasMore, true);
+  assert.deepEqual(result.questions.map((question) => [question.slug, question.rank]), [
+    ['exercise-100', 101], ['exercise-106', 107], ['exercise-112', 113]
+  ]);
+  const acko = await service.getPractice({ company: 'Acko', query: 'SUBSTRING', difficulty: 'hard', topic: 'String' });
+  assert.deepEqual(acko.questions.map((question) => [question.slug, question.frequency, question.rank]), [['minimum-window-substring', 0, 3]]);
+  assert.deepEqual(acko.topics, ['Array', 'Hash Table', 'String'], 'topic choices remain usable when a filter narrows results');
+  assert.equal((await service.getPractice({ company: 'Acko', topic: 'Hash' })).total, 0, 'topic filtering matches exact topic names');
+  assert.equal((await service.getPractice({ company: 'Acko', excludeSlug: 'minimum-window-substring' })).total, 3, 'active-problem exclusion remains available to the compact practice panel');
+  acko.questions[0].topics.push('Injected Topic');
+  assert.equal((await service.getPractice({ company: 'Acko' })).topics.includes('Injected Topic'), false, 'returned rows cannot mutate the cache');
+  assert.equal(source.calls.length, 0);
+});
+
+test('global explorer distinguishes no matches from missing windows, no cache, and legacy caches', async () => {
+  const { service, source } = globalExplorerFixture();
+  for (const method of ['searchProblems', 'searchCompanies']) {
+    const empty = await service[method]({ query: 'no such matching result' });
+    assert.equal(empty.available, true);
+    assert.equal(empty.windowAvailable, true);
+    assert.equal(empty.total, 0);
+    assert.equal(empty.hasMore, false);
+    const unavailable = await service[method]({ window: '3m' });
+    assert.equal(unavailable.available, false);
+    assert.equal(unavailable.windowAvailable, false);
+    assert.equal(unavailable.total, 0);
+    for (const storage of [memoryStorage(), memoryStorage(legacyState())]) {
+      const cold = makeService(storage, source);
+      const missing = await cold[method]({});
+      assert.equal(missing.available, false);
+      assert.equal(missing.total, 0);
+      assert.equal(missing.hasMore, false);
+    }
+  }
+  assert.equal(source.calls.length, 0);
+});
+
+test('global search and paged practice validate option types and bounds before querying the cache', async () => {
+  const { service, source } = globalExplorerFixture();
+  const invalidCommon = [
+    null, 'query', 7, [],
+    { query: false }, { query: 0 }, { query: null }, { query: 'x'.repeat(201) },
+    { offset: -1 }, { offset: 0.5 }, { offset: '1' }, { offset: Infinity }, { offset: 1000001 },
+    { limit: 0 }, { limit: 101 }, { limit: -1 }, { limit: 1.5 }, { limit: '10' }, { limit: NaN },
+    { window: 'week' }, { window: '' }, { window: '__proto__' }, { window: 0 }
+  ];
+  for (const method of ['searchProblems', 'searchCompanies']) for (const options of invalidCommon) {
+    await assert.rejects(service[method](options), /Invalid|query|offset|limit|window|options/i, method + ' ' + JSON.stringify(options));
+  }
+  for (const difficulty of [false, 0, 'Impossible', {}]) await assert.rejects(service.searchProblems({ difficulty }), /difficulty/i);
+  for (const options of invalidCommon.filter((value) => value && typeof value === 'object' && !Array.isArray(value))) {
+    await assert.rejects(service.getPractice({ company: 'Acko', ...options }), /Invalid|query|offset|limit|window|options/i, JSON.stringify(options));
+  }
+  for (const options of [{ company: '' }, { company: false }, { company: 'x'.repeat(201) }, { company: 'Acko', topic: false },
+    { company: 'Acko', topic: 0 }, { company: 'Acko', difficulty: false }, { company: 'Acko', excludeSlug: 0 }]) {
+    await assert.rejects(service.getPractice(options), /company|topic|difficulty|slug|Invalid/i, JSON.stringify(options));
+  }
+  for (const query of ['__proto__', 'constructor']) {
+    assert.equal((await service.searchCompanies({ query })).total, 0);
+    assert.equal((await service.searchProblems({ query })).total, 0);
+    assert.equal((await service.getPractice({ company: query })).total, 0);
+  }
+  assert.equal(source.calls.length, 0);
+});
+
+test('global searches retain the complete previous dataset during refresh and switch to the new complete cache', async () => {
+  const { service, source } = globalExplorerFixture();
+  const previous = await service.getPractice({ company: 'Acko' });
+  const gate = deferred();
+  source.commit = SHA_B;
+  source.files.find((file) => file.path === 'Acko/5. All.csv').sha = BLOB_B;
+  source.csvByPath['Acko/5. All.csv'] = recordsCSV([
+    { slug: 'group-anagrams', title: 'Group Anagrams', frequency: 90, difficulty: 'Medium', topics: ['Array', 'Hash Table'] },
+    { slug: 'longest-substring-without-repeating-characters', frequency: 90, difficulty: 'Medium', topics: ['String'] },
+    { slug: 'minimum-window-substring', frequency: 0, difficulty: 'Hard', topics: ['String'] },
+    { slug: 'valid-anagram', frequency: null, difficulty: 'Easy', topics: ['String'] },
+    { slug: 'find-all-anagrams-in-a-string', title: 'Find All Anagrams in a String', frequency: 70, difficulty: 'Medium', topics: ['String'] }
+  ]);
+  source.delays['Acko/5. All.csv'] = gate.promise;
+  await service.refresh();
+  try {
+    await settleUntil(() => source.calls.some((url) => url.startsWith(core.RAW_URL)));
+    assert.equal((await service.searchCompanies({ query: 'Acko' })).companies.find((company) => company.name === 'Acko').problemCount, 4);
+    assert.equal((await service.searchProblems({ query: 'find all anagrams' })).total, 0);
+  } finally {
+    gate.resolve();
+    await service.waitForIdle();
+  }
+  assert.equal((await service.getStatus()).phase, 'idle');
+  assert.equal((await service.searchCompanies({ query: 'Acko' })).companies.find((company) => company.name === 'Acko').problemCount, 5);
+  assert.equal((await service.searchProblems({ query: 'find all anagrams' })).problems[0].slug, 'find-all-anagrams-in-a-string');
+  assert.equal(previous.total, 4);
+  assert.equal(previous.questions.some((question) => question.slug === 'find-all-anagrams-in-a-string'), false);
+  const calls = source.calls.length;
+  await service.searchCompanies({ query: 'Acko' });
+  await service.searchProblems({ query: 'find all anagrams' });
+  await service.getPractice({ company: 'Acko', offset: 2, limit: 2 });
+  assert.equal(source.calls.length, calls, 'post-refresh search remains cache-only');
+});

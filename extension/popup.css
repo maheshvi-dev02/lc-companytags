@@ -14,6 +14,8 @@ h1 { font-size:18px; letter-spacing:-.45px; line-height:1.25; margin:0; font-wei
 .header p { font-size:11px; color:var(--muted); margin:3px 0 0; }
 .edition { margin-left:auto; color:var(--muted); font:9px Consolas,monospace; letter-spacing:.4px; }
 main { padding:0 19px; }
+.explore-dataset { display:flex; justify-content:space-between; align-items:center; width:100%; margin:16px 0 0; padding:10px 12px; }
+.explore-hint { color:var(--muted); font-size:11px; margin:5px 0 0; }
 .setting { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 0; cursor:pointer; }
 .setting strong { font-size:12px; font-weight:600; }
 .setting-hint { display:block; font-size:11px; color:var(--muted); margin-top:2px; }

@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromiumExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
 import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
 
 // Optional browser verification: uses an existing Playwright installation, never
@@ -445,12 +446,28 @@ async function chromiumRun() {
     assert.equal(offlineStatus.dataSource, 'bundled');
     assert.equal(offlineStatus.commit, expectedBundle.data.commit);
     firstInstall.popup = 'Actual packaged popup displays the same bundled all-time tags and source date.';
+    await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
+    const unrelatedPage = await context.newPage();
+    await unrelatedPage.goto('https://example.com/');
+    await unrelatedPage.bringToFront();
+    assert.equal(await unrelatedPage.locator('#company-lens-root').count(), 0);
+    await setupPopup.reload();
+    await setupPopup.locator('#explore-dataset').waitFor({ state: 'visible' });
+    const openedExplorer = context.waitForEvent('page');
+    await setupPopup.getByRole('button', { name: 'Explore dataset', exact: true }).click();
+    const explorerPage = await openedExplorer;
+    await explorerPage.waitForURL((url) => url.pathname === '/explore.html');
+    const explorer = await exerciseExplorer(chromiumExplorerDriver(explorerPage),
+      { data: expectedBundle.data, core, output, browserName: 'chromium' });
+    explorer.openedFrom = 'Actual toolbar popup while example.com was active, using bundled data with GitHub hosts blocked.';
+    await explorerPage.close();
+    await unrelatedPage.close();
     await seedFromPopup(setupPopup);
     await context.close();
     context = await playwright.chromium.launchPersistentContext(profile, deterministicOptions);
     await prepare(context);
     const { results, errors, popup } = await exercise(context, extensionUrl, 'chromium');
-    results.unshift(firstInstall.check, firstInstall.popup,
+    results.unshift(firstInstall.check, firstInstall.popup, ...explorer.checks,
       'Native browser deflate-raw decoder extracts every real source archive CSV with CRC and Git blob validation.',
       'GitHub API, raw-file and codeload hosts are blocked in the browser resolver, including extension service-worker requests.');
     assert.deepEqual(errors, [], 'Unexpected page errors');
@@ -512,7 +529,7 @@ async function chromiumRun() {
       await livePage.screenshot({ path: path.join(output, 'chromium-live-data.png'), fullPage: true, animations: 'disabled' });
       results.push('Actual extension background fetched current GitHub metadata using declared permissions and displayed live-source Two Sum tags.');
     }
-    return { status: 'passed', mode: 'actual unpacked extension', firstInstall, archive, results, live };
+    return { status: 'passed', mode: 'actual unpacked extension', firstInstall, archive, explorer, results, live };
   } finally { await context.close(); }
 }
 

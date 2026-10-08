@@ -389,6 +389,21 @@
       if (typeof window !== 'string' || !Object.prototype.hasOwnProperty.call(core.WINDOW_FILES, window)) throw new Error('Invalid company time window.');
       return window;
     }
+    function queryOptions(value, defaultLimit) {
+      const optionsForQuery = value === undefined ? {} : value;
+      if (!optionsForQuery || typeof optionsForQuery !== 'object' || Array.isArray(optionsForQuery)) throw new Error('Invalid search options.');
+      const query = optionsForQuery.query === undefined ? '' : optionsForQuery.query;
+      if (typeof query !== 'string' || query.length > 200) throw new Error('Search query must be text with at most 200 characters.');
+      const offset = optionsForQuery.offset === undefined ? 0 : optionsForQuery.offset;
+      if (!Number.isInteger(offset) || offset < 0 || offset > 1000000) throw new Error('Search offset must be an integer between 0 and 1000000.');
+      const limit = optionsForQuery.limit === undefined ? defaultLimit : optionsForQuery.limit;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Search limit must be between 1 and 100.');
+      if (optionsForQuery.difficulty !== undefined && optionsForQuery.difficulty !== '' &&
+          (typeof optionsForQuery.difficulty !== 'string' || !['easy', 'medium', 'hard'].includes(optionsForQuery.difficulty.toLowerCase()))) {
+        throw new Error('Invalid difficulty filter.');
+      }
+      return Object.assign({}, optionsForQuery, { query, offset, limit, window: selectedWindow(optionsForQuery.window) });
+    }
     return {
       initialize, startAutomatic, refresh: () => start({ manual: true }), resume: () => start(),
       async getStatus() { await initialize(); return Object.assign({}, state.lctStatus, dataStatus()); },
@@ -398,16 +413,25 @@
         return core.companiesForSlug(state.lctData, slug, selectedWindow(window));
       },
       async windowAvailable(window) { await initialize(); return core.windowAvailable(state.lctData, selectedWindow(window)); },
-      async getPractice(practiceOptions) {
+      async searchProblems(searchOptions) {
+        const validated = queryOptions(searchOptions, 50);
         await initialize();
-        if (!practiceOptions || typeof practiceOptions.company !== 'string' || !practiceOptions.company || practiceOptions.company.length > 200) throw new Error('Invalid company name.');
-        const window = selectedWindow(practiceOptions.window);
-        if (practiceOptions.difficulty && (typeof practiceOptions.difficulty !== 'string' ||
-            !['easy', 'medium', 'hard'].includes(practiceOptions.difficulty.toLowerCase()))) throw new Error('Invalid difficulty filter.');
-        if (practiceOptions.topic && (typeof practiceOptions.topic !== 'string' || practiceOptions.topic.length > 200)) throw new Error('Invalid topic filter.');
-        if (practiceOptions.excludeSlug && (typeof practiceOptions.excludeSlug !== 'string' || !core.SLUG_PATTERN.test(practiceOptions.excludeSlug))) throw new Error('Invalid excluded problem slug.');
-        if (practiceOptions.limit !== undefined && (!Number.isInteger(practiceOptions.limit) || practiceOptions.limit < 1 || practiceOptions.limit > 100)) throw new Error('Practice limit must be between 1 and 100.');
-        return core.practiceQuestions(state.lctData, Object.assign({}, practiceOptions, { window }));
+        return core.searchProblems(state.lctData, validated);
+      },
+      async searchCompanies(searchOptions) {
+        const validated = queryOptions(searchOptions, 50);
+        await initialize();
+        return core.searchCompanies(state.lctData, validated);
+      },
+      async getPractice(practiceOptions) {
+        const validated = queryOptions(practiceOptions, 20);
+        if (typeof validated.company !== 'string' || !validated.company || validated.company.length > 200) throw new Error('Invalid company name.');
+        if (validated.topic !== undefined && validated.topic !== '' &&
+            (typeof validated.topic !== 'string' || validated.topic.length > 200)) throw new Error('Invalid topic filter.');
+        if (validated.excludeSlug !== undefined && validated.excludeSlug !== '' &&
+            (typeof validated.excludeSlug !== 'string' || !core.SLUG_PATTERN.test(validated.excludeSlug))) throw new Error('Invalid excluded problem slug.');
+        await initialize();
+        return core.practiceQuestions(state.lctData, validated);
       },
       async waitForIdle() { if (launching) await launching; if (running) await running; }
     };

@@ -255,10 +255,104 @@
     return sortCompanies(companies);
   }
 
-  function practiceQuestions(data, options) {
+  function normalizedSearchText(value) {
+    return String(value || '').toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function queryTerms(value) {
+    const query = normalizedSearchText(typeof value === 'string' ? value : '');
+    return { query, terms: query ? query.split(' ') : [] };
+  }
+
+  function matchesProblem(record, terms) {
+    const text = normalizedSearchText(record.title) + ' ' + normalizedSearchText(record.slug);
+    return terms.every((term) => text.includes(term));
+  }
+
+  function pagination(options, defaultLimit) {
+    return {
+      offset: Number.isInteger(options.offset) && options.offset >= 0 ? Math.min(options.offset, 1000000) : 0,
+      limit: Number.isInteger(options.limit) && options.limit > 0 ? Math.min(options.limit, 100) : defaultLimit
+    };
+  }
+
+  function searchAvailability(data, window) {
+    return Boolean(data && data.schema === DATA_SCHEMA && windowAvailable(data, window) &&
+      Array.isArray(data.companies) && data.files);
+  }
+
+  function searchProblems(data, options = {}) {
     const window = options.window || 'all';
-    const available = windowAvailable(data, window) && data.schema === DATA_SCHEMA;
-    const empty = { questions: [], total: 0, topics: [], available, windowAvailable: available };
+    const available = searchAvailability(data, window);
+    const { offset, limit } = pagination(options, 50);
+    const empty = { problems: [], total: 0, offset, limit, hasMore: false, available, windowAvailable: available };
+    if (!available) return empty;
+    const { query, terms } = queryTerms(options.query);
+    const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
+    const problems = [];
+    for (const [slug, entries] of Object.entries(data.windows[window].index)) {
+      if (!SLUG_PATTERN.test(slug) || !Array.isArray(entries)) continue;
+      let representative = null, knownDifficulty = null;
+      const companies = new Set();
+      for (const entry of entries) {
+        if (!Array.isArray(entry) || !Number.isInteger(entry[0]) || entry[0] < 0 || !Number.isInteger(entry[1]) || entry[1] < 0) continue;
+        const company = data.companies[entry[0]];
+        if (!company || typeof company.name !== 'string') continue;
+        const path = company.name + '/' + WINDOW_FILES[window];
+        const file = Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
+        const record = file && Array.isArray(file.records) && file.records[entry[1]];
+        if (!record || record.slug !== slug) continue;
+        companies.add(company.name);
+        if (!representative) representative = record;
+        if (!knownDifficulty && ['Easy', 'Medium', 'Hard'].includes(record.difficulty)) knownDifficulty = record.difficulty;
+      }
+      if (!representative || !companies.size) continue;
+      const problem = { slug, title: typeof representative.title === 'string' && representative.title.trim() ?
+        representative.title : formatProblemTitle(slug), difficulty: knownDifficulty,
+        companyCount: companies.size, url: 'https://leetcode.com/problems/' + slug + '/' };
+      if ((!difficulty || (problem.difficulty || '').toLowerCase() === difficulty) && matchesProblem(problem, terms)) problems.push(problem);
+    }
+    function relevance(problem) {
+      if (!query) return 2;
+      const title = normalizedSearchText(problem.title), slug = normalizedSearchText(problem.slug);
+      if (title === query || slug === query) return 0;
+      return title.startsWith(query) || slug.startsWith(query) ? 1 : 2;
+    }
+    problems.sort((a, b) => relevance(a) - relevance(b) || a.title.localeCompare(b.title, 'en') || a.slug.localeCompare(b.slug, 'en'));
+    const page = problems.slice(offset, offset + limit);
+    return { problems: page, total: problems.length, offset, limit, hasMore: offset + page.length < problems.length,
+      available: true, windowAvailable: true };
+  }
+
+  function searchCompanies(data, options = {}) {
+    const window = options.window || 'all';
+    const available = searchAvailability(data, window);
+    const { offset, limit } = pagination(options, 50);
+    const empty = { companies: [], total: 0, offset, limit, hasMore: false, available, windowAvailable: available };
+    if (!available) return empty;
+    const query = typeof options.query === 'string' ? options.query.toLowerCase().trim() : '';
+    const terms = query ? query.split(/\s+/) : [];
+    const names = new Set();
+    const companies = [];
+    for (const company of data.companies) {
+      if (!company || typeof company.name !== 'string' || names.has(company.name)) continue;
+      const path = company.name + '/' + WINDOW_FILES[window];
+      const file = Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
+      if (!file || !Array.isArray(file.records) || !terms.every((term) => company.name.toLowerCase().includes(term))) continue;
+      names.add(company.name);
+      companies.push({ name: company.name, problemCount: file.records.length, sourceUrl: sourceFileURL(data.commit, path) });
+    }
+    companies.sort((a, b) => a.name.localeCompare(b.name, 'en'));
+    const page = companies.slice(offset, offset + limit);
+    return { companies: page, total: companies.length, offset, limit, hasMore: offset + page.length < companies.length,
+      available: true, windowAvailable: true };
+  }
+
+  function practiceQuestions(data, options = {}) {
+    const window = options.window || 'all';
+    const available = searchAvailability(data, window);
+    const { offset, limit } = pagination(options, 20);
+    const empty = { questions: [], total: 0, topics: [], offset, limit, hasMore: false, available, windowAvailable: available };
     if (!available || typeof options.company !== 'string') return empty;
     const path = options.company + '/' + WINDOW_FILES[window];
     const file = data.files && Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
@@ -266,18 +360,18 @@
     const topics = Array.from(new Set(file.records.flatMap((record) => record.topics))).sort((a, b) => a.localeCompare(b, 'en'));
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
     const topic = typeof options.topic === 'string' ? options.topic.toLowerCase() : '';
+    const { terms } = queryTerms(options.query);
     const filtered = file.records.filter((record) => record.slug !== options.excludeSlug &&
       (!difficulty || (record.difficulty || '').toLowerCase() === difficulty) &&
-      (!topic || record.topics.some((value) => value.toLowerCase() === topic)));
-    const limit = Number.isInteger(options.limit) && options.limit > 0 ? Math.min(options.limit, 100) : 20;
-    const questions = filtered.slice(0, limit).map((record) => Object.assign({}, record, {
+      (!topic || record.topics.some((value) => value.toLowerCase() === topic)) && matchesProblem(record, terms));
+    const questions = filtered.slice(offset, offset + limit).map((record) => Object.assign({}, record, {
       topics: record.topics.slice(), url: 'https://leetcode.com/problems/' + record.slug + '/'
     }));
-    return { questions, total: filtered.length, topics, available: true, windowAvailable: true,
-      sourceUrl: sourceFileURL(data.commit, path) };
+    return { questions, total: filtered.length, topics, offset, limit, hasMore: offset + questions.length < filtered.length,
+      available: true, windowAvailable: true, sourceUrl: sourceFileURL(data.commit, path) };
   }
 
   return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, getProblemSlug, formatProblemTitle,
     parseCSV, parseCompanyCSV, parseCompanyRecords, sortCompanies, selectCompanyFiles, selectWindowFiles, encodedPath, sourceFileURL, rawFileURL,
-    reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions };
+    reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
 });

@@ -30,8 +30,17 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
 
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!sender || sender.id !== api.runtime.id) return false;
-    if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE'].includes(message.type)) return false;
+    if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
+      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER'].includes(message.type)) return false;
     (async () => {
+      if (message.type === 'LCT_OPEN_EXPLORER') {
+        const mode = message.mode === undefined ? 'problems' : message.mode;
+        const query = message.query === undefined ? '' : message.query;
+        if (!['problems', 'companies'].includes(mode) || typeof query !== 'string' || query.length > 200) throw new Error('Invalid explorer selection.');
+        const params = new URLSearchParams({ mode, query });
+        await api.tabs.create({ url: api.runtime.getURL('explore.html') + '?' + params.toString() });
+        return { ok: true };
+      }
       if (message.type === 'LCT_REFRESH') return { ok: true, status: await service.refresh() };
       if (message.type === 'LCT_GET') {
         const companies = await service.getCompanies(message.slug, message.window);
@@ -39,6 +48,8 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         return { ok: true, companies, available, windowAvailable: available, status: await service.getStatus() };
       }
       if (message.type === 'LCT_PRACTICE') return Object.assign({ ok: true, status: await service.getStatus() }, await service.getPractice(message));
+      if (message.type === 'LCT_SEARCH_PROBLEMS') return Object.assign({ ok: true }, await service.searchProblems(message), { status: await service.getStatus() });
+      if (message.type === 'LCT_SEARCH_COMPANIES') return Object.assign({ ok: true }, await service.searchCompanies(message), { status: await service.getStatus() });
       return { ok: true, status: await service.getStatus() };
     })().then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || 'Could not read company data.' }));
     return true;

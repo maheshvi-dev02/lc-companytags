@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { makeFixture } from './firefox-fixture.mjs';
+import { firefoxExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
 import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
 
 // Installs and exercises the real Firefox MV3 addon. The default is deterministic:
@@ -58,6 +59,8 @@ function rdpConnect() {
         if (!Number.isFinite(length)) { reject(new Error('Bad Firefox RDP frame')); break; }
         if (buffer.length < colon + 1 + length) break;
         const packet = JSON.parse(buffer.subarray(colon + 1, colon + 1 + length));
+        if (packet.type === 'target-available-form' && packet.target?.url?.includes('_generated_background_page.html'))
+          backgroundConsole = packet.target.consoleActor;
         buffer = buffer.subarray(colon + 1 + length);
         const index = waiters.findIndex(({ predicate }) => predicate(packet));
         if (index >= 0) {
@@ -73,7 +76,7 @@ function rdpConnect() {
       send: async (packet) => {
         const reply = waitFor((response) => response.from === packet.to && !response.type);
         const body = JSON.stringify(packet); socket.write(`${Buffer.byteLength(body)}:${body}`);
-        const response = await reply;
+        const response = await reply.catch((error) => { throw new Error(`${error.message}: ${packet.type} to ${packet.to}`, { cause: error }); });
         assert.ok(!response.error, JSON.stringify(response));
         return response;
       },
@@ -139,6 +142,7 @@ try {
   });
   await context.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//,
     (route) => route.fulfill({ contentType: 'text/html', body: html }));
+  await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: html }));
   rdp = await rdpConnect();
   await rdp.waitFor(() => true);
   const actors = await rdp.send({ to: 'root', type: 'getRoot' });
@@ -166,6 +170,7 @@ try {
   assert.equal(offlineStatus.hasData, true);
   assert.equal(offlineStatus.dataSource, 'bundled');
   assert.equal(offlineStatus.commit, expectedBundle.data.commit);
+  report.stage = 'Checking fresh bundled popup';
   const freshPopupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
   const freshPopupTab = await evaluateBackground(`return (await browser.tabs.create({ url: ${JSON.stringify(freshPopupUrl)}, active: false })).id;`);
   const freshPopupTarget = await rdp.waitFor((packet) => packet.type === 'target-available-form' && packet.target?.url === freshPopupUrl);
@@ -182,9 +187,52 @@ try {
   assert.deepEqual(freshPopupObserved.names, expectedBundle.windows.all.slice(0, 5).map(({ name }) => name));
   assert.equal(freshPopupObserved.window, 'all');
   assert.match(freshPopupObserved.note, /Bundled snapshot/i);
-  await evaluateBackground(`await browser.tabs.remove(${freshPopupTab}); return 'closed';`);
+  report.stage = 'Opening explorer from a popup on an unrelated site';
+  const unrelatedPage = await context.newPage();
+  await unrelatedPage.goto('https://example.com/');
+  await unrelatedPage.bringToFront();
+  assert.equal(await unrelatedPage.locator('#company-lens-root').count(), 0);
+  const launcherTab = await evaluateBackground(`return (await browser.tabs.create({ url: ${JSON.stringify(freshPopupUrl)}, active: false })).id;`);
+  const launcherTarget = await rdp.waitFor((packet) => packet.type === 'target-available-form' && packet.target?.url === freshPopupUrl);
+  let launcherReady = false;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    report.launcherBeforeClick = JSON.parse(await evaluateConsoleRaw(`JSON.stringify({
+      state: document.readyState, button: Boolean(document.querySelector('#explore-dataset')?.getClientRects().length),
+      summary: document.querySelector('#dataset-summary')?.textContent || '',
+      note: document.querySelector('#window-note')?.textContent || '', status: document.querySelector('#status')?.textContent || '',
+    })`, launcherTarget.target.consoleActor));
+    if (report.launcherBeforeClick.state === 'complete' && report.launcherBeforeClick.button &&
+        report.launcherBeforeClick.summary.includes('470') && /Bundled snapshot/.test(report.launcherBeforeClick.note)) { launcherReady = true; break; }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(launcherReady, true, 'The actual launcher popup must finish running its packaged scripts before clicking.');
+  await evaluateConsoleRaw("document.querySelector('#explore-dataset').click(); 'opened'", launcherTarget.target.consoleActor);
+  report.stage = 'Waiting for explorer document';
+  let explorerTarget;
+  try {
+    explorerTarget = await rdp.waitFor((packet) => packet.type === 'target-available-form' &&
+      packet.target?.url?.startsWith(report.addon.manifestURL.replace('manifest.json', 'explore.html')));
+  } catch (error) {
+    report.launcherAfterClick = JSON.parse(await evaluateConsoleRaw(`JSON.stringify({
+      disabled: document.querySelector('#explore-dataset')?.disabled, status: document.querySelector('#status')?.textContent || '',
+    })`, launcherTarget.target.consoleActor));
+    report.openTabs = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.tabs.query({})).map(({id,url,title,status}) => ({id,url,title,status})));'));
+    throw error;
+  }
+  const explorerConsole = explorerTarget.target.consoleActor;
+  report.stage = 'Exercising global explorer';
+  report.explorer = await exerciseExplorer(firefoxExplorerDriver((source) => evaluateConsoleRaw(source, explorerConsole)),
+    { data: expectedBundle.data, core, output, browserName: 'firefox' });
+  report.explorer.openedFrom = 'Actual packaged popup while example.com was active; explorer document inspected and operated via Mozilla RDP with GitHub hosts blocked.';
+  report.checks.push(...report.explorer.checks);
+  const explorerTabs = JSON.parse(await evaluateBackground(`return JSON.stringify((await browser.tabs.query({})).filter((tab) =>
+    tab.url?.startsWith(${JSON.stringify(report.addon.manifestURL.replace('manifest.json', 'explore.html'))})).map((tab) => tab.id));`));
+  await evaluateBackground(`await browser.tabs.remove(${JSON.stringify(explorerTabs)}); return 'closed';`);
+  await unrelatedPage.close();
+  await evaluateBackground(`await browser.tabs.remove(${launcherTab}); return 'closed';`);
   report.firstInstall.popup = 'Actual packaged Firefox popup displays bundled all-time tags and source date, verified via Mozilla RDP.';
   report.checks.push(report.firstInstall.popup);
+  report.stage = 'Checking network blocking and native archive decoding';
   const blocked = JSON.parse(await evaluateBackground(`return JSON.stringify(await Promise.all(
     ['https://api.github.com/', 'https://raw.githubusercontent.com/', 'https://codeload.github.com/'].map(async (url) => {
       try { await fetch(url); return { url, blocked: false }; }
@@ -205,7 +253,9 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   assert.ok(settled, 'Initial blocked sync must settle before fixture seeding');
+  report.stage = 'Seeding deterministic UI fixture';
   assert.equal(await evaluateBackground(`await browser.alarms.clearAll(); await browser.storage.local.set(${JSON.stringify(seed)}); return 'seeded';`), 'seeded');
+  await evaluateBackground(`await browser.tabs.remove(${freshPopupTab}); return 'closed';`);
   rdp.discard((packet) => packet.type === 'target-available-form');
   await rdp.send({ to: report.addon.actor, type: 'reload' });
   const reloadedBackground = await rdp.waitFor((packet) => packet.type === 'target-available-form' &&

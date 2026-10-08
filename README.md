@@ -26,6 +26,10 @@ Firefox removes temporary extensions when it restarts. For permanent installatio
 
 The **Company Lens** panel appears on a problem page. It shows the top five companies by source frequency score; **Show all** expands the list and **Show fewer** restores the compact view. Search includes companies hidden from the preview. Collapse the panel while coding to a small square bubble with the lens icon and company count, such as **115+**. Click anywhere on the bubble, or focus it and press Enter/Space, to reopen the full panel. The toolbar popup provides the same company view, controls whether the panel is shown, and offers **Refresh**.
 
+Open **Explore dataset** in the toolbar popup or the problem panel to search the whole cached dataset from any website. **Problems** finds a question by title or slug and shows all recorded companies, ranked by frequency. **Companies** finds any company, including companies without a tag on the current problem, and opens all its recorded questions. Company question lists retain source ranks and frequency order, with difficulty/topic filters, title search, and **Load more** to reach every result. For example, searching Acko shows its source questions even though it has no Two Sum tag. Searches run locally and work with the bundled snapshot offline.
+
+The small company filter on a problem page searches only that problem’s tags; **Explore dataset** searches the whole collection.
+
 Choose a **Time window**: 30 days, 3 months, 6 months, older than 6 months, or all time. Each company shows its frequency score and the problem's rank within that company's selected list. Tied scores share a rank, and missing scores appear last without an invented value.
 
 Use **Practice** beside a company to browse more questions from that company in the selected window, sorted by source frequency. Filter the practice list by difficulty or topic, then follow a question to LeetCode. Rankings refer to the full company list, even when filters are applied.

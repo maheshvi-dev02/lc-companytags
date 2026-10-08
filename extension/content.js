@@ -58,6 +58,7 @@
     .count { color:var(--muted); font-size:12px; margin:0 0 13px; }
     .window-filter { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 5px; font-size:11px; color:var(--muted); }
     select { color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:7px; padding:6px 8px; max-width:180px; min-height:32px; }
+    .explore-dataset { display:flex; align-items:center; justify-content:space-between; width:100%; color:var(--teal); background:var(--tag); border:1px solid var(--line); border-radius:7px; padding:8px 10px; margin:0 0 14px; font-size:11px; font-weight:600; }
     .window-note { margin:0 0 14px; font-size:10px; color:var(--muted); }
     .search { display:block; margin:0 0 12px; }
     .search input { width:100%; border:1px solid var(--line); color:var(--ink); background:var(--wash); border-radius:8px; padding:8px 10px; min-height:35px; }
@@ -162,13 +163,19 @@
     }
     windowFilter.append(windowSelect);
     const windowNote = element('p', 'window-note');
+    const exploreDataset = element('button', 'explore-dataset', 'Explore dataset');
+    exploreDataset.type = 'button';
+    exploreDataset.title = 'Search any problem or company';
+    const exploreArrow = element('span', null, '↗');
+    exploreArrow.setAttribute('aria-hidden', 'true');
+    exploreDataset.append(exploreArrow);
     const companyView = element('div', 'company-view');
     const title = element('h2');
     const count = element('p', 'count');
     const searchWrap = element('label', 'search');
     const search = element('input');
     search.type = 'search';
-    search.placeholder = 'Find a company';
+    search.placeholder = 'Filter this problem’s companies';
     search.setAttribute('aria-label', 'Filter company names');
     search.autocomplete = 'off';
     searchWrap.append(search);
@@ -228,7 +235,7 @@
     const practiceList = element('ul', 'practice-questions');
     practiceList.setAttribute('aria-label', 'Practice questions sorted by frequency');
     practiceView.append(backCompanies, element('p', 'eyebrow', 'Company practice'), practiceTitle, practiceFilters, practiceSummary, practiceList);
-    body.append(windowFilter, windowNote, companyView, practiceView, statusBox,
+    body.append(windowFilter, windowNote, exploreDataset, companyView, practiceView, statusBox,
       element('p', 'note', 'Community company reports from liquidslr. Coverage may be incomplete. Company links open the source.'));
     card.append(header, body);
     shadow.append(style, card, bubble);
@@ -264,6 +271,17 @@
       practiceLoading = true;
       renderPractice();
       topicTimer = setTimeout(loadPractice, 250);
+    });
+    exploreDataset.addEventListener('click', async () => {
+      const currentView = view;
+      exploreDataset.disabled = true;
+      try {
+        const query = practiceCompany || search.value.trim();
+        const result = await api.runtime.sendMessage({ type: 'LCT_OPEN_EXPLORER', mode: query ? 'companies' : 'problems', query });
+        if (!result?.ok) throw new Error(result?.error || 'Could not open the dataset explorer.');
+      } catch (cause) {
+        if (view === currentView) { error = cause.message || 'Could not open the dataset explorer.'; renderStatus(); }
+      } finally { exploreDataset.disabled = false; }
     });
     refresh.addEventListener('click', refreshData);
     updateTheme();

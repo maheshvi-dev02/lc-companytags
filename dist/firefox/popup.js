@@ -257,6 +257,18 @@
     }
   }
 
+  $('explore-dataset').addEventListener('click', async () => {
+    const button = $('explore-dataset');
+    button.disabled = true;
+    try {
+      const query = $('search').value.trim();
+      const result = await api.runtime.sendMessage({ type: 'LCT_OPEN_EXPLORER', mode: query ? 'companies' : 'problems', query });
+      if (!result?.ok) throw new Error(result?.error || 'Could not open the dataset explorer.');
+    } catch (cause) {
+      error = cause.message || 'Could not open the dataset explorer.';
+      renderStatus();
+    } finally { button.disabled = false; }
+  });
   $('search').addEventListener('input', renderCompanies);
   $('window-select').addEventListener('change', () => {
     settings.window = $('window-select').value;
