@@ -8,9 +8,7 @@ a { color:var(--accent); text-underline-offset:3px; }
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 [hidden] { display:none !important; }
 .header { display:flex; align-items:center; gap:10px; padding:20px 19px 18px; border-bottom:1px solid var(--line); }
-.mark { position:relative; flex:none; width:32px; height:32px; border:2px solid var(--accent); border-radius:10px; }
-.mark::before { content:""; position:absolute; width:10px; height:10px; left:6px; top:6px; border:2px solid var(--accent); border-radius:50%; }
-.mark::after { content:""; position:absolute; width:7px; height:2px; left:17px; top:20px; background:var(--accent); transform:rotate(45deg); }
+.mark { display:block; flex:none; width:32px; height:32px; object-fit:contain; }
 h1 { font-size:18px; letter-spacing:-.45px; line-height:1.25; margin:0; font-weight:700; }
 .header p { font-size:11px; color:var(--muted); margin:3px 0 0; }
 .edition { margin-left:auto; color:var(--muted); font:9px Consolas,monospace; letter-spacing:.4px; }

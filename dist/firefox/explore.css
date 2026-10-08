@@ -11,9 +11,7 @@ a { color:var(--accent); text-underline-offset:3px; }
 [hidden] { display:none !important; }
 .header { display:flex; align-items:center; justify-content:space-between; gap:20px; max-width:1080px; margin:auto; padding:28px 32px; }
 .brand,.dataset-tools { display:flex; align-items:center; gap:12px; }
-.mark { position:relative; flex:none; width:32px; height:32px; border:2px solid var(--accent); border-radius:10px; }
-.mark::before { content:""; position:absolute; width:10px; height:10px; left:6px; top:6px; border:2px solid var(--accent); border-radius:50%; }
-.mark::after { content:""; position:absolute; width:7px; height:2px; left:17px; top:20px; background:var(--accent); transform:rotate(45deg); }
+.mark { display:block; flex:none; width:32px; height:32px; object-fit:contain; }
 h1 { font-size:19px; letter-spacing:-.5px; line-height:1.2; margin:0; }
 .brand p { color:var(--muted); font-size:11px; margin:4px 0 0; }
 .state { font:11px/1.5 Consolas,monospace; color:var(--accent); border:1px solid var(--line); border-radius:5px; padding:3px 7px; white-space:nowrap; }

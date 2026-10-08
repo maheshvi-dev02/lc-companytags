@@ -2,13 +2,13 @@ import { readFile, writeFile, mkdir, copyFile, readdir } from 'node:fs/promises'
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { deflateSync, gunzipSync } from 'node:zlib';
+import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/company-lens.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
 const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
 const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
 assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');
@@ -57,34 +57,6 @@ function crc32(bytes) {
   }
   return (crc ^ 0xffffffff) >>> 0;
 }
-function chunk(type, bytes) {
-  const name = Buffer.from(type);
-  const result = Buffer.alloc(bytes.length + 12);
-  result.writeUInt32BE(bytes.length);
-  name.copy(result, 4);
-  bytes.copy(result, 8);
-  result.writeUInt32BE(crc32(Buffer.concat([name, bytes])), bytes.length + 8);
-  return result;
-}
-// A small, original bracket/lens mark. Built with Node alone; no image dependencies.
-function icon(size) {
-  const pixels = Buffer.alloc(size * (1 + size * 4));
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const px = x / size, py = y / size;
-    const round = Math.hypot(Math.max(0.15 - px, 0, px - 0.85), Math.max(0.15 - py, 0, py - 0.85)) < 0.15;
-    let color = [36, 36, 36, round ? 255 : 0];
-    const left = Math.abs(px - (0.24 + Math.abs(py - 0.5) * 0.75)) < 0.035 && Math.abs(py - 0.5) < 0.22;
-    const right = Math.abs(px - (0.76 - Math.abs(py - 0.5) * 0.75)) < 0.035 && Math.abs(py - 0.5) < 0.22;
-    const dot = Math.hypot(px - 0.5, py - 0.5) < 0.065;
-    if (left || right) color = [226, 226, 226, 255];
-    if (dot) color = [255, 161, 22, 255];
-    const i = y * (1 + size * 4) + 1 + x * 4;
-    pixels.set(color, i);
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(size); header.writeUInt32BE(size, 4); header[8] = 8; header[9] = 6;
-  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR',header), chunk('IDAT',deflateSync(pixels)), chunk('IEND',Buffer.alloc(0))]);
-}
 async function zip(directory, output) {
   const entries = [];
   async function walk(dir, prefix = '') {
@@ -127,7 +99,7 @@ for (const browser of ['chrome','firefox']) {
     await copyFile(path.join(root,'extension',file),path.join(out,file));
   }
   await copyLogoAssets(path.join(root, 'extension', 'logos'), path.join(out, 'logos'));
-  for (const size of [16,32,48,128]) await writeFile(path.join(out,'icons',`${size}.png`),icon(size));
+  for (const size of [16,32,48,128]) await copyFile(path.join(root,'extension','icons',`${size}.png`),path.join(out,'icons',`${size}.png`));
   const manifest = structuredClone(common);
   if (browser === 'chrome') {
     manifest.minimum_chrome_version = '120';
