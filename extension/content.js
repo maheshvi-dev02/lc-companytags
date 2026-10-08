@@ -1,116 +1,49 @@
 (() => {
   'use strict';
-
   if (globalThis.__companyLensActive) return;
   globalThis.__companyLensActive = true;
   const api = globalThis.browser || globalThis.chrome;
   const core = globalThis.LCTCore;
   const logos = globalThis.LCTCompanyLogos;
-  const defaults = { enabled: true, collapsed: false, window: 'all' };
-  const windowLabels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
+  const defaults = { enabled: true, window: 'all' };
+  const labels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
   let settings = { ...defaults };
+  let status = {};
   let slug = null;
-  let lastUrl = '';
+  let companies = [];
+  let available = false;
+  let loading = false;
+  let error = '';
+  let requestId = 0;
   let host = null;
   let view = null;
-  let companies = [];
-  let status = {};
-  let error = '';
-  let loading = false;
-  let requestId = 0;
+  let renderedKey = null;
   let disposed = false;
-  let companiesExpanded = false;
-  let windowAvailable = false;
-  let practiceCompany = null;
-  let practiceQuestions = [];
-  let practiceTotal = 0;
-  let practiceAvailable = false;
-  let practiceLoading = false;
-  let practiceError = '';
-  let practiceRequestId = 0;
-  let topicTimer;
-  const previewCount = 5;
-  const frequencyHelp = 'Scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.';
-  const selectedWindow = () => Object.hasOwn(windowLabels, settings.window) ? settings.window : 'all';
-
+  let scheduled = false;
+  const selectedWindow = () => Object.hasOwn(labels, settings.window) ? settings.window : 'all';
   const css = `
-    :host { all: initial; position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; width: min(344px, calc(100vw - 24px)); font: 13px/1.5 "Segoe UI", sans-serif; color-scheme: light; --paper:#fff; --ink:#162b3b; --muted:#617480; --line:#dfE8eb; --wash:#f4f8f9; --teal:#007b77; --tag:#eaf6f3; --warn:#855815; --warn-bg:#fff7e5; }
-    :host([data-collapsed]) { width:64px; height:64px; }
-    :host([data-dark]) { color-scheme: dark; --paper:#19252f; --ink:#e6f0f3; --muted:#a4b5bf; --line:#35454e; --wash:#22323c; --teal:#73d8c8; --tag:#203e40; --warn:#f0cd89; --warn-bg:#3a3325; }
-    * { box-sizing: border-box; }
-    .card { background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:16px; box-shadow:0 12px 44px #10233329, 0 2px 8px #10233312; overflow:hidden; }
-    .collapsed-bubble { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; width:64px; height:64px; padding:8px; margin:0; color:var(--teal); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 44px #10233329, 0 2px 8px #10233312; }
-    .bubble-count { font:600 12px/1 Consolas, monospace; white-space:nowrap; }
-    .header { display:flex; align-items:center; gap:10px; padding:13px 15px; }
-    .mark { position:relative; width:22px; height:22px; flex:none; border:2px solid var(--teal); border-radius:8px; }
-    .mark::before { content:""; position:absolute; width:6px; height:6px; top:4px; left:4px; border:1.5px solid var(--teal); border-radius:50%; }
-    .mark::after { content:""; position:absolute; width:5px; height:2px; background:var(--teal); top:12px; left:11px; transform:rotate(45deg); }
-    .brand { font-size:14px; font-weight:700; letter-spacing:-.2px; flex:1; }
-    .badge { color:var(--teal); font:11px/1.4 Consolas, monospace; white-space:nowrap; }
-    button, input, select { font:inherit; }
-    button { cursor:pointer; }
-    .collapse { display:grid; place-items:center; width:27px; height:27px; padding:0; color:var(--muted); background:transparent; border:1px solid transparent; border-radius:7px; font-size:18px; line-height:1; }
-    button:hover { background:var(--wash); }
-    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:2px solid var(--teal); outline-offset:3px; }
-    .body { border-top:1px solid var(--line); padding:15px; max-height: min(560px, calc(100vh - 105px)); overflow:auto; overscroll-behavior:contain; }
+    :host { all:initial; display:block; width:100%; min-width:0; margin:10px 0 14px; color-scheme:light; font:12px/1.4 "Segoe UI",sans-serif; --ink:#262626; --muted:#737373; --line:#e5e5e5; --wash:#fafafa; }
+    :host([data-dark]) { color-scheme:dark; --ink:#dedede; --muted:#a3a3a3; --line:#3a3a3a; --wash:#262626; }
+    * { box-sizing:border-box; }
     [hidden] { display:none !important; }
-    .eyebrow { color:var(--muted); text-transform:uppercase; letter-spacing:1.1px; font:10px/1.5 Consolas, monospace; margin:0 0 6px; }
-    h2 { font-size:16px; font-weight:650; line-height:1.35; margin:0 0 5px; overflow-wrap:anywhere; }
-    .count { color:var(--muted); font-size:12px; margin:0 0 13px; }
-    .window-filter { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 5px; font-size:11px; color:var(--muted); }
-    select { color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:7px; padding:6px 8px; max-width:180px; min-height:32px; }
-    .explore-dataset { display:flex; align-items:center; justify-content:space-between; width:100%; color:var(--teal); background:var(--tag); border:1px solid var(--line); border-radius:7px; padding:8px 10px; margin:0 0 14px; font-size:11px; font-weight:600; }
-    .window-note { margin:0 0 14px; font-size:10px; color:var(--muted); }
-    .search { display:block; margin:0 0 12px; }
-    .search input { width:100%; border:1px solid var(--line); color:var(--ink); background:var(--wash); border-radius:8px; padding:8px 10px; min-height:35px; }
-    .search input::placeholder { color:var(--muted); opacity:1; }
-    .frequency-heading { color:var(--muted); font:10px/1.5 Consolas,monospace; margin:0 0 7px; cursor:help; }
-    .frequency-heading:focus-visible { outline:2px solid var(--teal); outline-offset:3px; }
-    .companies { display:grid; gap:4px; margin:0; padding:1px 0; list-style:none; }
-    .companies[data-scrollable] { max-height:250px; overflow:auto; }
-    .companies li { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px; margin:0; padding:0; max-width:100%; }
-    .companies a { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid transparent; border-radius:6px; padding:4px 9px; font-size:12px; font-weight:600; color:var(--teal); background:var(--tag); text-decoration:none; overflow-wrap:anywhere; }
-    .companies a:hover { border-color:var(--teal); }
-    .frequency-score { flex:none; color:var(--muted); font:11px/1.5 Consolas,monospace; font-variant-numeric:tabular-nums; }
-    .company-identity { display:flex; align-items:center; gap:8px; min-width:0; }
-    .company-info { min-width:0; }
+    .company-bar { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--ink); }
+    .caption { flex:none; max-width:128px; color:var(--muted); }
+    .company-label { display:block; font-size:10px; font-weight:600; white-space:nowrap; }
+    .window-label { display:block; font-size:9px; margin-top:2px; }
+    .companies { display:flex; flex:1; min-width:0; gap:6px; list-style:none; margin:0; padding:2px 0 5px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
+    .companies li { display:block; flex:none; }
+    .company-chip { display:inline-flex; align-items:center; gap:6px; height:34px; padding:5px 8px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:6px; text-decoration:none; white-space:nowrap; }
+    .company-chip:hover { border-color:var(--muted); }
+    a:focus-visible,.companies:focus-visible { outline:2px solid var(--muted); outline-offset:2px; }
+    .company-name { font-size:11px; font-weight:500; }
+    .frequency-score { flex:none; padding-left:2px; color:var(--muted); font:10px/1.4 Consolas,monospace; font-variant-numeric:tabular-nums; }
     .company-logo { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; flex:0 0 20px; overflow:hidden; border:1px solid #dfe8eb; border-radius:5px; background:#fff; color:#007b77; }
     .company-logo-fallback { display:block; color:#3c6463; font:600 10px/1 Consolas,monospace; letter-spacing:-.25px; }
     .company-logo img { display:none; width:100%; height:100%; padding:2px; object-fit:contain; }
     .company-logo[data-loaded] img { display:block; }
     .company-logo[data-loaded] .company-logo-fallback { display:none; }
-    .company-heading { display:flex; align-items:center; gap:9px; min-width:0; }
-    .company-heading h2 { min-width:0; }
-    .company-heading .company-logo { width:24px; height:24px; flex-basis:24px; }
-    .company-name, .company-rank { display:block; }
-    .company-rank { margin-top:1px; color:var(--muted); font-size:9px; font-weight:400; }
-    .practice-company { align-self:stretch; border:1px solid var(--line); border-radius:6px; background:transparent; color:var(--teal); padding:4px 7px; font-size:10px; }
-    .show-companies { display:flex; align-items:center; justify-content:space-between; width:100%; color:var(--teal); border:1px solid var(--line); background:transparent; border-radius:7px; padding:7px 9px; margin-top:8px; font-size:11px; font-weight:600; }
-    .chevron { width:7px; height:7px; margin-right:2px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg) translateY(-2px); }
-    [aria-expanded="true"] .chevron { transform:rotate(225deg) translate(-1px,-1px); }
-    .empty { margin:6px 0 12px; color:var(--muted); font-size:13px; }
-    .status { margin-top:14px; border-top:1px solid var(--line); padding-top:11px; }
-    .status-message { font-size:12px; color:var(--muted); margin:0; overflow-wrap:anywhere; }
-    .status[data-warning] .status-message { color:var(--warn); background:var(--warn-bg); padding:8px; border-radius:6px; }
-    progress { display:block; accent-color:var(--teal); width:100%; height:4px; margin:10px 0 4px; border:0; }
-    .actions { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:9px 0 0; }
-    .source { color:var(--muted); font-size:11px; text-decoration:none; text-underline-offset:3px; }
-    .source:hover { color:var(--teal); text-decoration:underline; }
-    .refresh { color:var(--teal); border:1px solid var(--line); background:transparent; border-radius:6px; padding:4px 9px; font-size:11px; }
-    button:disabled { opacity:.55; cursor:wait; }
-    .note { color:var(--muted); font-size:10px; line-height:1.5; margin:11px 0 0; }
-    .back-companies { border:0; background:transparent; color:var(--teal); padding:0; margin:0 0 11px; font-size:11px; }
-    .practice-filters { display:grid; grid-template-columns:1fr; gap:8px; margin:12px 0; }
-    .practice-filters label { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:11px; }
-    .practice-filters input { width:180px; min-height:32px; padding:6px 8px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:7px; }
-    .practice-summary { font-size:11px; color:var(--muted); margin:0 0 8px; }
-    .practice-questions { list-style:none; margin:0; padding:0; max-height:230px; overflow:auto; }
-    .practice-questions li + li { border-top:1px solid var(--line); }
-    .practice-questions a { display:block; padding:9px 1px; color:var(--teal); text-decoration:none; font-size:12px; font-weight:600; }
-    .practice-questions a:hover .question-title { text-decoration:underline; text-underline-offset:3px; }
-    .question-meta, .question-topics { display:block; font-size:10px; color:var(--muted); font-weight:400; margin-top:3px; }
-    @media (max-width:480px) { :host { right:12px; bottom:12px; } .body { max-height: min(420px, calc(100vh - 90px)); } }
-    @media (prefers-reduced-motion:no-preference) { .card { animation:arrive .16s ease-out; } @keyframes arrive { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } } }
+    .status-message { flex:1; min-width:0; margin:0; color:var(--muted); font-size:11px; }
+    @media(max-width:480px) { .company-bar { gap:8px; } .caption { max-width:105px; } }
   `;
 
   function element(tag, className, text) {
@@ -119,554 +52,212 @@
     if (text !== undefined) node.textContent = text;
     return node;
   }
-
-  function sourceLink(url) {
+  function sourceURL(value) {
     try {
-      const parsed = new URL(url);
-      if (parsed.protocol === 'https:' && parsed.hostname === 'github.com' && parsed.pathname.startsWith('/liquidslr/leetcode-company-wise-problems/')) return parsed.href;
-    } catch (_) { /* Fall back to the public dataset. */ }
+      const url = new URL(value);
+      if (url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname.startsWith('/liquidslr/leetcode-company-wise-problems/')) return url.href;
+    } catch (_) { /* Use the known public dataset. */ }
     return core.SOURCE_URL;
   }
-
+  function date(value) {
+    const parsed = new Date(value);
+    return value && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
+  }
+  function rendered(node) {
+    return Boolean(node?.isConnected && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+  }
+  function normalizedTitle(value) {
+    return value.normalize('NFKC').trim().replace(/^(?:Q\s*)?\d+\s*[.)：:]\s*/i, '').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  }
+  function titleMatches(title, currentSlug) {
+    const anchors = title.matches('a[href]') ? [title] : Array.from(title.querySelectorAll('a[href]'));
+    const identity = anchors.map(anchor => core.getProblemSlug(anchor.href)).find(Boolean);
+    if (identity) return identity === currentSlug;
+    const explicit = title.dataset.problemSlug || title.dataset.slug;
+    if (explicit) return explicit === currentSlug;
+    return normalizedTitle(title.textContent || '') === normalizedTitle(core.formatProblemTitle(currentSlug));
+  }
+  function findPlacement() {
+    if (!slug || !settings.enabled) return null;
+    const descriptionButton = document.querySelector('#description_tab')?.closest('.flexlayout__tab_button');
+    if (descriptionButton?.getAttribute('aria-selected') === 'false') return null;
+    if (descriptionButton && !descriptionButton.hasAttribute('aria-selected') && document.querySelector('.flexlayout__tab_button--selected') && !descriptionButton.classList.contains('flexlayout__tab_button--selected')) return null;
+    const targets = document.querySelectorAll('[data-track-load="description_content"], [data-cy="question-content"], [data-key="description-content"]');
+    for (const target of targets) {
+      if (!rendered(target) || host?.contains(target)) continue;
+      const tab = target.closest('.flexlayout__tab, [role="tabpanel"]');
+      const scopes = [];
+      if (tab) scopes.push(tab);
+      else {
+        let parent = target.parentElement;
+        for (let depth = 0; parent && parent !== document.body && depth < 8; depth++, parent = parent.parentElement) scopes.push(parent);
+      }
+      for (const scope of scopes) {
+        const candidates = Array.from(scope.querySelectorAll('.text-title-large, [data-cy="question-title"]'));
+        const headings = candidates.length ? candidates : Array.from(scope.querySelectorAll('h1, h2'));
+        const title = headings.find(node => rendered(node) && !host?.contains(node));
+        if (!title || !titleMatches(title, slug)) continue;
+        const statement = target.contains(title) ? target.querySelector('[data-cy="question-content"], [data-key="description-content"], .elfjS') : target;
+        if (!statement || !rendered(statement) || statement.contains(title) || !statement.parentElement) continue;
+        if (!(title.compareDocumentPosition(statement) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+        return { parent: statement.parentElement, statement };
+      }
+    }
+    return null;
+  }
   function updateTheme() {
     if (!host) return;
     const html = document.documentElement;
-    const explicitDark = html.classList.contains('dark') || html.dataset.theme === 'dark';
-    const explicitLight = html.classList.contains('light') || html.dataset.theme === 'light';
-    const dark = explicitDark || (!explicitLight && matchMedia('(prefers-color-scheme: dark)').matches);
+    const dark = html.classList.contains('dark') || html.dataset.theme === 'dark' || (!html.classList.contains('light') && html.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
     host.toggleAttribute('data-dark', dark);
   }
-
-  function mount() {
-    if (host || !slug || !settings.enabled) return;
-    host = element('div');
-    host.id = 'company-lens-root';
-    const shadow = host.attachShadow({ mode: 'open' });
-    const style = element('style', null, css);
-    const card = element('section', 'card');
-    card.setAttribute('aria-label', 'Company Lens company tags');
-    const bubble = element('button', 'collapsed-bubble');
-    bubble.type = 'button';
-    bubble.setAttribute('aria-expanded', 'false');
-    bubble.setAttribute('aria-controls', 'company-lens-body');
-    const bubbleMark = element('span', 'mark');
-    bubbleMark.setAttribute('aria-hidden', 'true');
-    const bubbleCount = element('span', 'bubble-count');
-    bubbleCount.setAttribute('aria-hidden', 'true');
-    bubble.append(bubbleMark, bubbleCount);
-    const header = element('div', 'header');
-    const mark = element('span', 'mark');
-    mark.setAttribute('aria-hidden', 'true');
-    const badge = element('span', 'badge');
-    const collapse = element('button', 'collapse');
-    collapse.type = 'button';
-    collapse.setAttribute('aria-controls', 'company-lens-body');
-    header.append(mark, element('span', 'brand', 'Company Lens'), badge, collapse);
-    const body = element('div', 'body');
-    body.id = 'company-lens-body';
-    const windowFilter = element('label', 'window-filter', 'Time window');
-    const windowSelect = element('select', 'window-select');
-    windowSelect.setAttribute('aria-label', 'Time window');
-    for (const [value, label] of Object.entries(windowLabels)) {
-      const option = element('option', null, label);
-      option.value = value;
-      windowSelect.append(option);
-    }
-    windowFilter.append(windowSelect);
-    const windowNote = element('p', 'window-note');
-    const exploreDataset = element('button', 'explore-dataset', 'Explore dataset');
-    exploreDataset.type = 'button';
-    exploreDataset.title = 'Search any problem or company';
-    const exploreArrow = element('span', null, '↗');
-    exploreArrow.setAttribute('aria-hidden', 'true');
-    exploreDataset.append(exploreArrow);
-    const companyView = element('div', 'company-view');
-    const title = element('h2');
-    const count = element('p', 'count');
-    const searchWrap = element('label', 'search');
-    const search = element('input');
-    search.type = 'search';
-    search.placeholder = 'Filter this problem’s companies';
-    search.setAttribute('aria-label', 'Filter company names');
-    search.autocomplete = 'off';
-    searchWrap.append(search);
-    const frequencyHeading = element('p', 'frequency-heading');
-    frequencyHeading.tabIndex = 0;
-    const list = element('ul', 'companies');
-    list.id = 'company-lens-companies';
-    list.setAttribute('aria-label', 'Companies listed for this problem');
-    const showCompanies = element('button', 'show-companies');
-    showCompanies.type = 'button';
-    showCompanies.setAttribute('aria-controls', list.id);
-    const showCompaniesLabel = element('span');
-    const chevron = element('span', 'chevron');
-    chevron.setAttribute('aria-hidden', 'true');
-    showCompanies.append(showCompaniesLabel, chevron);
-    const empty = element('p', 'empty');
-    const statusBox = element('div', 'status');
-    const statusMessage = element('p', 'status-message');
-    statusMessage.setAttribute('role', 'status');
-    const progress = element('progress');
-    progress.setAttribute('aria-label', 'Dataset sync progress');
-    const actions = element('div', 'actions');
-    const source = element('a', 'source', 'View dataset ↗');
-    source.href = core.SOURCE_URL;
-    source.target = '_blank';
-    source.rel = 'noopener noreferrer';
-    const refresh = element('button', 'refresh', 'Refresh');
-    refresh.type = 'button';
-    refresh.setAttribute('aria-label', 'Refresh company dataset');
-    actions.append(source, refresh);
-    statusBox.append(statusMessage, progress, actions);
-    companyView.append(element('p', 'eyebrow', 'Problem companies'), title, count, searchWrap, frequencyHeading, list, showCompanies, empty);
-    const practiceView = element('section', 'practice-view');
-    practiceView.setAttribute('aria-label', 'Company practice questions');
-    const backCompanies = element('button', 'back-companies', '← Back to companies');
-    backCompanies.type = 'button';
-    const practiceTitle = element('h2', 'practice-title');
-    const practiceHeading = element('div', 'company-heading');
-    practiceHeading.append(practiceTitle);
-    const practiceFilters = element('div', 'practice-filters');
-    const difficultyLabel = element('label', null, 'Difficulty');
-    const difficultySelect = element('select', 'difficulty-select');
-    difficultySelect.setAttribute('aria-label', 'Difficulty');
-    for (const difficulty of ['', 'Easy', 'Medium', 'Hard']) {
-      const option = element('option', null, difficulty || 'All difficulties');
-      option.value = difficulty;
-      difficultySelect.append(option);
-    }
-    difficultyLabel.append(difficultySelect);
-    const topicLabel = element('label', null, 'Topic');
-    const topicInput = element('input', 'topic-input');
-    topicInput.type = 'search';
-    topicInput.placeholder = 'e.g. Array';
-    topicInput.setAttribute('aria-label', 'Topic filter');
-    topicLabel.append(topicInput);
-    practiceFilters.append(difficultyLabel, topicLabel);
-    const practiceSummary = element('p', 'practice-summary');
-    practiceSummary.setAttribute('role', 'status');
-    const practiceList = element('ul', 'practice-questions');
-    practiceList.setAttribute('aria-label', 'Practice questions sorted by frequency');
-    practiceView.append(backCompanies, element('p', 'eyebrow', 'Company practice'), practiceHeading, practiceFilters, practiceSummary, practiceList);
-    body.append(windowFilter, windowNote, exploreDataset, companyView, practiceView, statusBox,
-      element('p', 'note', 'Community company reports from liquidslr. Coverage may be incomplete. Company links open the source.'));
-    card.append(header, body);
-    shadow.append(style, card, bubble);
-    document.documentElement.append(host);
-    view = { card, bubble, bubbleCount, body, title, count, badge, collapse, windowSelect, windowNote, companyView, search, searchWrap, frequencyHeading, list, showCompanies, showCompaniesLabel, empty, practiceView, backCompanies, practiceTitle, practiceHeading, difficultySelect, topicInput, practiceSummary, practiceList, statusBox, statusMessage, progress, source, refresh };
-    collapse.addEventListener('click', () => setCollapsed(true));
-    bubble.addEventListener('click', () => setCollapsed(false));
-    showCompanies.addEventListener('click', () => {
-      companiesExpanded = !companiesExpanded;
-      renderCompanies();
-      if (!companiesExpanded) view.list.scrollTop = 0;
-    });
-    search.addEventListener('input', renderCompanies);
-    windowSelect.addEventListener('change', () => {
-      settings.window = windowSelect.value;
-      resetWindow();
-      api.storage.local.set({ lctSettings: settings }).catch(() => { /* The selection still works for this page. */ });
-    });
-    backCompanies.addEventListener('click', () => {
-      const previousCompany = practiceCompany;
-      practiceCompany = null;
-      practiceRequestId++;
-      clearTimeout(topicTimer);
-      render();
-      const returnButton = Array.from(view.list.querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
-      (returnButton || view.windowSelect).focus();
-    });
-    difficultySelect.addEventListener('change', loadPractice);
-    topicInput.addEventListener('input', () => {
-      clearTimeout(topicTimer);
-      practiceRequestId++;
-      practiceQuestions = [];
-      practiceLoading = true;
-      renderPractice();
-      topicTimer = setTimeout(loadPractice, 250);
-    });
-    exploreDataset.addEventListener('click', async () => {
-      const currentView = view;
-      exploreDataset.disabled = true;
-      try {
-        const query = practiceCompany || search.value.trim();
-        const result = await api.runtime.sendMessage({ type: 'LCT_OPEN_EXPLORER', mode: query ? 'companies' : 'problems', query });
-        if (!result?.ok) throw new Error(result?.error || 'Could not open the dataset explorer.');
-      } catch (cause) {
-        if (view === currentView) { error = cause.message || 'Could not open the dataset explorer.'; renderStatus(); }
-      } finally { exploreDataset.disabled = false; }
-    });
-    refresh.addEventListener('click', refreshData);
-    updateTheme();
-    render();
-  }
-
-  function setCollapsed(collapsed) {
-    if (!view) return;
-    settings.collapsed = collapsed;
-    renderCollapsedState();
-    (collapsed ? view.bubble : view.collapse).focus();
-    api.storage.local.set({ lctSettings: settings }).catch(() => { /* Keep the current session usable. */ });
-  }
-
-  function renderCollapsedState() {
-    if (!view) return;
-    const active = host.shadowRoot.activeElement;
-    const collapsed = Boolean(settings.collapsed);
-    const hadCardFocus = active && view.card.contains(active);
-    const hadBubbleFocus = active === view.bubble;
-    host.toggleAttribute('data-collapsed', collapsed);
-    view.card.hidden = collapsed;
-    view.body.hidden = collapsed;
-    view.bubble.hidden = !collapsed;
-    view.collapse.textContent = '−';
-    view.collapse.setAttribute('aria-expanded', String(!collapsed));
-    view.collapse.setAttribute('aria-label', 'Collapse Company Lens');
-    view.collapse.title = 'Collapse';
-    const knownCount = windowAvailable;
-    const companyCount = `${companies.length} ${companies.length === 1 ? 'company' : 'companies'}`;
-    const countLabel = knownCount ? companyCount : loading || status.phase === 'syncing' ? 'Company count loading' : 'Company count unavailable';
-    const windowLabel = windowLabels[selectedWindow()].toLowerCase();
-    view.bubbleCount.textContent = knownCount ? `${companies.length}+` : '…';
-    view.bubble.setAttribute('aria-label', `Expand Company Lens, ${countLabel} for ${windowLabel}`);
-    view.bubble.title = `${countLabel} · ${windowLabel}${status.phase === 'syncing' ? ' · Updating in the background' : ''}`;
-    if (collapsed && hadCardFocus) view.bubble.focus();
-    else if (!collapsed && hadBubbleFocus) view.collapse.focus();
-  }
-
   function unmount() {
-    // Remounting creates fresh filter controls, so discard their old results too.
-    clearTimeout(topicTimer);
-    practiceRequestId++;
-    practiceCompany = null;
-    practiceQuestions = [];
-    practiceTotal = 0;
-    practiceAvailable = false;
-    practiceLoading = false;
-    practiceError = '';
-    companiesExpanded = false;
     if (host) host.remove();
-    host = null;
-    view = null;
+    host = null; view = null; renderedKey = null;
   }
-
-  function dateLabel(value) {
-    const date = new Date(value);
-    if (!value || !Number.isFinite(date.getTime())) return '';
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  function mount(placement) {
+    if (!placement || host) return;
+    host = element('div'); host.id = 'company-lens-root';
+    const shadow = host.attachShadow({ mode:'open' });
+    const bar = element('section', 'company-bar');
+    const caption = element('div', 'caption');
+    const label = element('span', 'company-label');
+    const windowLabel = element('span', 'window-label');
+    caption.append(label, windowLabel);
+    const list = element('ul', 'companies');
+    list.id = 'company-lens-companies'; list.tabIndex = 0;
+    list.setAttribute('aria-label', 'Companies ordered by frequency. Scroll horizontally for more.');
+    const message = element('p', 'status-message'); message.setAttribute('role', 'status');
+    bar.append(caption, list, message);
+    shadow.append(element('style', '', css), bar);
+    view = { bar, caption, label, windowLabel, list, message };
+    placement.parent.insertBefore(host, placement.statement);
+    list.addEventListener('keydown', event => {
+      if (event.target !== list || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === 'Home') list.scrollLeft = 0;
+      else if (event.key === 'End') list.scrollLeft = list.scrollWidth;
+      else list.scrollLeft += event.key === 'ArrowRight' ? 140 : -140;
+    });
+    updateTheme(); renderCompanies();
   }
-
-  function renderCompanies() {
-    if (!view) return;
-    const query = view.search.value.trim().toLocaleLowerCase();
-    const ordered = core.sortCompanies(companies);
-    const filtered = ordered.filter(company => company.name.toLocaleLowerCase().includes(query));
-    const shown = query || companiesExpanded ? filtered : filtered.slice(0, previewCount);
-    view.list.toggleAttribute('data-scrollable', shown.length > previewCount);
-    const hasFrequency = companies.some(company => Number.isFinite(company.frequency) && company.frequency >= 0);
-    view.frequencyHeading.hidden = companies.length === 0;
-    view.frequencyHeading.textContent = hasFrequency ? 'Frequency score · high to low' : 'Frequency unavailable · A–Z';
-    view.frequencyHeading.title = hasFrequency ? frequencyHelp : `Refresh to check for frequency scores. ${frequencyHelp}`;
-    view.frequencyHeading.setAttribute('aria-label', `${view.frequencyHeading.textContent}. ${view.frequencyHeading.title}`);
-    view.showCompanies.hidden = Boolean(query) || companies.length <= previewCount;
-    view.showCompanies.setAttribute('aria-expanded', String(companiesExpanded));
-    view.showCompaniesLabel.textContent = companiesExpanded ? 'Show fewer' : `Show all ${companies.length} companies`;
-    view.list.replaceChildren(...shown.map((company, index) => {
-      const item = element('li');
-      const link = element('a');
-      const knownFrequency = Number.isFinite(company.frequency) && company.frequency >= 0;
-      const frequency = element('span', 'frequency-score', knownFrequency ? String(company.frequency) : '—');
-      frequency.id = `company-lens-frequency-${index}`;
-      frequency.title = knownFrequency ? `Frequency score: ${company.frequency}` : 'Frequency score unavailable';
-      frequency.setAttribute('aria-label', frequency.title);
-      const companyInfo = element('span', 'company-info');
-      const rank = element('span', 'company-rank', Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}` : 'Rank unavailable');
-      rank.title = `This problem’s frequency rank within ${company.name} for ${windowLabels[selectedWindow()].toLowerCase()}. Equal scores share a rank.`;
-      companyInfo.append(element('span', 'company-name', company.name), rank);
-      const identity = element('span', 'company-identity');
-      identity.append(logos.createBadge(company.name), companyInfo);
-      link.append(identity, frequency);
-      link.href = sourceLink(company.sourceUrl);
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.setAttribute('aria-label', `${company.name}, view source`);
-      link.setAttribute('aria-describedby', frequency.id);
-      const practiceButton = element('button', 'practice-company', 'Practice');
-      practiceButton.type = 'button';
-      practiceButton.setAttribute('aria-label', `Practice ${company.name}`);
-      practiceButton.dataset.company = company.name;
-      practiceButton.addEventListener('click', () => openPractice(company.name));
-      item.append(link, practiceButton);
-      return item;
-    }));
-    view.searchWrap.hidden = companies.length < 6 && !query;
-    renderCompanyMessage(filtered.length > 0);
-  }
-
-  function renderCompanyMessage(hasMatches = view?.list.childElementCount > 0) {
-    if (!view) return;
-    const query = view.search.value.trim();
-    view.empty.hidden = hasMatches;
-    if (query && companies.length) view.empty.textContent = 'No company names match your search.';
-    else if (loading && !status.hasData) view.empty.textContent = 'Loading company tags…';
-    else if (!status.hasData && status.phase === 'syncing') view.empty.textContent = 'Preparing company tags…';
-    else if (!status.hasData && (error || status.phase === 'error')) view.empty.textContent = 'Company data is unavailable. Check your connection, then refresh.';
-    else if (!windowAvailable) view.empty.textContent = status.phase === 'syncing' ? 'This time window is syncing. It will appear when the updated dataset is ready.' : 'This time window is not downloaded yet. Refresh to load it.';
-    else view.empty.textContent = 'No company matches in this dataset. This does not mean the problem has never been asked.';
-  }
-
   function renderStatus() {
     if (!view) return;
-    const revision = /^[a-f0-9]{40}$/i.test(status.commit || '') ? status.commit : '';
-    view.source.href = revision ? `${core.SOURCE_URL.replace(/\/$/, '')}/tree/${revision}` : core.SOURCE_URL;
-    view.source.title = revision ? `Dataset revision ${revision.slice(0, 7)}` : 'Public company dataset';
-    const syncedDate = new Date(status.lastSyncedAt);
-    view.statusMessage.title = status.lastSyncedAt && Number.isFinite(syncedDate.getTime()) ? `Last synced: ${syncedDate.toLocaleString()}` : '';
-    const snapshot = status.dataSource === 'bundled' ? 'Bundled snapshot · ' : '';
-    view.windowNote.textContent = status.sourceUpdatedAt ? `${snapshot}Windows relative to source updated ${dateLabel(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';
-    view.badge.textContent = status.phase === 'syncing' ? 'syncing' : `${companies.length} ${companies.length === 1 ? 'company' : 'companies'}`;
-    view.refresh.disabled = status.phase === 'syncing';
-    view.refresh.textContent = status.phase === 'syncing' ? 'Syncing…' : 'Refresh';
-    view.progress.hidden = status.phase !== 'syncing';
-    if (status.total > 0) {
-      view.progress.max = status.total;
-      view.progress.value = Math.min(status.completed || 0, status.total);
-    } else view.progress.removeAttribute('value');
-    const failure = error || (status.phase === 'error' ? status.message || 'Refresh failed. Check your connection and try again.' : '');
-    const stale = status.lastCheckedAt && Date.now() - new Date(status.lastCheckedAt).getTime() > 48 * 60 * 60 * 1000;
-    view.statusBox.toggleAttribute('data-warning', Boolean(failure || stale));
-    if (failure) view.statusMessage.textContent = `${status.hasData ? 'Showing saved data. ' : ''}${failure}`;
-    else if (status.phase === 'syncing') view.statusMessage.textContent = status.total > 0 ? `${snapshot}Syncing dataset · ${status.completed || 0} of ${status.total}` : `${snapshot}Checking the latest dataset…`;
-    else if (stale) view.statusMessage.textContent = `${snapshot}Saved data · last checked ${dateLabel(status.lastCheckedAt)}. Refresh for updates.`;
-    else if (status.sourceUpdatedAt) view.statusMessage.textContent = `${snapshot}Source updated ${dateLabel(status.sourceUpdatedAt)}`;
-    else if (status.lastCheckedAt || status.lastSyncedAt) view.statusMessage.textContent = `${snapshot}Last checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
-    else view.statusMessage.textContent = loading ? 'Connecting to the company dataset…' : 'Live source · saved locally after sync';
-    renderCompanyMessage();
-    renderPracticeSummary();
-    renderCollapsedState();
+    const windowLabel = labels[selectedWindow()];
+    const sourceDate = date(status.sourceUpdatedAt);
+    const provenance = `${status.dataSource === 'bundled' ? 'Bundled snapshot. ' : ''}${sourceDate ? `Source updated ${sourceDate}. ` : ''}${status.phase === 'syncing' ? 'Updating in the background. ' : ''}${status.phase === 'error' ? 'Refresh failed; saved data is shown. ' : ''}Open Company Lens in the browser toolbar for filters, practice and refresh.`;
+    view.label.textContent = `Companies${available ? ` · ${companies.length}` : ''}`;
+    view.windowLabel.textContent = windowLabel;
+    view.caption.title = provenance;
+    view.bar.setAttribute('aria-label', `Company Lens company reports for ${core.formatProblemTitle(slug)}. ${windowLabel}. ${provenance}`);
+    view.bar.dataset.phase = status.phase || 'idle';
+    view.list.hidden = companies.length === 0;
+    view.message.hidden = companies.length > 0;
+    if (loading) view.message.textContent = 'Loading company tags…';
+    else if (error || (!status.hasData && status.phase === 'error')) view.message.textContent = 'Company data unavailable. Open the extension popup to refresh.';
+    else if (!available) view.message.textContent = status.phase === 'syncing' ? 'Company tags are updating…' : 'This window is unavailable. Open the extension popup to refresh.';
+    else view.message.textContent = 'No company reports in this window. More options in the extension popup.';
   }
-
-  function render() {
+  function renderCompanies() {
     if (!view) return;
-    const total = companies.length;
-    view.title.textContent = core.formatProblemTitle(slug);
-    view.count.textContent = `${total} ${total === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}`;
-    view.windowSelect.value = selectedWindow();
-    view.companyView.hidden = Boolean(practiceCompany);
-    view.practiceView.hidden = !practiceCompany;
-    renderCollapsedState();
-    renderCompanies();
-    renderPractice();
+    const ordered = core.sortCompanies(companies);
+    const key = JSON.stringify([slug, selectedWindow(), ordered.map(company => [company.name, company.frequency, company.rank, company.sourceUrl])]);
+    if (key !== renderedKey) {
+      const windowLabel = labels[selectedWindow()].toLowerCase();
+      view.list.replaceChildren(...ordered.map((company, index) => {
+        const item = element('li');
+        const link = element('a', 'company-chip');
+        const score = Number.isFinite(company.frequency) && company.frequency >= 0 ? String(company.frequency) : 'unavailable';
+        const rank = Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}. ` : '';
+        const help = element('span', 'chip-description', `Frequency score ${score} for ${windowLabel}. ${rank}Scores are not interview counts and may not be directly comparable between companies.`);
+        help.id = `company-lens-score-${index}`; help.hidden = true;
+        const frequency = element('span', 'frequency-score', score === 'unavailable' ? '—' : score);
+        frequency.setAttribute('aria-hidden', 'true');
+        link.append(logos.createBadge(company.name), element('span', 'company-name', company.name), frequency, help);
+        link.href = sourceURL(company.sourceUrl); link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.setAttribute('aria-label', `${company.name}, view source`);
+        link.setAttribute('aria-describedby', help.id); link.title = `${company.name}. ${help.textContent}`;
+        item.append(link); return item;
+      }));
+      renderedKey = key;
+    }
     renderStatus();
   }
-
-  function resetWindow() {
-    requestId++;
-    companies = [];
-    windowAvailable = false;
-    companiesExpanded = false;
-    error = '';
-    render();
-    void loadCompanies();
-    if (practiceCompany) void loadPractice();
-  }
-
-  function openPractice(company) {
-    practiceCompany = company;
-    view.difficultySelect.value = '';
-    view.topicInput.value = '';
-    render();
-    view.backCompanies.focus();
-    void loadPractice();
-  }
-
-  function renderPracticeSummary() {
-    if (!view || !practiceCompany) return;
-    if (practiceError) view.practiceSummary.textContent = practiceError;
-    else if (practiceLoading) view.practiceSummary.textContent = 'Loading practice questions…';
-    else if (!practiceAvailable) view.practiceSummary.textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
-    else if (!practiceTotal) view.practiceSummary.textContent = 'No questions match these filters in this time window.';
-    else {
-      const order = practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0) ? 'highest frequency first' : 'frequency unavailable';
-      view.practiceSummary.textContent = `${practiceQuestions.length} of ${practiceTotal} questions · ${order}`;
-    }
-  }
-
-  function renderPractice() {
-    if (!view || !practiceCompany) return;
-    view.practiceTitle.textContent = practiceCompany;
-    view.practiceHeading.replaceChildren(logos.createBadge(practiceCompany), view.practiceTitle);
-    renderPracticeSummary();
-    view.practiceList.replaceChildren(...practiceQuestions.map(question => {
-      const item = element('li');
-      const link = element('a');
-      link.href = `https://leetcode.com/problems/${encodeURIComponent(question.slug)}/`;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.append(element('span', 'question-title', question.title));
-      const score = Number.isFinite(question.frequency) && question.frequency >= 0 ? String(question.frequency) : 'unavailable';
-      const rank = Number.isInteger(question.rank) && question.rank > 0 ? `company rank #${question.rank}` : 'rank unavailable';
-      link.append(element('span', 'question-meta', `${question.difficulty || 'Difficulty unavailable'} · score ${score} · ${rank}`));
-      if (Array.isArray(question.topics) && question.topics.length) {
-        const topics = element('span', 'question-topics', question.topics.slice(0, 3).join(' · '));
-        topics.title = question.topics.join(', ');
-        link.append(topics);
-      }
-      item.append(link);
-      return item;
-    }));
-  }
-
-  async function loadPractice() {
-    if (!practiceCompany || !view) return;
-    const id = ++practiceRequestId;
-    practiceQuestions = [];
-    practiceLoading = true;
-    practiceError = '';
-    renderPractice();
-    try {
-      const message = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), limit: 20 };
-      if (slug) message.excludeSlug = slug;
-      if (view.difficultySelect.value) message.difficulty = view.difficultySelect.value;
-      if (view.topicInput.value.trim()) message.topic = view.topicInput.value.trim();
-      const result = await api.runtime.sendMessage(message);
-      if (id !== practiceRequestId || !practiceCompany) return;
-      if (!result?.ok) throw new Error(result?.error || 'Could not load practice questions. Try again.');
-      practiceQuestions = Array.isArray(result.questions) ? result.questions : [];
-      practiceTotal = Number(result.total) || 0;
-      practiceAvailable = result.available !== false;
-    } catch (cause) {
-      if (id !== practiceRequestId) return;
-      practiceError = cause.message || 'Could not load practice questions. Try again.';
-    } finally {
-      if (id === practiceRequestId) { practiceLoading = false; renderPractice(); }
-    }
-  }
-
   async function loadCompanies() {
     const currentSlug = slug;
-    const currentRequest = ++requestId;
+    const window = selectedWindow();
+    const id = ++requestId;
     if (!currentSlug || !settings.enabled) return;
-    loading = true;
-    error = '';
-    renderStatus();
+    loading = true; error = ''; renderStatus();
     try {
-      const result = await api.runtime.sendMessage({ type: 'LCT_GET', slug: currentSlug, window: selectedWindow() });
-      if (currentRequest !== requestId || currentSlug !== slug) return;
-      if (!result?.ok) throw new Error(result?.error || 'The company dataset could not be loaded. Try Refresh.');
+      const result = await api.runtime.sendMessage({ type:'LCT_GET', slug:currentSlug, window });
+      if (id !== requestId || currentSlug !== slug || window !== selectedWindow() || core.getProblemSlug(location.href) !== currentSlug) return;
+      if (!result?.ok) throw new Error(result?.error || 'Could not load company tags.');
       companies = Array.isArray(result.companies) ? result.companies : [];
-      windowAvailable = result.available ?? Boolean(result.status?.hasData && selectedWindow() === 'all');
+      available = result.available ?? Boolean(result.status?.hasData && window === 'all');
       status = result.status || status;
     } catch (cause) {
-      if (currentRequest !== requestId || currentSlug !== slug) return;
-      error = /context invalidated/i.test(cause.message) ? 'Extension updated. Reload this page to reconnect.' : cause.message || 'Could not connect. Check your connection, then refresh.';
+      if (id !== requestId || currentSlug !== slug || window !== selectedWindow()) return;
+      error = cause.message || 'Could not load company tags.';
     } finally {
-      if (currentRequest === requestId && currentSlug === slug) {
-        loading = false;
-        render();
-      }
+      if (id === requestId && currentSlug === slug && window === selectedWindow()) { loading = false; renderCompanies(); scheduleCheck(); }
     }
   }
-
-  async function refreshData() {
-    const currentSlug = slug;
-    error = '';
-    status = { ...status, phase: 'syncing', completed: 0, total: 0 };
-    renderStatus();
-    try {
-      const result = await api.runtime.sendMessage({ type: 'LCT_REFRESH' });
-      if (!result?.ok) throw new Error(result?.error || 'Refresh failed. Check your connection and try again.');
-      if (slug !== currentSlug) return;
-      status = result.status || status;
-      await loadCompanies();
-      if (practiceCompany) await loadPractice();
-    } catch (cause) {
-      if (slug !== currentSlug) return;
-      status = { ...status, phase: 'error' };
-      error = cause.message || 'Refresh failed. Check your connection and try again.';
-      renderStatus();
-    }
-  }
-
-  function checkNavigation(force = false) {
+  function checkPage() {
+    scheduled = false;
     if (disposed) return;
-    const nextUrl = location.href;
-    if (!force && nextUrl === lastUrl && (!slug || host?.isConnected || !settings.enabled)) return;
-    lastUrl = nextUrl;
-    const nextSlug = core.getProblemSlug(nextUrl);
+    const nextSlug = core.getProblemSlug(location.href);
     if (nextSlug !== slug) {
-      slug = nextSlug;
-      requestId++;
-      companies = [];
-      companiesExpanded = false;
-      windowAvailable = false;
-      practiceCompany = null;
-      practiceRequestId++;
-      clearTimeout(topicTimer);
-      error = '';
-      loading = false;
-      if (view) view.search.value = '';
-      if (!slug) unmount();
-      if (slug && settings.enabled) { mount(); render(); void loadCompanies(); }
-    } else if (slug && settings.enabled) {
-      if (!host?.isConnected) {
-        if (host) unmount();
-        mount();
-      }
-      if (force) void loadCompanies();
+      requestId++; unmount(); slug = nextSlug;
+      companies = []; available = false; error = ''; loading = false;
+      if (slug && settings.enabled) void loadCompanies();
     }
+    if (!slug || !settings.enabled) { unmount(); return; }
+    const placement = findPlacement();
+    if (!placement) { unmount(); return; }
+    if (!host) mount(placement);
+    else if (!host.isConnected || host.parentElement !== placement.parent || host.nextElementSibling !== placement.statement) placement.parent.insertBefore(host, placement.statement);
+    updateTheme();
   }
-
+  function scheduleCheck() {
+    if (scheduled || disposed) return;
+    scheduled = true; requestAnimationFrame(checkPage);
+  }
   api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'LCT_CONTEXT') return false;
-    sendResponse({ slug: core.getProblemSlug(location.href) });
-    return false;
+    sendResponse({ slug:core.getProblemSlug(location.href) }); return false;
   });
-
   api.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || (!changes.lctSettings && !changes.lctStatus && !changes.lctData)) return;
+    let reload = Boolean(changes.lctData?.newValue);
     if (changes.lctSettings) {
-      const previousEnabled = settings.enabled;
-      const previousWindow = selectedWindow();
+      const previousWindow = selectedWindow(); const previousEnabled = settings.enabled;
       settings = { ...defaults, ...changes.lctSettings.newValue };
-      renderCollapsedState();
       if (!settings.enabled) { requestId++; unmount(); }
-      else checkNavigation(previousEnabled !== settings.enabled);
-      if (previousWindow !== selectedWindow()) resetWindow();
-      render();
+      if (previousWindow !== selectedWindow()) { requestId++; companies = []; available = false; error = ''; renderCompanies(); }
+      reload ||= settings.enabled && (previousEnabled !== settings.enabled || previousWindow !== selectedWindow());
+      scheduleCheck();
     }
-    let dataChanged = Boolean(changes.lctData?.newValue);
     if (changes.lctStatus) {
-      const previous = status;
-      status = changes.lctStatus.newValue || {};
-      if (status.phase !== 'error') error = '';
-      dataChanged ||= Boolean(status.hasData && (!previous.hasData || status.commit !== previous.commit || status.lastSyncedAt !== previous.lastSyncedAt));
-      // Progress and source verification must preserve focused links and filter inputs.
+      const previous = status; status = changes.lctStatus.newValue || {};
+      reload ||= Boolean(status.hasData && (!previous.hasData || previous.commit !== status.commit || previous.lastSyncedAt !== status.lastSyncedAt));
       renderStatus();
     }
-    if (dataChanged && slug && settings.enabled) {
-      void loadCompanies();
-      if (practiceCompany) void loadPractice();
-    }
+    if (reload && slug && settings.enabled) void loadCompanies();
   });
-
   async function start() {
     try {
-      const stored = await api.storage.local.get(['lctSettings', 'lctStatus']);
-      settings = { ...defaults, ...stored.lctSettings };
-      status = stored.lctStatus || {};
-    } catch (_) { /* Start with defaults if storage is temporarily unavailable. */ }
-    checkNavigation(true);
-    const interval = setInterval(checkNavigation, 800);
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+      const stored = await api.storage.local.get(['lctSettings','lctStatus']);
+      settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
+    } catch (_) { /* Cache queries report a compact usable error. */ }
+    checkPage();
+    const interval = setInterval(checkPage, 700);
+    const observer = new MutationObserver(scheduleCheck);
+    observer.observe(document.documentElement, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','style','hidden','href','aria-selected','data-slug','data-problem-slug'] });
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
-    addEventListener('popstate', () => checkNavigation());
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNavigation(true); });
-    addEventListener('pagehide', event => {
-      if (!event.persisted) { disposed = true; clearInterval(interval); observer.disconnect(); }
-    }, { once: true });
+    addEventListener('popstate', scheduleCheck);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleCheck(); });
+    addEventListener('pagehide', event => { if (!event.persisted) { disposed = true; clearInterval(interval); observer.disconnect(); } }, { once:true });
   }
-
   void start();
 })();

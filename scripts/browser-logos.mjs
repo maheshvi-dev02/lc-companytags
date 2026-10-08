@@ -65,27 +65,25 @@ export async function verifyBadges(ui, { root = 'document', selector, names, siz
 
 export async function exercisePanelLogos(page, companies) {
   const ui = { read: expression => page.evaluate(expression), mutate: source => page.evaluate(source) };
-  const rows = '.company-identity > .company-logo';
-  const first = await verifyBadges(ui, { root: panelRoot, selector: rows, names: companies.slice(0, 5).map(company => company.name), known: true, label: '{name}, view source' });
-  const host = page.locator('#company-lens-root');
-  await host.getByRole('button', { name: `Show all ${companies.length} companies` }).click();
-  const all = await verifyBadges(ui, { root: panelRoot, selector: rows, names: companies.map(company => company.name), label: '{name}, view source' });
+  const rows = 'ul.companies > li > a.company-chip > .company-logo';
+  const names = companies.map(company => company.name);
+  const first = await verifyBadges(ui, { root: panelRoot,
+    selector: 'ul.companies > li:nth-child(-n+5) > a.company-chip > .company-logo',
+    names: names.slice(0, 5), known: true, label: '{name}, view source' });
+  const all = await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
   assert.ok(all.initials.length > 0, 'The real source list should exercise unmapped-company initials.');
   await page.evaluate(() => { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); });
   await page.waitForFunction(() => !document.querySelector('#company-lens-root').hasAttribute('data-dark'));
-  const light = await verifyBadges(ui, { root: panelRoot, selector: rows, names: companies.map(company => company.name) });
+  const light = await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
   await page.evaluate(() => { document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); });
   await page.waitForFunction(() => document.querySelector('#company-lens-root').hasAttribute('data-dark'));
-  const dark = await verifyBadges(ui, { root: panelRoot, selector: rows, names: companies.map(company => company.name) });
+  const dark = await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
   assert.deepEqual(dark.initials, light.initials);
   await page.evaluate(() => document.documentElement.classList.remove('dark'));
-  await host.getByRole('button', { name: 'Show fewer' }).click();
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await verifyBadges(ui, { root: panelRoot, selector: '.practice-view .company-heading > .company-logo', names: ['Amazon'], size: 24, known: true });
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  await verifyBadges(ui, { root: panelRoot, selector: rows, names: companies.slice(0, 5).map(company => company.name), known: true, label: '{name}, view source' });
+  await page.waitForFunction(() => !document.querySelector('#company-lens-root').hasAttribute('data-dark'));
+  await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
   return { ...first, realSource: all, lightAndDark: true,
-    check: 'Offline problem panel decodes real local company logos, preserves accessible names, shows readable initials in light/dark themes, and includes a 24px Amazon practice heading logo.' };
+    check: 'Offline inline company bar decodes real local 20px company logos for every source company, preserves accessible source names, and shows readable initials in light/dark themes.' };
 }
 
 export async function exercisePopupLogos(ui, names) {

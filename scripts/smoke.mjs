@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exercisePanelLogos, exercisePopupLogos } from './browser-logos.mjs';
 import { chromiumExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
-import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
+import { bundledExpectations, exerciseBundledPanel, exerciseBundledPopup, problemFixture, exerciseInlineLayout, exerciseInlineNavigation, exercisePopupFeatures, exercisePopupContext, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
 
 // Optional browser verification: uses an existing Playwright installation, never
 // downloads a runtime or adds a production dependency. See output/playwright.
@@ -65,14 +65,11 @@ const seed = {
   lctStatus: { phase: 'idle', completed: 35, total: 35, message: 'Up to date.',
     lastCheckedAt: now, lastSyncedAt: now, sourceUpdatedAt: now,
     commit, companyCount: fixtureData.companyCount, problemCount: fixtureData.problemCount, hasData: true },
-  lctSettings: { enabled: true, collapsed: false },
+  lctSettings: { enabled: true, collapsed: true },
   lctStage: null,
   lctCache: null,
 };
-const fixture = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Two Sum - LeetCode</title>
-<style>body{margin:0;background:#161616;color:#eee;font:15px system-ui}header{padding:20px 30px;border-bottom:1px solid #373737;color:#ffa116}main{padding:30px;max-width:640px}h1{font-size:26px}.meta{color:#53bb91}pre{padding:18px;background:#252525;border-radius:8px;white-space:pre-wrap}aside{position:absolute;top:84px;left:56%;color:#aaa;padding:24px;border:1px solid #333;width:30%;height:500px}code{color:#75baff}</style>
-</head><body><header>LeetCode &nbsp; / &nbsp; Problems</header><main><h1>1. Two Sum</h1><p class="meta">Easy &nbsp; • &nbsp; Array &nbsp; • &nbsp; Hash Table</p>
-<p>Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.</p><h3>Example 1:</h3><pre>Input: nums = [2,7,11,15], target = 9\nOutput: [0,1]</pre><p>You may assume that each input would have exactly one solution.</p></main><aside>Code &nbsp; · &nbsp; JavaScript<pre><code>function twoSum(nums, target) {\n  // Your solution\n}</code></pre></aside></body></html>`;
+const fixture = problemFixture();
 
 async function installedExecutable(kind) {
   const explicit = process.env[kind === 'chromium' ? 'CHROMIUM_EXECUTABLE' : 'FIREFOX_EXECUTABLE'];
@@ -87,7 +84,7 @@ async function installedExecutable(kind) {
 }
 
 async function prepare(context, blockGitHub = true) {
-  await context.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//, (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
+  await context.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//, (route) => route.fulfill({ contentType: 'text/html', body: problemFixture({ anchor: !new URL(route.request().url()).searchParams.has('late') }) }));
   // Supplemental routing for page requests. Service-worker requests bypass these
   // routes, so deterministic browser launches also block these hosts in Chromium's
   // resolver before the extension starts.
@@ -128,275 +125,29 @@ async function expectTexts(locator, expected) {
   assert.deepEqual(observed, expected);
 }
 
-async function panelGeometry(host) {
-  return host.evaluate((element) => {
-    const shadow = element.shadowRoot;
-    const rectangle = (node) => {
-      const { x, y, width, height, top, right, bottom, left } = node.getBoundingClientRect();
-      return { x, y, width, height, top, right, bottom, left };
-    };
-    const body = shadow.querySelector('.body');
-    const list = shadow.querySelector('.companies');
-    return {
-      viewport: { width: innerWidth, height: innerHeight },
-      panel: rectangle(element),
-      body: { ...rectangle(body), scrollTop: body.scrollTop, scrollHeight: body.scrollHeight, clientHeight: body.clientHeight },
-      list: { ...rectangle(list), scrollTop: list.scrollTop, scrollHeight: list.scrollHeight, clientHeight: list.clientHeight },
-      fifthRow: rectangle(list.querySelectorAll('li')[4]),
-      disclosure: rectangle(shadow.querySelector('.show-companies')),
-    };
-  });
-}
-
 async function exercise(context, extensionUrl, browserName) {
-  const results = [];
-  const errors = [];
-  context.on('page', (page) => page.on('pageerror', (error) => errors.push(error.message)));
-  const popup = await context.newPage();
-  await popup.goto(`${extensionUrl}/popup.html`);
+  const results = [], errors = [];
+  context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   const page = await context.newPage();
   await page.goto('https://leetcode.com/problems/two-sum/description/');
-
-  // The selectors below use accessible names and the real content-script host.
-  // Playwright crosses the open shadow root without injecting implementation code.
   const host = page.locator('#company-lens-root');
-  await host.waitFor({ state: 'visible' });
-  await host.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
-  await host.getByRole('link', { name: 'Google, view source', exact: true }).waitFor();
-  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).count(), 0);
-  assert.deepEqual(await host.locator('.company-name').allTextContents(), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']);
-  assert.deepEqual(await host.locator('.frequency-score').allTextContents(), ['100', '91', '91', '65', '50']);
-  assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).locator('.company-rank').textContent(), 'Company rank #2');
-  assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).getAttribute('href'), sourceUrl('Amazon'));
-  results.push('Actual extension defaults to five companies, ranked by frequency with alphabetical ties.');
-
-  await host.getByRole('button', { name: 'Show all 7 companies' }).click();
-  assert.deepEqual(await host.locator('.company-name').allTextContents(), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg', 'Meta', 'Microsoft']);
-  assert.equal(await host.locator('.show-companies').getAttribute('aria-expanded'), 'true');
-  assert.equal(await host.getByRole('link', { name: 'Meta, view source', exact: true }).locator('.frequency-score').textContent(), '0');
-  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.frequency-score').textContent(), '—');
-  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.company-rank').textContent(), 'Rank unavailable');
-  await host.getByRole('button', { name: 'Show fewer' }).click();
-  assert.equal(await host.locator('.companies a').count(), 5);
-  results.push('Show all / Show fewer discloses the complete ranking, preserving zero and unknown scores.');
-
-  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('micro');
-  assert.equal(await host.locator('.companies a').count(), 1);
-  assert.deepEqual(await host.locator('.company-name').allTextContents(), ['Microsoft']);
-  assert.equal(await host.locator('.show-companies').isVisible(), false);
-  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('unlisted-test-company');
-  assert.equal(await host.locator('.companies a').count(), 0);
-  assert.match(await host.locator('.empty').textContent(), /No company names match/);
-  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('');
-  assert.equal(await host.locator('.companies a').count(), 5);
-  results.push('Search includes companies outside the initial five and gives an empty-search message.');
-
-  // Reload the popup while the problem tab is active, matching a toolbar open.
-  await page.bringToFront();
-  await popup.reload();
-  await popup.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
-  assert.deepEqual(await popup.locator('.company-name').allTextContents(), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']);
-  await popup.getByRole('button', { name: 'Show all 7 companies' }).click();
-  assert.equal(await popup.locator('#companies a').count(), 7);
-  assert.equal(await popup.getByRole('link', { name: 'Meta, view source', exact: true }).locator('.frequency-score').textContent(), '0');
-  assert.equal(await popup.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.frequency-score').textContent(), '—');
-  await popup.getByRole('button', { name: 'Show fewer' }).click();
-  await popup.locator('#search').fill('micro');
-  assert.deepEqual(await popup.locator('.company-name').allTextContents(), ['Microsoft']);
-  assert.equal(await popup.locator('#show-companies').isVisible(), false);
-  await popup.locator('#search').fill('');
-  assert.equal(await popup.locator('#companies a').count(), 5);
-  results.push('Toolbar popup uses the same five-company ranking, disclosure, scores and full-list search.');
-
-  const windowOrders = [
-    ['30d', ['Google', 'Meta', 'Amazon', 'Apple', 'Bloomberg']],
-    ['3m', ['Spotify', 'Amazon', 'Apple', 'Google', 'Bloomberg']],
-    ['6m', ['Meta', 'Amazon', 'Apple', 'Google', 'Spotify']],
-    ['older', ['Bloomberg', 'Amazon', 'Apple', 'Google', 'Spotify']],
-    ['all', ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']],
-  ];
-  for (const [window, names] of windowOrders) {
-    await host.locator('.window-select').selectOption(window);
-    await expectTexts(host.locator('.company-name'), names);
-    await expectTexts(popup.locator('.company-name'), names);
-    assert.equal(await popup.locator('#window-select').inputValue(), window);
-    if (window === '30d') {
-      assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).locator('.company-rank').textContent(), 'Company rank #7');
-      assert.ok((await host.getByRole('link', { name: 'Amazon, view source', exact: true }).getAttribute('href')).endsWith('/Amazon/1.%20Thirty%20Days.csv'));
-    }
-  }
-  await popup.locator('#window-select').selectOption('30d');
-  await expectTexts(host.locator('.company-name'), windowOrders[0][1]);
-  await popup.locator('#window-select').selectOption('all');
-  await expectTexts(host.locator('.company-name'), windowOrders[4][1]);
-  await expectTexts(popup.locator('.company-name'), windowOrders[4][1]);
-  results.push('All five time windows rerank companies, source links and per-company ranks; selection synchronizes between panel and popup.');
-
-  const amazonPractice = ['Add Two Numbers', 'Merge Two Sorted Lists', 'Binary Tree Level Order Traversal',
-    'Valid Parentheses', 'Longest Substring Without Repeating Characters', 'Maximum Depth of Binary Tree'];
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await host.locator('.practice-view').waitFor({ state: 'visible' });
-  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
-  assert.equal(await host.locator('.practice-title').textContent(), 'Amazon');
-  assert.equal(await host.locator('.practice-questions a').first().getAttribute('href'), 'https://leetcode.com/problems/add-two-numbers/');
-  assert.match(await host.locator('.practice-questions .question-meta').first().textContent(), /Medium.*score 180.*company rank #1/);
-  await host.locator('.difficulty-select').selectOption('Medium');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Add Two Numbers', 'Binary Tree Level Order Traversal', 'Longest Substring Without Repeating Characters']);
-  await host.locator('.topic-input').fill('Tree');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
-  await host.locator('.topic-input').fill('not-a-fixture-topic');
-  await host.locator('.practice-summary').filter({ hasText: 'No questions match these filters' }).waitFor();
-  await expectTexts(host.locator('.practice-questions .question-title'), []);
-  assert.match(await host.locator('.practice-summary').textContent(), /No questions match/);
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  await host.locator('.practice-view').waitFor({ state: 'hidden' });
-
-  await popup.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(popup.locator('#practice-questions .question-title'), amazonPractice);
-  await popup.locator('#difficulty-select').selectOption('Easy');
-  await expectTexts(popup.locator('#practice-questions .question-title'), ['Merge Two Sorted Lists', 'Valid Parentheses', 'Maximum Depth of Binary Tree']);
-  await popup.locator('#topic-input').fill('Tree');
-  await expectTexts(popup.locator('#practice-questions .question-title'), ['Maximum Depth of Binary Tree']);
-  await popup.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  results.push('Company practice lists exclude the current problem and support difficulty/topic filtering in both panel and popup.');
-
-  // Progress events and pending-file checkpoints must not disrupt cached results.
-  await page.bringToFront();
-  await page.waitForTimeout(200);
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await popup.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
-  await expectTexts(popup.locator('#practice-questions .question-title'), amazonPractice);
-  const retainedPanelCompany = await host.locator('.companies a').first().elementHandle();
-  const retainedPopupCompany = await popup.locator('#companies a').first().elementHandle();
-  const retainedPanelQuestion = await host.locator('.practice-questions a').first().elementHandle();
-  const retainedPopupQuestion = await popup.locator('#practice-questions a').first().elementHandle();
-  await host.locator('.practice-questions a').first().focus();
-  const statusBeforeProgress = await popup.evaluate(async () => (await chrome.storage.local.get('lctStatus')).lctStatus);
-  await popup.evaluate(async (status) => {
-    await chrome.storage.local.set({ lctStatus: { ...status, phase: 'syncing', completed: 3, total: 35 },
-      lctStage: { auditCheckpoint: true }, lctAuditChunk: { progress: 3 } });
-  }, statusBeforeProgress);
-  await host.locator('.status-message').filter({ hasText: '3 of 35' }).waitFor();
-  await page.waitForTimeout(1100); // Includes the SPA-navigation polling interval.
-  for (const retained of [retainedPanelCompany, retainedPopupCompany, retainedPanelQuestion, retainedPopupQuestion])
-    assert.equal(await retained.evaluate((node) => node.isConnected), true, 'Progress updates must retain existing result links.');
-  assert.equal(await retainedPanelQuestion.evaluate((node) => node.getRootNode().activeElement === node), true, 'A focused practice link must survive refresh progress.');
-  await popup.evaluate(async (status) => {
-    await chrome.storage.local.set({ lctStatus: status, lctStage: null });
-    await chrome.storage.local.remove('lctAuditChunk');
-  }, statusBeforeProgress);
-  for (const retained of [retainedPanelCompany, retainedPopupCompany, retainedPanelQuestion, retainedPopupQuestion]) await retained.dispose();
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  await popup.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  results.push('Background sync progress and unrelated storage checkpoints preserve company/practice result nodes and the focused practice link.');
-
-  // Disabling the panel must not retain filtered results under newly reset controls.
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await host.locator('.difficulty-select').selectOption('Medium');
-  await host.locator('.topic-input').fill('Tree');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
-  await popup.locator('#enabled').uncheck();
-  await host.waitFor({ state: 'detached' });
-  await popup.locator('#enabled').check();
-  await host.locator('.company-view').waitFor({ state: 'visible', timeout: 3000 });
-  assert.equal(await host.locator('.practice-view').isVisible(), false);
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  assert.equal(await host.locator('.difficulty-select').inputValue(), '');
-  assert.equal(await host.locator('.topic-input').inputValue(), '');
-  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
-  // A pending topic debounce must also be cancelled when the panel is removed.
-  await host.locator('.topic-input').fill('Tree');
-  await popup.locator('#enabled').uncheck();
-  await host.waitFor({ state: 'detached' });
-  await popup.locator('#enabled').check();
-  await host.locator('.company-view').waitFor({ state: 'visible', timeout: 3000 });
-  await page.waitForTimeout(300);
-  assert.equal(await host.locator('.practice-view').isVisible(), false);
-  // LeetCode can replace page elements; recreating the removed panel resets filters.
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await host.locator('.difficulty-select').selectOption('Medium');
-  await host.locator('.topic-input').fill('Tree');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
-  await host.evaluate(element => element.remove());
-  await host.locator('.company-view').waitFor({ state: 'visible', timeout: 3000 });
-  assert.equal(await host.locator('.practice-view').isVisible(), false);
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  assert.equal(await host.locator('.difficulty-select').inputValue(), '');
-  assert.equal(await host.locator('.topic-input').inputValue(), '');
-  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  results.push('Panel toggles and external removal reset practice state, filter controls, and pending topic input.');
-
-  const collapsedGeometry = await exerciseCollapsedBubble(page, { output, browserName,
-    getCollapsed: () => popup.evaluate(async () => Boolean((await chrome.storage.local.get('lctSettings')).lctSettings?.collapsed)),
-    setCollapsed: (collapsed) => popup.evaluate(async (value) => {
-      const { lctSettings } = await chrome.storage.local.get('lctSettings');
-      await chrome.storage.local.set({ lctSettings: { ...lctSettings, collapsed: value } });
-    }, collapsed),
+  const inline = await exerciseInlineLayout(page, { core, data: fixtureData, output, browserName });
+  results.push(...inline.checks);
+  const popup = await context.newPage();
+  await page.bringToFront(); await popup.goto(`${extensionUrl}/popup.html`);
+  const ui = chromiumExplorerDriver(popup);
+  const toolbar = await exercisePopupFeatures(ui, page, { data: fixtureData, core,
+    getStatus: () => popup.evaluate(async () => (await chrome.storage.local.get('lctStatus')).lctStatus),
+    setStorage: data => popup.evaluate(data => chrome.storage.local.set(data), data),
+    removeStorage: key => popup.evaluate(key => chrome.storage.local.remove(key), key),
   });
-  await writeFile(path.join(output, `${browserName}-collapsed-layout.json`), JSON.stringify(collapsedGeometry, null, 2) + '\n');
-  results.push(collapsedGeometry.check);
-
-  await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.waitForFunction(() => document.getElementById('company-lens-root')?.hasAttribute('data-dark'));
-  assert.equal(await host.getAttribute('data-dark'), '');
-  await page.setViewportSize({ width: 375, height: 667 });
-  await host.locator('.body').evaluate((body) => { body.scrollTop = 0; });
-  const smallBounds = await host.boundingBox();
-  assert.ok(smallBounds.x >= 0 && smallBounds.x + smallBounds.width <= 375, 'Panel fits a narrow viewport');
-  const smallGeometry = await panelGeometry(host);
-  await page.screenshot({ path: path.join(output, `${browserName}-small.png`), fullPage: true, animations: 'disabled' });
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await host.locator('.body').evaluate((body) => { body.scrollTop = 0; });
-  const desktopGeometry = await panelGeometry(host);
-  assert.ok(desktopGeometry.fifthRow.bottom <= desktopGeometry.list.bottom + 1, 'Default five rows fit without scrolling inside the company list');
-  await writeFile(path.join(output, `${browserName}-layout.json`), JSON.stringify({ desktop: desktopGeometry, narrow: smallGeometry }, null, 2) + '\n');
-  results.push('Dark theme follows the page and the panel fits a 375-pixel viewport.');
-
-  await page.screenshot({ path: path.join(output, `${browserName}-problem.png`), fullPage: true, animations: 'disabled' });
+  results.push(...toolbar.checks);
   await popup.screenshot({ path: path.join(output, `${browserName}-popup.png`), animations: 'disabled' });
-
-  await host.getByRole('button', { name: 'Show all 7 companies' }).click();
-  await page.evaluate(() => history.pushState({}, '', '/problems/add-two-numbers/'));
-  await host.locator('.company-view h2').filter({ hasText: 'Add Two Numbers' }).waitFor();
-  await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).waitFor();
-  assert.deepEqual(await host.locator('.company-name').allTextContents(), ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
-  assert.equal(await host.locator('.companies a').count(), 5);
-  assert.equal(await host.locator('.show-companies').getAttribute('aria-expanded'), 'false');
-  assert.match(await host.locator('.company-view h2').textContent(), /Add Two Numbers/);
-  results.push('SPA navigation replaces and reranks companies, resetting disclosure to five.');
-
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  results.push('Practice lists update the excluded current problem after SPA navigation.');
-
-  await popup.locator('#enabled').uncheck();
-  await host.waitFor({ state: 'detached' });
-  await popup.locator('#enabled').check();
-  await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).waitFor();
-  results.push('Toolbar popup enable/disable updates already-open problem pages.');
-
-  await page.evaluate(() => history.pushState({}, '', '/problems/not-a-listed-problem/'));
-  await host.locator('.empty').filter({ hasText: 'No company matches in this dataset.' }).waitFor();
-  assert.equal(await host.locator('.companies a').count(), 0);
-  results.push('Unknown problems show the dataset coverage message without old tags.');
-
-  await page.evaluate(() => history.pushState({}, '', '/problemset/'));
-  await host.waitFor({ state: 'detached' });
-  await page.evaluate(() => history.pushState({}, '', '/problems/%2F/'));
-  await page.waitForTimeout(1000);
-  assert.equal(await host.count(), 0);
-  await page.goto('https://leetcode.cn/contest/weekly-contest-100/problems/two-sum/');
-  await host.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
-  results.push('Off-problem and malformed URLs remove the panel; contest and .cn URLs work.');
-
-  await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
-  await page.goto('https://example.com/problems/two-sum/');
-  assert.equal(await host.count(), 0);
-  results.push('Unrelated websites receive no company panel.');
-  return { results, errors, page, popup, host };
+  const navigation = await exerciseInlineNavigation(page, { data: fixtureData, core, context,
+    onSPA: async () => { await page.bringToFront(); await popup.reload(); return exercisePopupContext(ui, { data: fixtureData, core, slug: 'add-two-numbers' }); },
+  });
+  results.push(...navigation.checks);
+  return { results, errors, page, popup, host, inline };
 }
 
 async function chromiumRun() {
@@ -424,6 +175,7 @@ async function chromiumRun() {
     const navigationStartedAt = Date.now();
     await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
     const firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt, output, browserName: 'chromium' });
+    firstInstall.inline = await exerciseInlineLayout(firstPage, { core, data: expectedBundle.data, output, browserName: 'chromium-bundled' });
     firstInstall.logos = await exercisePanelLogos(firstPage, expectedBundle.windows.all);
     await firstPage.screenshot({ path: path.join(output, 'chromium-first-install.png'), fullPage: true, animations: 'disabled' });
     const blockedHosts = await worker.evaluate(async () => Promise.all(
@@ -447,6 +199,8 @@ async function chromiumRun() {
     assert.equal(offlineStatus.hasData, true);
     assert.equal(offlineStatus.dataSource, 'bundled');
     assert.equal(offlineStatus.commit, expectedBundle.data.commit);
+    firstInstall.bundledPopup = await exerciseBundledPopup(chromiumExplorerDriver(setupPopup), firstPage, expectedBundle);
+    firstInstall.windowNote = firstInstall.bundledPopup.windowNote;
     firstInstall.popupLogos = await exercisePopupLogos(chromiumExplorerDriver(setupPopup), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
     firstInstall.popup = 'Actual packaged popup displays the same bundled all-time tags and source date.';
     await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
@@ -470,7 +224,7 @@ async function chromiumRun() {
     context = await playwright.chromium.launchPersistentContext(profile, deterministicOptions);
     await prepare(context);
     const { results, errors, popup } = await exercise(context, extensionUrl, 'chromium');
-    results.unshift(firstInstall.check, firstInstall.popup, firstInstall.logos.check, firstInstall.popupLogos.check, ...explorer.checks,
+    results.unshift(firstInstall.check, firstInstall.popup, firstInstall.bundledPopup.check, firstInstall.logos.check, firstInstall.popupLogos.check, ...explorer.checks,
       'Native browser deflate-raw decoder extracts every real source archive CSV with CRC and Git blob validation.',
       'GitHub API, raw-file and codeload hosts are blocked in the browser resolver, including extension service-worker requests.');
     assert.deepEqual(errors, [], 'Unexpected page errors');

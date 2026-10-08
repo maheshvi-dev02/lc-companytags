@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { makeFixture } from './firefox-fixture.mjs';
 import { exercisePanelLogos, exercisePopupLogos } from './browser-logos.mjs';
 import { firefoxExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
-import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult, exerciseCollapsedBubble } from './browser-first-install.mjs';
+import { bundledExpectations, exerciseBundledPanel, exerciseBundledPopup, problemFixture, exerciseInlineLayout, exerciseInlineNavigation, exercisePopupFeatures, exercisePopupContext, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
 
 // Installs and exercises the real Firefox MV3 addon. The default is deterministic:
 // a dead proxy blocks extension requests. The packaged snapshot is verified on a
@@ -21,7 +21,9 @@ await mkdir(output, { recursive: true });
 const { firefox } = require(process.env.PLAYWRIGHT_MODULE || path.join(process.env.USERPROFILE,
   '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
 const core = require(path.join(root, 'dist/firefox/core.js'));
-const { seed, html, commit } = makeFixture(core);
+const { seed, commit } = makeFixture(core);
+const html = problemFixture();
+seed.lctSettings.collapsed = true; // Existing collapsed-card preferences must not hide the new inline bar.
 const id = 'company-lens@leetcode-tags.local';
 const uuid = randomUUID();
 const port = 23000 + Math.floor(Math.random() * 20000);
@@ -146,7 +148,7 @@ try {
     },
   });
   await context.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//,
-    (route) => route.fulfill({ contentType: 'text/html', body: html }));
+    (route) => route.fulfill({ contentType: 'text/html', body: problemFixture({ anchor: !new URL(route.request().url()).searchParams.has('late') }) }));
   await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: html }));
   rdp = await rdpConnect();
   await rdp.waitFor(() => true);
@@ -169,6 +171,7 @@ try {
   await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
   report.firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt, output, browserName: 'firefox' });
   report.firstInstall.addonInstallationToFirstPanelResultsMs = report.firstInstall.startupToFirstPanelResultsMs - (addonInstallationStartedAt - startupStartedAt);
+  report.firstInstall.inline = await exerciseInlineLayout(firstPage, { core, data: expectedBundle.data, output, browserName: 'firefox-bundled' });
   report.firstInstall.logos = await exercisePanelLogos(firstPage, expectedBundle.windows.all);
   report.checks.push(report.firstInstall.logos.check);
   await firstPage.screenshot({ path: path.join(output, 'firefox-first-install.png'), fullPage: true, animations: 'disabled' });
@@ -194,6 +197,9 @@ try {
   assert.deepEqual(freshPopupObserved.names, expectedBundle.windows.all.slice(0, 5).map(({ name }) => name));
   assert.equal(freshPopupObserved.window, 'all');
   assert.match(freshPopupObserved.note, /Bundled snapshot/i);
+  report.firstInstall.bundledPopup = await exerciseBundledPopup(firefoxExplorerDriver(source => evaluateConsoleRaw(source, freshPopupTarget.target.consoleActor)), firstPage, expectedBundle);
+  report.firstInstall.windowNote = report.firstInstall.bundledPopup.windowNote;
+  report.checks.push(report.firstInstall.bundledPopup.check);
   report.firstInstall.popupLogos = await exercisePopupLogos(firefoxExplorerDriver(source => evaluateConsoleRaw(source, freshPopupTarget.target.consoleActor)), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
   report.checks.push(report.firstInstall.popupLogos.check);
   report.stage = 'Opening explorer from a popup on an unrelated site';
@@ -274,205 +280,34 @@ try {
 
   page = await context.newPage();
   await page.goto('https://leetcode.com/problems/two-sum/description/');
-  const host = page.locator('#company-lens-root');
-  await host.waitFor({ state: 'visible', timeout: 30000 });
-  await host.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
-  await expectTexts(host.locator('.company-name'), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']);
-  await expectTexts(host.locator('.frequency-score'), ['100', '91', '91', '65', '50']);
-  assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).locator('.company-rank').textContent(), 'Company rank #2');
-  assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).getAttribute('href'),
-    `https://github.com/liquidslr/leetcode-company-wise-problems/blob/${commit}/Amazon/5.%20All.csv`);
-  report.checks.push('Actual content script shows five companies in descending frequency order, with alphabetical ties, scores, ranks and pinned source links.');
-
-  await host.getByRole('button', { name: 'Show all 7 companies' }).click();
-  await expectTexts(host.locator('.company-name'), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg', 'Meta', 'Microsoft']);
-  assert.equal(await host.locator('.show-companies').getAttribute('aria-expanded'), 'true');
-  assert.equal(await host.getByRole('link', { name: 'Meta, view source', exact: true }).locator('.frequency-score').textContent(), '0');
-  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.frequency-score').textContent(), '—');
-  assert.equal(await host.getByRole('link', { name: 'Microsoft, view source', exact: true }).locator('.company-rank').textContent(), 'Rank unavailable');
-  await host.getByRole('button', { name: 'Show fewer' }).click();
-  assert.equal(await host.locator('.companies a').count(), 5);
-  report.checks.push('Show all / Show fewer expands the company list and preserves zero scores and unknown-score ranks.');
-
-  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('micro');
-  await expectTexts(host.locator('.company-name'), ['Microsoft']);
-  assert.equal(await host.locator('.show-companies').isVisible(), false);
-  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('unlisted-test-company');
-  await host.locator('.empty').filter({ hasText: 'No company names match' }).waitFor();
-  await host.getByRole('searchbox', { name: 'Filter company names' }).fill('');
-  await expectTexts(host.locator('.company-name'), ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']);
-  report.checks.push('Company search includes the hidden sixth/seventh companies and handles no-match searches.');
-
-  const orders = [
-    ['30d', ['Google', 'Meta', 'Amazon', 'Apple', 'Bloomberg']],
-    ['3m', ['Spotify', 'Amazon', 'Apple', 'Google', 'Bloomberg']],
-    ['6m', ['Meta', 'Amazon', 'Apple', 'Google', 'Spotify']],
-    ['older', ['Bloomberg', 'Amazon', 'Apple', 'Google', 'Spotify']],
-    ['all', ['Amazon', 'Apple', 'Google', 'Spotify', 'Bloomberg']],
-  ];
-  for (const [window, names] of orders) {
-    await host.locator('.window-select').selectOption(window);
-    await expectTexts(host.locator('.company-name'), names);
-    if (window === '30d') {
-      assert.equal(await host.getByRole('link', { name: 'Amazon, view source', exact: true }).locator('.company-rank').textContent(), 'Company rank #7');
-      assert.ok((await host.getByRole('link', { name: 'Amazon, view source', exact: true }).getAttribute('href')).endsWith('/Amazon/1.%20Thirty%20Days.csv'));
-    }
-  }
-  report.checks.push('All five time windows rerank companies and update per-company ranks and the matching source file.');
-
-  const amazonPractice = ['Add Two Numbers', 'Merge Two Sorted Lists', 'Binary Tree Level Order Traversal',
-    'Valid Parentheses', 'Longest Substring Without Repeating Characters', 'Maximum Depth of Binary Tree'];
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
-  assert.match(await host.locator('.practice-questions .question-meta').first().textContent(), /Medium.*score 180.*company rank #1/);
-  assert.equal(await host.locator('.practice-questions a').first().getAttribute('href'), 'https://leetcode.com/problems/add-two-numbers/');
-  await host.locator('.difficulty-select').selectOption('Medium');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Add Two Numbers', 'Binary Tree Level Order Traversal', 'Longest Substring Without Repeating Characters']);
-  await host.locator('.topic-input').fill('Tree');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
-  await host.locator('.topic-input').fill('not-a-fixture-topic');
-  await host.locator('.practice-summary').filter({ hasText: 'No questions match these filters' }).waitFor();
-  await expectTexts(host.locator('.practice-questions .question-title'), []);
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  report.checks.push('Practice lists sort by frequency, show scores/ranks, exclude the current problem, and support difficulty/topic/no-match filters.');
-
-  report.collapsedGeometry = await exerciseCollapsedBubble(page, { output, browserName: 'firefox',
-    getCollapsed: () => evaluateBackground('return Boolean((await browser.storage.local.get("lctSettings")).lctSettings?.collapsed);'),
-    setCollapsed: (collapsed) => evaluateBackground(`const { lctSettings } = await browser.storage.local.get('lctSettings');
-      await browser.storage.local.set({ lctSettings: { ...lctSettings, collapsed: ${collapsed} } }); return 'changed';`),
-  });
-  await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.waitForFunction(() => document.getElementById('company-lens-root')?.hasAttribute('data-dark'));
-  await page.screenshot({ path: path.join(output, 'firefox-problem.png'), fullPage: true, animations: 'disabled' });
-  report.checks.push(report.collapsedGeometry.check + ' The expanded panel follows the page dark theme.');
-
-  await host.getByRole('button', { name: 'Show all 7 companies' }).click();
-  await page.evaluate(() => history.pushState({}, '', '/problems/add-two-numbers/'));
-  await host.locator('.company-view h2').filter({ hasText: 'Add Two Numbers' }).waitFor();
-  await expectTexts(host.locator('.company-name'), ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
-  assert.equal(await host.locator('.show-companies').getAttribute('aria-expanded'), 'false');
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  report.checks.push('SPA problem changes rerank tags, reset expansion, and update the practice-list current-problem exclusion.');
-
-  // Playwright cannot expose Firefox extension-process tabs as Page objects.
-  // Mozilla RDP does expose the actual popup document, so dispatch the same
-  // DOM input/change/click events through its console rather than mocking it.
+  report.inline = await exerciseInlineLayout(page, { core, data: seed.lctData, output, browserName: 'firefox' });
+  report.checks.push(...report.inline.checks);
   const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
-  await evaluateBackground(`await browser.tabs.create({ url: ${JSON.stringify(popupUrl)}, active: false }); return 'opened';`);
-  const popupTarget = await rdp.waitFor((packet) => packet.type === 'target-available-form' && packet.target?.url === popupUrl);
-  const popupConsole = popupTarget.target.consoleActor;
-  const popupRead = async (expression) => JSON.parse(await evaluateConsoleRaw(`JSON.stringify(${expression})`, popupConsole));
-  const popupClick = async (selector) => evaluateConsoleRaw(`document.querySelector(${JSON.stringify(selector)}).click(); 'clicked'`, popupConsole);
-  const popupSet = async (selector, value, event = 'change') => evaluateConsoleRaw(
-    `document.querySelector(${JSON.stringify(selector)}).value = ${JSON.stringify(value)};
-      document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new Event(${JSON.stringify(event)}, { bubbles: true })); 'changed'`, popupConsole);
-  const popupTexts = async (selector, expected) => {
-    let observed;
-    for (let attempt = 0; attempt < 100; attempt++) {
-      observed = await popupRead(`Array.from(document.querySelectorAll(${JSON.stringify(selector)}), node => node.textContent)`);
-      if (JSON.stringify(observed) === JSON.stringify(expected)) return;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    assert.deepEqual(observed, expected);
+  const openPopup = async () => {
+    await page.bringToFront();
+    await evaluateBackground(`await browser.tabs.create({ url: ${JSON.stringify(popupUrl)}, active: false }); return 'opened';`);
+    const target = await rdp.waitFor(packet => packet.type === 'target-available-form' && packet.target?.url === popupUrl);
+    return firefoxExplorerDriver(source => evaluateConsoleRaw(source, target.target.consoleActor));
   };
-  await popupTexts('.company-name', ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
-  await popupClick('#show-companies');
-  assert.equal(await popupRead('document.querySelectorAll("#companies a").length'), 7);
-  assert.equal(await popupRead('document.querySelector("#show-companies").getAttribute("aria-expanded")'), 'true');
-  await popupClick('#show-companies');
-  await popupSet('#search', 'Spotify', 'input');
-  await popupTexts('.company-name', ['Spotify']);
-  await popupSet('#search', '', 'input');
-  await popupSet('#window-select', '30d');
-  await page.waitForFunction(() => document.getElementById('company-lens-root')?.shadowRoot.querySelector('.window-select').value === '30d');
-  await popupSet('#window-select', 'all');
-  await popupTexts('.company-name', ['Google', 'Amazon', 'Meta', 'Apple', 'Microsoft']);
-  await popupClick('[data-company="Amazon"]');
-  await popupTexts('#practice-questions .question-title', ['Two Sum', ...amazonPractice.slice(1)]);
-  await popupSet('#difficulty-select', 'Easy');
-  await popupSet('#topic-input', 'Tree', 'input');
-  await popupTexts('#practice-questions .question-title', ['Maximum Depth of Binary Tree']);
-  await popupClick('#back-companies');
+  const popupUI = await openPopup();
+  const toolbar = await exercisePopupFeatures(popupUI, page, { data: seed.lctData, core,
+    getStatus: async () => JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);')),
+    setStorage: data => evaluateBackground(`await browser.storage.local.set(${JSON.stringify(data)}); return 'changed';`),
+    removeStorage: key => evaluateBackground(`await browser.storage.local.remove(${JSON.stringify(key)}); return 'removed';`),
+  });
+  report.checks.push(...toolbar.checks);
+  const navigation = await exerciseInlineNavigation(page, { data: seed.lctData, core, context,
+    onSPA: async () => exercisePopupContext(await openPopup(), { data: seed.lctData, core, slug: 'add-two-numbers' }),
+  });
+  report.checks.push(...navigation.checks);
   report.popupVerification = 'Actual packaged popup DOM, inspected and operated via Mozilla RDP console; Playwright does not expose this extension-process tab.';
-  report.checks.push('Actual packaged popup displays ranked tags, expansion, full-list search, shared windows and difficulty/topic-filtered practice questions.');
-
-  await page.bringToFront();
-  await page.waitForTimeout(200);
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await popupClick('[data-company="Amazon"]');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
-  await popupTexts('#practice-questions .question-title', ['Two Sum', ...amazonPractice.slice(1)]);
-  const retainedCompany = await host.locator('.companies a').first().elementHandle();
-  const retainedQuestion = await host.locator('.practice-questions a').first().elementHandle();
-  await host.locator('.practice-questions a').first().focus();
-  await evaluateConsoleRaw(`globalThis.__lctProgressNodes = {
-    company: document.querySelector('#companies a'), question: document.querySelector('#practice-questions a')
-  }; 'retained'`, popupConsole);
-  const statusBeforeProgress = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);'));
-  await evaluateBackground(`await browser.storage.local.set({
-    lctStatus: { ...${JSON.stringify(statusBeforeProgress)}, phase: 'syncing', completed: 3, total: 35 },
-    lctStage: { auditCheckpoint: true }, lctAuditChunk: { progress: 3 }
-  }); return 'progress';`);
-  await host.locator('.status-message').filter({ hasText: '3 of 35' }).waitFor();
-  await page.waitForTimeout(1100);
-  assert.equal(await retainedCompany.evaluate((node) => node.isConnected), true);
-  assert.equal(await retainedQuestion.evaluate((node) => node.isConnected), true);
-  assert.equal(await retainedQuestion.evaluate((node) => node.getRootNode().activeElement === node), true);
-  assert.equal(await popupRead('globalThis.__lctProgressNodes.company.isConnected && globalThis.__lctProgressNodes.question.isConnected'), true);
-  await evaluateBackground(`await browser.storage.local.set({ lctStatus: ${JSON.stringify(statusBeforeProgress)}, lctStage: null });
-    await browser.storage.local.remove('lctAuditChunk'); return 'restored';`);
-  await evaluateConsoleRaw("delete globalThis.__lctProgressNodes; 'cleared'", popupConsole);
-  await retainedCompany.dispose(); await retainedQuestion.dispose();
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  await popupClick('#back-companies');
-  report.checks.push('Background progress and unrelated storage checkpoints retain company/practice result nodes and the focused practice link.');
-
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await host.locator('.difficulty-select').selectOption('Medium');
-  await host.locator('.topic-input').fill('Tree');
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Binary Tree Level Order Traversal']);
-  const setEnabled = async (enabled) => evaluateConsoleRaw(
-    `document.querySelector('#enabled').checked = ${enabled}; document.querySelector('#enabled').dispatchEvent(new Event('change', { bubbles: true })); 'changed'`, popupConsole);
-  await setEnabled(false);
-  await host.waitFor({ state: 'detached' });
-  await setEnabled(true);
-  await host.locator('.company-view').waitFor({ state: 'visible' });
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
-  assert.equal(await host.locator('.difficulty-select').inputValue(), '');
-  assert.equal(await host.locator('.topic-input').inputValue(), '');
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  report.checks.push('Popup enable/disable updates the open problem; re-enabling resets filtered practice state consistently.');
-
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await host.locator('.topic-input').fill('Tree');
-  await page.evaluate(() => document.getElementById('company-lens-root').remove());
-  await host.locator('.company-view').waitFor({ state: 'visible' });
-  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
-  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
-  assert.equal(await host.locator('.topic-input').inputValue(), '');
-  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
-  report.checks.push('Externally removed panels remount with consistent practice state and no pending filter result leakage.');
-
-  await page.evaluate(() => history.pushState({}, '', '/problems/not-a-listed-problem/'));
-  await host.locator('.empty').filter({ hasText: 'No company matches in this dataset.' }).waitFor();
-  await page.evaluate(() => history.pushState({}, '', '/problemset/'));
-  await host.waitFor({ state: 'detached' });
-  await page.evaluate(() => history.pushState({}, '', '/problems/%2F/'));
-  await page.waitForTimeout(1000);
-  assert.equal(await host.count(), 0);
-  await page.goto('https://leetcode.cn/contest/weekly-contest-100/problems/two-sum/');
-  await host.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
-  report.checks.push('Unknown problems, non-problem and malformed paths clear old tags; contest and leetcode.cn paths work.');
   report.status = 'passed';
 } catch (error) {
   report.status = 'failed'; report.error = error.stack; process.exitCode = 1;
   console.error(error.stack);
   if (rdp) report.debugTargets = rdp.pending().filter((packet) => /target/.test(packet.type || '')).slice(-10);
   if (page) {
-    report.finalPanel = await page.locator('#company-lens-root .body').innerText().catch(() => null);
+    report.finalPanel = await page.locator('#company-lens-root').innerText().catch(() => null);
     await page.screenshot({ path: path.join(output, 'firefox-final.png'), fullPage: true, animations: 'disabled' }).catch(() => {});
   }
 } finally {

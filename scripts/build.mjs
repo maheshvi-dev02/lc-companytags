@@ -39,7 +39,7 @@ const common = {
   manifest_version: 3,
   name: 'Company Lens for LeetCode',
   version: pkg.version,
-  description: 'See company tags on LeetCode problems, synced from the public liquidslr GitHub repository.',
+  description: 'See company logos and frequency scores in a compact LeetCode bar. Search companies and problems from the toolbar.',
   permissions: ['storage', 'unlimitedStorage', 'alarms'],
   host_permissions: ['https://api.github.com/*', 'https://raw.githubusercontent.com/*', 'https://codeload.github.com/*', ...matches],
   action: { default_title: 'Company Lens', default_popup: 'popup.html', default_icon: {16:'icons/16.png',32:'icons/32.png'} },
