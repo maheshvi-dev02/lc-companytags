@@ -1119,3 +1119,217 @@ test('global searches retain the complete previous dataset during refresh and sw
   await service.getPractice({ company: 'Acko', offset: 2, limit: 2 });
   assert.equal(source.calls.length, calls, 'post-refresh search remains cache-only');
 });
+
+
+function sortingFixture() {
+  const source = sourceFixture();
+  source.files = [];
+  source.csvByPath = {};
+  const rows = [
+    { slug: 'alpha-easy', title: 'Alpha Problem', difficulty: 'Easy', frequency: 40, topics: ['Array'] },
+    { slug: 'beta-hard', title: 'Beta Problem', difficulty: 'Hard', frequency: 100, topics: ['Graph'] },
+    { slug: 'gamma-medium', title: 'Gamma Problem', difficulty: 'Medium', frequency: 40, topics: ['Array'] },
+    { slug: 'delta-easy', title: 'Delta Problem', difficulty: 'Easy', frequency: 0, topics: ['Array'] },
+    { slug: 'omega-unknown', title: 'Omega Problem', difficulty: 'Unknown', frequency: null, topics: ['Array'] },
+    { slug: 'alpha-twin', title: 'Alpha Problem', difficulty: 'Easy', frequency: 10, topics: ['Array'] }
+  ];
+  addWindow(source, 'Alpha', 'all', [...rows, { ...rows[0], frequency: 20 }]);
+  addWindow(source, 'Beta', 'all', rows.slice(0, 3));
+  addWindow(source, 'Gamma', 'all', [rows[2]]);
+  addWindow(source, 'Empty', 'all', []);
+  addWindow(source, 'Alpha', '30d', [rows[0], rows[2], rows[4]]);
+  addWindow(source, 'Beta', '30d', [rows[0]]);
+  addWindow(source, 'Gamma', '30d', []);
+  addWindow(source, 'Empty', '30d', []);
+  const files = core.selectWindowFiles({ truncated: false, tree: source.files });
+  const parsed = Object.fromEntries(files.map((file) => [file.path, {
+    sha: file.sha, records: core.parseCompanyRecords(source.csvByPath[file.path])
+  }]));
+  const storage = memoryStorage({
+    lctData: core.buildData(files, parsed, SHA_A, '2026-08-16T22:18:35Z', new Date(FIXED_NOW).toISOString()),
+    lctStatus: { phase: 'idle', lastCheckedAt: new Date(FIXED_NOW).toISOString(), dataSource: 'live' }
+  });
+  return { source, storage, data: storage.values.lctData, service: makeService(storage, source) };
+}
+
+test('company sort modes order the whole filtered selected-window list before paging', async () => {
+  const { service, source } = sortingFixture();
+  const expected = {
+    'name-asc': ['Alpha', 'Beta', 'Empty', 'Gamma'],
+    'name-desc': ['Gamma', 'Empty', 'Beta', 'Alpha'],
+    'questions-desc': ['Alpha', 'Beta', 'Gamma', 'Empty'],
+    'questions-asc': ['Empty', 'Gamma', 'Beta', 'Alpha']
+  };
+  for (const [sort, names] of Object.entries(expected)) {
+    const first = await service.searchCompanies({ sort, limit: 2 });
+    const second = await service.searchCompanies({ sort, offset: 2, limit: 2 });
+    assert.deepEqual([...first.companies, ...second.companies].map((company) => company.name), names, sort);
+    assert.equal(first.total, 4);
+    assert.equal(first.hasMore, true);
+    assert.equal(second.hasMore, false);
+  }
+  const filtered = await service.searchCompanies({ query: 'a', sort: 'questions-asc', offset: 1, limit: 1 });
+  assert.equal(filtered.total, 3);
+  assert.equal(filtered.companies[0].name, 'Beta', 'search filters are applied before count sorting and pagination');
+  const recent = await service.searchCompanies({ window: '30d', sort: 'questions-desc' });
+  assert.deepEqual(recent.companies.map((company) => [company.name, company.problemCount]), [
+    ['Alpha', 3], ['Beta', 1], ['Empty', 0], ['Gamma', 0]
+  ]);
+  assert.equal(source.calls.length, 0);
+});
+
+test('problem sort modes preserve deterministic ties and keep unknown difficulty last in both directions', async () => {
+  const { service, source } = sortingFixture();
+  const expected = {
+    relevance: ['alpha-easy', 'alpha-twin', 'beta-hard', 'delta-easy', 'gamma-medium', 'omega-unknown'],
+    'name-asc': ['alpha-easy', 'alpha-twin', 'beta-hard', 'delta-easy', 'gamma-medium', 'omega-unknown'],
+    'name-desc': ['omega-unknown', 'gamma-medium', 'delta-easy', 'beta-hard', 'alpha-easy', 'alpha-twin'],
+    'difficulty-asc': ['alpha-easy', 'alpha-twin', 'delta-easy', 'gamma-medium', 'beta-hard', 'omega-unknown'],
+    'difficulty-desc': ['beta-hard', 'gamma-medium', 'alpha-easy', 'alpha-twin', 'delta-easy', 'omega-unknown'],
+    'companies-desc': ['gamma-medium', 'alpha-easy', 'beta-hard', 'alpha-twin', 'delta-easy', 'omega-unknown'],
+    'companies-asc': ['alpha-twin', 'delta-easy', 'omega-unknown', 'alpha-easy', 'beta-hard', 'gamma-medium']
+  };
+  for (const [sort, slugs] of Object.entries(expected)) {
+    const pages = [];
+    for (let offset = 0; offset < slugs.length; offset += 2) {
+      const page = await service.searchProblems({ sort, query: 'problem', offset, limit: 2 });
+      assert.equal(page.total, 6);
+      assert.equal(page.hasMore, offset + 2 < slugs.length);
+      pages.push(...page.problems);
+    }
+    assert.deepEqual(pages.map((problem) => problem.slug), slugs, sort);
+  }
+  const filtered = await service.searchProblems({ query: 'problem', difficulty: 'easy', sort: 'companies-desc', offset: 1, limit: 1 });
+  assert.equal(filtered.total, 3);
+  assert.equal(filtered.problems[0].slug, 'alpha-twin');
+  const recent = await service.searchProblems({ window: '30d', sort: 'companies-desc' });
+  assert.deepEqual(recent.problems.map((problem) => [problem.slug, problem.companyCount]), [
+    ['alpha-easy', 2], ['gamma-medium', 1], ['omega-unknown', 1]
+  ]);
+  assert.equal(source.calls.length, 0);
+});
+
+test('explicit problem ordering overrides search relevance while the omitted sort preserves it', async () => {
+  const { service } = globalExplorerFixture();
+  const defaultResult = await service.searchProblems({ query: 'two sum' });
+  const explicitRelevance = await service.searchProblems({ query: 'two sum', sort: 'relevance' });
+  assert.deepEqual(explicitRelevance, defaultResult);
+  const alphabetical = await service.searchProblems({ query: 'two sum', sort: 'name-asc', limit: 1 });
+  assert.equal(alphabetical.total, 3);
+  assert.equal(alphabetical.problems[0].slug, 'advanced-two-sum-variant');
+  assert.equal(defaultResult.problems[0].slug, 'two-sum');
+});
+
+test('practice sort modes reorder filtered full results without changing source scores and competition ranks', async () => {
+  const { service, source } = sortingFixture();
+  const expected = {
+    'frequency-desc': ['beta-hard', 'alpha-easy', 'gamma-medium', 'alpha-twin', 'delta-easy', 'omega-unknown'],
+    'frequency-asc': ['delta-easy', 'alpha-twin', 'alpha-easy', 'gamma-medium', 'beta-hard', 'omega-unknown'],
+    'name-asc': ['alpha-easy', 'alpha-twin', 'beta-hard', 'delta-easy', 'gamma-medium', 'omega-unknown'],
+    'name-desc': ['omega-unknown', 'gamma-medium', 'delta-easy', 'beta-hard', 'alpha-easy', 'alpha-twin'],
+    'difficulty-asc': ['alpha-easy', 'alpha-twin', 'delta-easy', 'gamma-medium', 'beta-hard', 'omega-unknown'],
+    'difficulty-desc': ['beta-hard', 'gamma-medium', 'alpha-easy', 'alpha-twin', 'delta-easy', 'omega-unknown'],
+    'companies-desc': ['gamma-medium', 'alpha-easy', 'beta-hard', 'alpha-twin', 'delta-easy', 'omega-unknown'],
+    'companies-asc': ['alpha-twin', 'delta-easy', 'omega-unknown', 'alpha-easy', 'beta-hard', 'gamma-medium']
+  };
+  const sourceValues = {
+    'alpha-easy': [40, 2, 2], 'beta-hard': [100, 1, 2], 'gamma-medium': [40, 2, 3],
+    'delta-easy': [0, 5, 1], 'omega-unknown': [null, null, 1], 'alpha-twin': [10, 4, 1]
+  };
+  for (const [sort, slugs] of Object.entries(expected)) {
+    const pages = [];
+    for (let offset = 0; offset < slugs.length; offset += 2) {
+      const page = await service.getPractice({ company: 'Alpha', sort, offset, limit: 2 });
+      assert.equal(page.total, 6, 'duplicate CSV rows do not create extra questions');
+      assert.equal(page.hasMore, offset + 2 < slugs.length);
+      pages.push(...page.questions);
+    }
+    assert.deepEqual(pages.map((question) => question.slug), slugs, sort);
+    for (const question of pages) {
+      assert.deepEqual([question.frequency, question.rank, question.companyCount], sourceValues[question.slug], sort + ' ' + question.slug);
+    }
+  }
+  const filtered = await service.getPractice({ company: 'Alpha', query: 'problem', topic: 'Array', excludeSlug: 'alpha-easy', sort: 'frequency-asc', offset: 1, limit: 1 });
+  assert.equal(filtered.total, 4);
+  assert.equal(filtered.questions[0].slug, 'alpha-twin');
+  assert.deepEqual([filtered.questions[0].frequency, filtered.questions[0].rank], [10, 4]);
+  const defaultResult = await service.getPractice({ company: 'Alpha' });
+  assert.deepEqual((await service.getPractice({ company: 'Alpha', sort: 'frequency-desc' })).questions, defaultResult.questions);
+  assert.equal(source.calls.length, 0);
+});
+
+test('current-problem company sorting exposes selected-window question counts and leaves cached records unchanged', () => {
+  const { data } = sortingFixture();
+  const original = structuredClone(data);
+  const companies = core.companiesForSlug(data, 'gamma-medium');
+  assert.deepEqual(companies.map((company) => [company.name, company.problemCount, company.frequency, company.rank]), [
+    ['Alpha', 6, 40, 2], ['Beta', 3, 40, 2], ['Gamma', 1, 40, 1]
+  ]);
+  assert.deepEqual(core.companiesForSlug(data, 'gamma-medium', '30d').map((company) => [company.name, company.problemCount]), [['Alpha', 3]]);
+  const modes = {
+    'name-asc': ['Alpha', 'Beta', 'Gamma'], 'name-desc': ['Gamma', 'Beta', 'Alpha'],
+    'questions-desc': ['Alpha', 'Beta', 'Gamma'], 'questions-asc': ['Gamma', 'Beta', 'Alpha']
+  };
+  for (const [sort, names] of Object.entries(modes)) assert.deepEqual(core.sortCompanies(companies, sort).map((company) => company.name), names, sort);
+  const frequencies = [{ name: 'High', frequency: 90 }, { name: 'Missing', frequency: null },
+    { name: 'Zero', frequency: 0 }, { name: 'Tie B', frequency: 20 }, { name: 'Tie A', frequency: 20 }];
+  const originalCompanies = structuredClone(frequencies);
+  assert.deepEqual(core.sortCompanies(frequencies, 'frequency-asc').map((company) => company.name), ['Zero', 'Tie A', 'Tie B', 'High', 'Missing']);
+  assert.deepEqual(frequencies, originalCompanies);
+  const practice = core.practiceQuestions(data, { company: 'Alpha', sort: 'companies-desc' });
+  const alpha = practice.questions.find((question) => question.slug === 'alpha-easy');
+  alpha.topics.push('Injected');
+  alpha.rank = 999;
+  companies[0].name = 'Changed';
+  core.searchProblems(data, { sort: 'difficulty-desc' });
+  core.searchCompanies(data, { sort: 'questions-asc' });
+  assert.deepEqual(data, original, 'query sorting and returned row edits do not mutate the source cache');
+});
+
+test('question company counts deduplicate valid selected-window index matches and ignore stale entries', () => {
+  const { data } = sortingFixture();
+  const id = (name) => data.companies.findIndex((company) => company.name === name);
+  const alphaRecord = data.files['Alpha/' + core.WINDOW_FILES.all].records.findIndex((record) => record.slug === 'alpha-easy');
+  const betaRecord = data.files['Beta/' + core.WINDOW_FILES.all].records.findIndex((record) => record.slug === 'alpha-easy');
+  const duplicateBetaId = data.companies.push({ ...data.companies[id('Beta')] }) - 1;
+  const missingFileId = data.companies.push({ name: 'Missing File', sourceUrl: core.SOURCE_URL }) - 1;
+  data.windows.all.index['alpha-easy'].push(
+    [id('Alpha'), alphaRecord], [id('Beta'), betaRecord], [duplicateBetaId, betaRecord],
+    [missingFileId, 0], [id('Gamma'), 0], [id('Alpha'), -1], [id('Alpha'), 999],
+    [-1, 0], [999, 0], [String(id('Beta')), betaRecord], null
+  );
+  const global = core.searchProblems(data, { query: 'alpha-easy', sort: 'companies-desc' });
+  assert.equal(global.problems[0].companyCount, 2);
+  const practice = core.practiceQuestions(data, { company: 'Alpha', sort: 'companies-desc' });
+  assert.equal(practice.questions.find((question) => question.slug === 'alpha-easy').companyCount, 2);
+  assert.equal(practice.questions.find((question) => question.slug === 'gamma-medium').companyCount, 3);
+  const recent = core.practiceQuestions(data, { company: 'Alpha', window: '30d', sort: 'companies-desc' });
+  assert.deepEqual(recent.questions.map((question) => [question.slug, question.companyCount]), [
+    ['alpha-easy', 2], ['gamma-medium', 1], ['omega-unknown', 1]
+  ]);
+});
+
+test('each query endpoint rejects malformed and irrelevant sort modes before touching storage or the network', async () => {
+  const source = sourceFixture();
+  let storageReads = 0;
+  const storage = memoryStorage();
+  const originalGet = storage.get;
+  storage.get = async (...args) => { storageReads += 1; return originalGet(...args); };
+  const service = makeService(storage, source);
+  for (const sort of [null, '', false, 0, [], {}, 'unknown', '__proto__', 'NAME-ASC']) {
+    for (const method of ['searchProblems', 'searchCompanies', 'getPractice']) {
+      await assert.rejects(service[method]({ company: 'Alpha', sort }), /sort/i, method + ' ' + JSON.stringify(sort));
+    }
+  }
+  for (const sort of ['frequency-desc', 'frequency-asc', 'questions-desc', 'questions-asc']) {
+    await assert.rejects(service.searchProblems({ sort }), /sort/i, sort);
+  }
+  for (const sort of ['relevance', 'frequency-desc', 'difficulty-asc', 'companies-desc']) {
+    await assert.rejects(service.searchCompanies({ sort }), /sort/i, sort);
+  }
+  for (const sort of ['relevance', 'questions-desc', 'questions-asc']) {
+    await assert.rejects(service.getPractice({ company: 'Alpha', sort }), /sort/i, sort);
+  }
+  assert.equal(storageReads, 0, 'invalid requests fail before loading the cache');
+  assert.equal(source.calls.length, 0);
+});

@@ -389,7 +389,7 @@
       if (typeof window !== 'string' || !Object.prototype.hasOwnProperty.call(core.WINDOW_FILES, window)) throw new Error('Invalid company time window.');
       return window;
     }
-    function queryOptions(value, defaultLimit) {
+    function queryOptions(value, defaultLimit, endpoint, defaultSort) {
       const optionsForQuery = value === undefined ? {} : value;
       if (!optionsForQuery || typeof optionsForQuery !== 'object' || Array.isArray(optionsForQuery)) throw new Error('Invalid search options.');
       const query = optionsForQuery.query === undefined ? '' : optionsForQuery.query;
@@ -402,7 +402,9 @@
           (typeof optionsForQuery.difficulty !== 'string' || !['easy', 'medium', 'hard'].includes(optionsForQuery.difficulty.toLowerCase()))) {
         throw new Error('Invalid difficulty filter.');
       }
-      return Object.assign({}, optionsForQuery, { query, offset, limit, window: selectedWindow(optionsForQuery.window) });
+      const sort = optionsForQuery.sort === undefined ? defaultSort : optionsForQuery.sort;
+      if (typeof sort !== 'string' || !core.SORT_OPTIONS[endpoint].includes(sort)) throw new Error('Invalid sort option.');
+      return Object.assign({}, optionsForQuery, { query, offset, limit, sort, window: selectedWindow(optionsForQuery.window) });
     }
     return {
       initialize, startAutomatic, refresh: () => start({ manual: true }), resume: () => start(),
@@ -414,17 +416,17 @@
       },
       async windowAvailable(window) { await initialize(); return core.windowAvailable(state.lctData, selectedWindow(window)); },
       async searchProblems(searchOptions) {
-        const validated = queryOptions(searchOptions, 50);
+        const validated = queryOptions(searchOptions, 50, 'searchProblems', 'relevance');
         await initialize();
         return core.searchProblems(state.lctData, validated);
       },
       async searchCompanies(searchOptions) {
-        const validated = queryOptions(searchOptions, 50);
+        const validated = queryOptions(searchOptions, 50, 'searchCompanies', 'name-asc');
         await initialize();
         return core.searchCompanies(state.lctData, validated);
       },
       async getPractice(practiceOptions) {
-        const validated = queryOptions(practiceOptions, 20);
+        const validated = queryOptions(practiceOptions, 20, 'practiceQuestions', 'frequency-desc');
         if (typeof validated.company !== 'string' || !validated.company || validated.company.length > 200) throw new Error('Invalid company name.');
         if (validated.topic !== undefined && validated.topic !== '' &&
             (typeof validated.topic !== 'string' || validated.topic.length > 200)) throw new Error('Invalid topic filter.');

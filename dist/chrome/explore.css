@@ -34,7 +34,7 @@ h2 { font-size:27px; letter-spacing:-.65px; line-height:1.25; font-weight:650; m
 .global-search { display:block; color:var(--muted); font-size:12px; }
 .global-search span { display:block; margin-bottom:6px; }
 .global-search input { display:block; width:100%; font-size:16px; min-height:50px; padding:12px 15px; background:var(--wash); }
-.results-heading { display:flex; justify-content:space-between; gap:12px; align-items:center; margin:23px 0 10px; }
+.results-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin:23px 0 10px; }
 .results-heading p { color:var(--muted); font-size:12px; margin:0; }
 .results-heading span { font-size:11px; margin:0; text-align:right; }
 .results { list-style:none; padding:0; margin:0; }
@@ -86,3 +86,31 @@ progress { width:100%; height:5px; accent-color:var(--accent); border:0; margin-
 a.leetcode-link { display:inline-flex; align-items:center; justify-content:center; width:36px; min-width:36px; height:36px; padding:7px; border:1px solid var(--line); border-radius:8px; background:var(--wash); text-decoration:none; vertical-align:middle; }
 a.leetcode-link:hover { border-color:var(--muted); text-decoration:none; }
 .leetcode-icon { display:block; width:20px; height:20px; object-fit:contain; }
+
+.sort-filter { display:flex; align-items:center; gap:8px; margin-left:auto; max-width:100%; color:var(--muted); font-size:11px; }
+.sort-filter span { white-space:nowrap; }
+.sort-filter select { min-width:0; min-height:34px; max-width:200px; padding:6px 9px; font-size:12px; }
+@media(max-width:440px) { .sort-filter { width:100%; margin-left:0; justify-content:space-between; } }
+
+/* Enhanced selects keep native state while the visible menu follows the page theme. */
+.select-control { display:inline-block; min-width:0; max-width:100%; vertical-align:middle; }
+.select-trigger { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-width:0; min-height:40px; padding:9px 11px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:8px; font-size:14px; font-weight:400; text-align:left; }
+.select-trigger:hover,.select-trigger[aria-expanded="true"] { border-color:var(--muted); }
+.select-trigger:disabled { cursor:default; }
+.select-value { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.select-chevron { display:block; width:7px; height:7px; flex:0 0 7px; border-right:1.5px solid var(--muted); border-bottom:1.5px solid var(--muted); transform:translateY(-2px) rotate(45deg); }
+.select-trigger[aria-expanded="true"] .select-chevron { transform:translateY(2px) rotate(225deg); }
+.window-filter .select-control { width:184px; }
+.sort-filter .select-control { max-width:200px; min-width:150px; }
+.sort-filter .select-trigger { min-height:34px; padding:6px 9px; font-size:12px; }
+.sort-filter .select-value { font-size:12px; text-align:left; }
+.detail-filters .select-control { display:block; width:100%; margin-top:5px; }
+.detail-filters .select-trigger { font-size:13px; }
+.select-menu { position:fixed; z-index:1000; overflow:auto; padding:4px; background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px #00000016; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--line) var(--paper); }
+.select-option { position:relative; display:block; min-height:36px; padding:8px 30px 8px 10px; border-radius:6px; font-size:13px; line-height:20px; overflow-wrap:anywhere; cursor:pointer; user-select:none; }
+.select-option:hover,.select-option[data-active] { background:var(--wash); }
+.select-option[data-active] { box-shadow:inset 0 0 0 1px var(--line); }
+.select-option[aria-selected="true"] { font-weight:600; }
+.select-option[aria-selected="true"]::after { content:'✓'; position:absolute; right:10px; top:8px; color:var(--muted); }
+.select-option[aria-disabled="true"] { opacity:.5; cursor:default; }
+@media(max-width:440px) { .window-filter .select-control { max-width:190px; } .sort-filter .select-control { max-width:200px; } }

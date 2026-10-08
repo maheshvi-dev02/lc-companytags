@@ -16,6 +16,13 @@
   });
   const SHA_PATTERN = /^[a-f0-9]{40}$/i;
   const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const SORT_OPTIONS = Object.freeze({
+    searchProblems: Object.freeze(['relevance', 'name-asc', 'name-desc', 'difficulty-asc', 'difficulty-desc', 'companies-desc', 'companies-asc']),
+    searchCompanies: Object.freeze(['name-asc', 'name-desc', 'questions-desc', 'questions-asc']),
+    practiceQuestions: Object.freeze(['frequency-desc', 'frequency-asc', 'name-asc', 'name-desc', 'difficulty-asc', 'difficulty-desc', 'companies-desc', 'companies-asc']),
+    sortCompanies: Object.freeze(['frequency-desc', 'frequency-asc', 'name-asc', 'name-desc', 'questions-desc', 'questions-asc'])
+  });
+  const DIFFICULTY_ORDER = Object.freeze({ Easy: 0, Medium: 1, Hard: 2 });
 
   function getProblemSlug(value) {
     try {
@@ -132,16 +139,59 @@
     return parseCompanyRecords(text).map((record) => record.slug).sort();
   }
 
-  function sortCompanies(companies) {
+  function selectedSort(value, endpoint, fallback) {
+    return SORT_OPTIONS[endpoint].includes(value) ? value : fallback;
+  }
+
+  function compareText(a, b) {
+    return String(a || '').localeCompare(String(b || ''), 'en');
+  }
+
+  function compareNullableNumbers(a, b, direction) {
+    const first = typeof a === 'number' && Number.isFinite(a) && a >= 0 ? a : null;
+    const second = typeof b === 'number' && Number.isFinite(b) && b >= 0 ? b : null;
+    if (first === null && second !== null) return 1;
+    if (first !== null && second === null) return -1;
+    return first === null ? 0 : direction * (first - second);
+  }
+
+  function compareCompanyRows(a, b, sort) {
+    const byName = compareText(a.name, b.name), bySlug = compareText(a.slug, b.slug);
+    if (sort === 'name-asc') return byName || bySlug;
+    if (sort === 'name-desc') return -byName || bySlug;
+    const field = sort.startsWith('questions-') ? 'problemCount' : 'frequency';
+    return compareNullableNumbers(a[field], b[field], sort.endsWith('-asc') ? 1 : -1) || byName || bySlug;
+  }
+
+  function sortCompanies(companies, sort = 'frequency-desc') {
     if (!Array.isArray(companies)) return [];
+    const mode = selectedSort(sort, 'sortCompanies', 'frequency-desc');
     return companies.filter((company) => company && typeof company.name === 'string')
       .map((company) => Object.assign({}, company, { frequency: validFrequency(company.frequency) }))
-      .sort((a, b) => {
-        if (a.frequency === null && b.frequency !== null) return 1;
-        if (a.frequency !== null && b.frequency === null) return -1;
-        if (a.frequency !== b.frequency) return b.frequency - a.frequency;
-        return a.name.localeCompare(b.name, 'en');
-      });
+      .sort((a, b) => compareCompanyRows(a, b, mode));
+  }
+
+  function problemRelevance(problem, query) {
+    if (!query) return 2;
+    const title = normalizedSearchText(problem.title), slug = normalizedSearchText(problem.slug);
+    if (title === query || slug === query) return 0;
+    return title.startsWith(query) || slug.startsWith(query) ? 1 : 2;
+  }
+
+  function compareProblemRows(a, b, sort, query = '') {
+    const byTitle = compareText(a.title, b.title), bySlug = compareText(a.slug, b.slug);
+    if (sort === 'name-asc') return byTitle || bySlug;
+    if (sort === 'name-desc') return -byTitle || bySlug;
+    let byMetric;
+    if (sort === 'relevance') byMetric = problemRelevance(a, query) - problemRelevance(b, query);
+    else {
+      const difficulty = sort.startsWith('difficulty-');
+      const field = sort.startsWith('companies-') ? 'companyCount' : 'frequency';
+      const first = difficulty && Object.prototype.hasOwnProperty.call(DIFFICULTY_ORDER, a.difficulty) ? DIFFICULTY_ORDER[a.difficulty] : difficulty ? null : a[field];
+      const second = difficulty && Object.prototype.hasOwnProperty.call(DIFFICULTY_ORDER, b.difficulty) ? DIFFICULTY_ORDER[b.difficulty] : difficulty ? null : b[field];
+      byMetric = compareNullableNumbers(first, second, sort.endsWith('-asc') ? 1 : -1);
+    }
+    return byMetric || byTitle || bySlug;
   }
 
   function selectWindowFiles(treeResponse, allTimeOnly) {
@@ -234,23 +284,41 @@
     return Boolean(data.windows && data.windows[window] && data.windows[window].index && data.windows[window].available !== false);
   }
 
+  // Count only associations whose company and selected-window record still
+  // match the requested slug. Duplicate or malformed reverse-index entries
+  // must never inflate a popularity count or expose stale company tags.
+  function matchingCompanyRecords(data, slug, window) {
+    const index = data.windows && data.windows[window] && data.windows[window].index;
+    const matches = new Map();
+    if (!index || !Object.prototype.hasOwnProperty.call(index, slug) || !Array.isArray(index[slug])) return [];
+    for (const entry of index[slug]) {
+      if (!Array.isArray(entry) || !Number.isInteger(entry[0]) || entry[0] < 0 || !Number.isInteger(entry[1]) || entry[1] < 0) continue;
+      const company = data.companies[entry[0]];
+      if (!company || typeof company.name !== 'string' || !company.name || typeof company.sourceUrl !== 'string' || matches.has(company.name)) continue;
+      const path = company.name + '/' + WINDOW_FILES[window];
+      const file = data.files && Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
+      const record = file && Array.isArray(file.records) && file.records[entry[1]];
+      if (!record || record.slug !== slug) continue;
+      matches.set(company.name, { company, path, file, record });
+    }
+    return Array.from(matches.values());
+  }
+
   function companiesForSlug(data, slug, window = 'all') {
     if (!windowAvailable(data, window) || !Array.isArray(data.companies) || !SLUG_PATTERN.test(slug || '')) return [];
-    const index = data.schema === DATA_SCHEMA ? data.windows[window].index : data.index;
-    if (!Object.prototype.hasOwnProperty.call(index, slug) || !Array.isArray(index[slug])) return [];
-    const companies = index[slug].map((entry) => {
+    if (data.schema === DATA_SCHEMA) {
+      return sortCompanies(matchingCompanyRecords(data, slug, window).map(({ company, path, file, record }) => ({
+        name: company.name, sourceUrl: sourceFileURL(data.commit, path), frequency: validFrequency(record.frequency),
+        rank: record.rank, problemCount: file.records.length
+      })));
+    }
+    if (!Object.prototype.hasOwnProperty.call(data.index, slug) || !Array.isArray(data.index[slug])) return [];
+    const companies = data.index[slug].map((entry) => {
       const id = data.version === DATA_VERSION && Array.isArray(entry) ? entry[0] : entry;
       const company = Number.isInteger(id) && id >= 0 ? data.companies[id] : null;
       if (!company || typeof company.name !== 'string' || typeof company.sourceUrl !== 'string') return null;
-      if (data.schema === DATA_SCHEMA) {
-        const path = company.name + '/' + WINDOW_FILES[window];
-        const file = data.files && data.files[path];
-        const record = file && Array.isArray(file.records) && file.records[entry[1]];
-        if (!record || record.slug !== slug) return null;
-        return { name: company.name, sourceUrl: sourceFileURL(data.commit, path), frequency: validFrequency(record.frequency), rank: record.rank };
-      }
       const frequency = data.version === DATA_VERSION && Array.isArray(entry) ? validFrequency(entry[1]) : null;
-      return { name: company.name, sourceUrl: company.sourceUrl, frequency, rank: null };
+      return { name: company.name, sourceUrl: company.sourceUrl, frequency, rank: null, problemCount: null };
     });
     return sortCompanies(companies);
   }
@@ -289,19 +357,13 @@
     if (!available) return empty;
     const { query, terms } = queryTerms(options.query);
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
+    const sort = selectedSort(options.sort, 'searchProblems', 'relevance');
     const problems = [];
     for (const [slug, entries] of Object.entries(data.windows[window].index)) {
       if (!SLUG_PATTERN.test(slug) || !Array.isArray(entries)) continue;
       let representative = null, knownDifficulty = null;
       const companies = new Set();
-      for (const entry of entries) {
-        if (!Array.isArray(entry) || !Number.isInteger(entry[0]) || entry[0] < 0 || !Number.isInteger(entry[1]) || entry[1] < 0) continue;
-        const company = data.companies[entry[0]];
-        if (!company || typeof company.name !== 'string') continue;
-        const path = company.name + '/' + WINDOW_FILES[window];
-        const file = Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
-        const record = file && Array.isArray(file.records) && file.records[entry[1]];
-        if (!record || record.slug !== slug) continue;
+      for (const { company, record } of matchingCompanyRecords(data, slug, window)) {
         companies.add(company.name);
         if (!representative) representative = record;
         if (!knownDifficulty && ['Easy', 'Medium', 'Hard'].includes(record.difficulty)) knownDifficulty = record.difficulty;
@@ -312,13 +374,7 @@
         companyCount: companies.size, url: 'https://leetcode.com/problems/' + slug + '/' };
       if ((!difficulty || (problem.difficulty || '').toLowerCase() === difficulty) && matchesProblem(problem, terms)) problems.push(problem);
     }
-    function relevance(problem) {
-      if (!query) return 2;
-      const title = normalizedSearchText(problem.title), slug = normalizedSearchText(problem.slug);
-      if (title === query || slug === query) return 0;
-      return title.startsWith(query) || slug.startsWith(query) ? 1 : 2;
-    }
-    problems.sort((a, b) => relevance(a) - relevance(b) || a.title.localeCompare(b.title, 'en') || a.slug.localeCompare(b.slug, 'en'));
+    problems.sort((a, b) => compareProblemRows(a, b, sort, query));
     const page = problems.slice(offset, offset + limit);
     return { problems: page, total: problems.length, offset, limit, hasMore: offset + page.length < problems.length,
       available: true, windowAvailable: true };
@@ -342,7 +398,8 @@
       names.add(company.name);
       companies.push({ name: company.name, problemCount: file.records.length, sourceUrl: sourceFileURL(data.commit, path) });
     }
-    companies.sort((a, b) => a.name.localeCompare(b.name, 'en'));
+    const sort = selectedSort(options.sort, 'searchCompanies', 'name-asc');
+    companies.sort((a, b) => compareCompanyRows(a, b, sort));
     const page = companies.slice(offset, offset + limit);
     return { companies: page, total: companies.length, offset, limit, hasMore: offset + page.length < companies.length,
       available: true, windowAvailable: true };
@@ -361,17 +418,20 @@
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
     const topic = typeof options.topic === 'string' ? options.topic.toLowerCase() : '';
     const { terms } = queryTerms(options.query);
+    const sort = selectedSort(options.sort, 'practiceQuestions', 'frequency-desc');
     const filtered = file.records.filter((record) => record.slug !== options.excludeSlug &&
       (!difficulty || (record.difficulty || '').toLowerCase() === difficulty) &&
-      (!topic || record.topics.some((value) => value.toLowerCase() === topic)) && matchesProblem(record, terms));
-    const questions = filtered.slice(offset, offset + limit).map((record) => Object.assign({}, record, {
-      topics: record.topics.slice(), url: 'https://leetcode.com/problems/' + record.slug + '/'
-    }));
+      (!topic || record.topics.some((value) => value.toLowerCase() === topic)) && matchesProblem(record, terms))
+      .map((record) => Object.assign({}, record, { topics: record.topics.slice(),
+        companyCount: matchingCompanyRecords(data, record.slug, window).length,
+        url: 'https://leetcode.com/problems/' + record.slug + '/' }));
+    filtered.sort((a, b) => compareProblemRows(a, b, sort));
+    const questions = filtered.slice(offset, offset + limit);
     return { questions, total: filtered.length, topics, offset, limit, hasMore: offset + questions.length < filtered.length,
       available: true, windowAvailable: true, sourceUrl: sourceFileURL(data.commit, path) };
   }
 
-  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, getProblemSlug, formatProblemTitle,
+  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, getProblemSlug, formatProblemTitle,
     parseCSV, parseCompanyCSV, parseCompanyRecords, sortCompanies, selectCompanyFiles, selectWindowFiles, encodedPath, sourceFileURL, rawFileURL,
     reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
 });

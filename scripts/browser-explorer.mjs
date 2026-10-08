@@ -5,17 +5,35 @@ import { verifyBadges, exerciseBrokenLogo } from './browser-logos.mjs';
 // Both drivers operate the actual packaged document. Firefox extension-process
 // tabs are unavailable to Playwright, so its driver uses Mozilla's DOM console.
 export function chromiumExplorerDriver(page) {
+  const settleScroll = async locator => {
+    await locator.scrollIntoViewIfNeeded();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  };
   return {
     read: (expression) => page.evaluate(expression),
-    click: (selector) => page.locator(selector).click(),
+    click: async selector => {
+      const locator=page.locator(selector);
+      if(await locator.getAttribute('data-select-for')!==null)await settleScroll(locator);
+      return locator.click();
+    },
     fill: (selector, value) => page.locator(selector).fill(value),
-    select: (selector, value) => page.locator(selector).selectOption(value),
+    select: async (selector, value) => {
+      const field = page.locator(selector), id = await field.getAttribute('id');
+      const trigger = page.locator(`[data-select-for=${JSON.stringify(id)}]`);
+      if (!await trigger.count()) return field.selectOption(value);
+      // Let the page-scroll dismissal settle before opening the positioned menu.
+      await settleScroll(trigger);
+      await trigger.click();
+      await page.locator(`#${id}-menu [role=option][data-value=${JSON.stringify(value)}]`).click();
+    },
+    press: async (selector,key) => { const locator=page.locator(selector);await settleScroll(locator);return locator.press(key); },
     activateWithKeyboard: async (selector) => { await page.locator(selector).focus(); await page.locator(selector).press('Enter'); },
     mutate: (source) => page.evaluate(source),
-    screenshot: (filename) => page.screenshot({ path: filename, fullPage: true, animations: 'disabled' }),
+    screenshot: (filename, options = {}) => page.screenshot({ path: filename, fullPage: true, animations: 'disabled', ...options }),
     setColorScheme: (colorScheme) => page.emulateMedia({ colorScheme }),
     setViewport: (viewport) => page.setViewportSize(viewport),
     viewport: () => page.viewportSize(),
+    reload: () => page.reload(),
     keyboard: 'Native Chromium keyboard events',
   };
 }
@@ -24,9 +42,20 @@ export function firefoxExplorerDriver(evaluate) {
   const mutate = async (source) => evaluate(`(() => { ${source}; return 'changed'; })()`);
   return {
     read: async (expression) => JSON.parse(await evaluate(`JSON.stringify(${expression})`)),
-    click: (selector) => mutate(`document.querySelector(${JSON.stringify(selector)}).click()`),
+    click: async (selector) => {
+      await mutate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'nearest'})`);
+      await wait(50); return mutate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+    },
     fill: (selector, value) => mutate(`const node = document.querySelector(${JSON.stringify(selector)}); node.value = ${JSON.stringify(value)}; node.dispatchEvent(new Event('input', { bubbles: true }))`),
-    select: (selector, value) => mutate(`const node = document.querySelector(${JSON.stringify(selector)}); node.value = ${JSON.stringify(value)}; node.dispatchEvent(new Event('change', { bubbles: true }))`),
+    select: async (selector, value) => {
+      const custom = JSON.parse(await evaluate(`JSON.stringify(Boolean(document.querySelector('[data-select-for="' + document.querySelector(${JSON.stringify(selector)}).id + '"]')))`));
+      if (!custom) return mutate(`const node=document.querySelector(${JSON.stringify(selector)});node.value=${JSON.stringify(value)};node.dispatchEvent(new Event('change',{bubbles:true}))`);
+      await mutate(`document.querySelector('[data-select-for="'+document.querySelector(${JSON.stringify(selector)}).id+'"]').scrollIntoView({block:'nearest'})`);
+      await wait(50);
+      await mutate(`document.querySelector('[data-select-for="'+document.querySelector(${JSON.stringify(selector)}).id+'"]').click()`);
+      await mutate(`const menu=document.getElementById(document.querySelector(${JSON.stringify(selector)}).id+'-menu');const option=Array.from(menu.querySelectorAll('[role=option]')).find(node=>node.dataset.value===${JSON.stringify(value)});if(!option)throw new Error('Missing visible select option');option.scrollIntoView({block:'nearest'});option.click()`);
+    },
+    press: (selector, key) => mutate(`const node=document.querySelector(${JSON.stringify(selector)});node.focus();node.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key === 'Space' ? ' ' : key)},bubbles:true,cancelable:true}))`),
     activateWithKeyboard: async (selector) => {
       // RDP cannot issue trusted key input to these tabs. Check native keyboard
       // semantics and focus, then activate the same button through its DOM.
@@ -68,6 +97,206 @@ async function expectSummary(ui, selector, total) {
   assert.ok(observed.includes(expected), `${selector} should report the source total ${expected}; got ${observed}`);
 }
 
+
+async function exerciseMenu(ui, selector, { output, browserName, capture, commit = false } = {}) {
+  const id = selector.slice(1), trigger = `#${id}-trigger`, menu = `#${id}-menu`;
+  const before = await ui.read(`document.querySelector(${JSON.stringify(selector)}).value`);
+  const state = () => ui.read(`(()=>{const field=document.querySelector(${JSON.stringify(selector)}),button=document.querySelector(${JSON.stringify(trigger)}),menu=document.querySelector(${JSON.stringify(menu)}),active=menu.querySelector('[data-active]'),css=getComputedStyle(menu),r=menu.getBoundingClientRect();return{value:field.value,selectedLabel:field.selectedOptions[0]?.textContent,label:button.querySelector('.select-value').textContent,expanded:button.getAttribute('aria-expanded'),visible:!!menu.getClientRects().length,role:menu.getAttribute('role'),radius:css.borderRadius,background:css.backgroundColor,border:css.borderTopColor,viewport:{width:innerWidth,height:innerHeight},rect:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height},selected:Array.from(menu.querySelectorAll('[aria-selected="true"]'),n=>n.dataset.value),options:Array.from(menu.querySelectorAll('[role=option]'),n=>({value:n.dataset.value,label:n.textContent})),active:active?{value:active.dataset.value,id:active.id,background:getComputedStyle(active).backgroundColor,radius:getComputedStyle(active).borderRadius,top:active.getBoundingClientRect().top,bottom:active.getBoundingClientRect().bottom}:null,descendant:button.getAttribute('aria-activedescendant'),focused:document.activeElement===button};})()`);
+  const gray = color => { const rgb = color.match(/[\d.]+/g).slice(0,3).map(Number); assert.equal(rgb[0],rgb[1]);assert.equal(rgb[1],rgb[2]); };
+  const closed = async () => {
+    await expectRead(ui, visible(menu), false); await expectRead(ui, `document.querySelector(${JSON.stringify(trigger)}).getAttribute('aria-expanded')`, 'false');
+  };
+  await ui.click(trigger); const opened = await state();
+  assert.equal(opened.visible,true);assert.equal(opened.expanded,'true');assert.equal(opened.role,'listbox');assert.equal(opened.focused,true);
+  assert.equal(opened.label,opened.selectedLabel);assert.deepEqual(opened.selected,[before]);
+  assert.ok(parseFloat(opened.radius)>=8);assert.ok(parseFloat(opened.active.radius)>=4);gray(opened.background);gray(opened.active.background);gray(opened.border);
+  assert.equal(opened.descendant,opened.active.id);
+  assert.ok(opened.rect.left>=0&&opened.rect.right<=opened.viewport.width+1&&opened.rect.top>=0&&opened.rect.bottom<=opened.viewport.height+1,'Opened dropdown must fit its actual viewport.');
+  if(capture&&ui.screenshot)await ui.screenshot(path.join(output,`${browserName}-${capture}.png`),{fullPage:false});
+  await ui.press(trigger,'End');let moved=await state();assert.equal(moved.active.value,opened.options.at(-1).value);assert.equal(moved.value,before);
+  assert.ok(moved.active.top>=moved.rect.top-1&&moved.active.bottom<=moved.rect.bottom+2,'Keyboard endpoint must scroll into view.');
+  await ui.press(trigger,'Home');moved=await state();assert.equal(moved.active.value,opened.options[0].value);
+  await ui.press(trigger,'ArrowDown');moved=await state();assert.equal(moved.active.value,opened.options[Math.min(1,opened.options.length-1)].value);
+  await ui.press(trigger,'Escape');await closed();assert.equal((await state()).value,before);assert.equal((await state()).focused,true);
+  await ui.press(trigger,'Enter');await expectRead(ui,visible(menu),true);await ui.press(trigger,'Tab');await closed();
+  if(ui.keyboard.startsWith('Native Chromium'))assert.equal((await state()).focused,false,'Native Tab must leave the trigger without a focus trap.');
+  await ui.click(trigger);
+  const outside=await ui.read(visible('#detail-view'))?'#detail-title':'#search-heading';
+  if(ui.keyboard.startsWith('Native Chromium'))await ui.click(outside);
+  else await ui.mutate(`document.querySelector(${JSON.stringify(outside)}).dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));`);
+  await closed();assert.equal((await state()).value,before);
+  if(commit){
+    await ui.press(trigger,'Space');await expectRead(ui,visible(menu),true);await ui.press(trigger,'Home');
+    const prefix=opened.options.at(-1).label[0].toLowerCase();await ui.press(trigger,prefix);moved=await state();assert.ok(moved.options.find(n=>n.value===moved.active.value).label.toLowerCase().startsWith(prefix));
+    await ui.press(trigger,'End');await ui.press(trigger,'Enter');await closed();
+    const chosen=await state();assert.equal(chosen.value,opened.options.at(-1).value);assert.equal(chosen.label,chosen.selectedLabel);assert.equal(chosen.focused,true);
+    await ui.select(selector,before);await closed();
+  }
+  return{selector,opened,keyboard:ui.keyboard,commit};
+}
+
+async function exerciseSorting(ui, { data, core, output, browserName }) {
+  const checks = [], result = {};
+  const selected = selector => `document.querySelector(${JSON.stringify(selector)}).value`;
+  const problemIds = values('#results [data-action="problem"]', 'data-slug');
+  const companyIds = values('#results .company-title', 'data-company');
+  const questionIds = values('#detail-results .question-row', 'data-slug');
+  const tagIds = values('#detail-results .company-row', 'data-company');
+  const globalProblems = options => core.searchProblems(data, { window: 'all', limit: 50, ...options }).problems;
+  const globalCompanies = options => core.searchCompanies(data, { window: 'all', limit: 50, ...options }).companies;
+  const practice = options => core.practiceQuestions(data, { company: 'Amazon', window: 'all', limit: 50, ...options }).questions;
+  const expectRows = async (expression, rows, key) => {
+    await expectRead(ui, expression, rows.map(row => row[key]));
+    const ids = await ui.read(expression); assert.equal(new Set(ids).size, ids.length);
+  };
+  const choose = async (selector, sort) => { await ui.select(selector, sort); await expectRead(ui, selected(selector), sort); };
+  const options = async (selector, allowed, label) => {
+    const actual = await ui.read(`(()=>{const n=document.querySelector(${JSON.stringify(selector)}),button=document.getElementById(n.id+'-trigger');button.focus();return{tag:n.tagName,label:button.getAttribute('aria-label'),values:Array.from(n.options,o=>o.value),focused:document.activeElement===button,hidden:!n.getClientRects().length,buttonTag:button.tagName,role:button.getAttribute('role'),controls:button.getAttribute('aria-controls')};})()`);
+    assert.equal(actual.tag, 'SELECT'); assert.equal(actual.label, label); assert.equal(actual.focused, true); assert.deepEqual(actual.values, allowed);
+    assert.equal(actual.hidden,true);assert.equal(actual.buttonTag,'BUTTON');assert.equal(actual.role,'combobox');assert.equal(actual.controls,selector.slice(1)+'-menu');
+  };
+  const monotonic = (rows, field, direction) => {
+    const known = rows.map(row => row[field]).filter(value => Number.isFinite(value));
+    assert.ok(known.length > 1);
+    for (let index = 1; index < known.length; index++) assert.ok(direction * (known[index] - known[index - 1]) >= 0, `${field} must respect the selected direction.`);
+  };
+  const verifyPractice = async expected => {
+    await expectRows(questionIds, expected, 'slug');
+    const metadata = await ui.read(texts('#detail-results .question-meta'));
+    for (let index = 0; index < expected.length; index++) {
+      const row = expected[index], source = data.files['Amazon/' + core.WINDOW_FILES[currentWindow]].records.find(record => record.slug === row.slug);
+      assert.equal(row.rank, source.rank); assert.equal(row.frequency, source.frequency);
+      assert.ok(metadata[index].includes(source.rank == null ? 'rank unavailable' : `company rank #${source.rank}`));
+      assert.ok(metadata[index].includes(`score ${source.frequency == null ? 'unavailable' : source.frequency}`));
+      assert.ok(metadata[index].includes(`${row.companyCount} ${row.companyCount === 1 ? 'company' : 'companies'} in this window`));
+    }
+  };
+  let currentWindow = 'all';
+  await ui.select('#window-select', 'all'); await ui.fill('#global-search', '');
+  await options('#sort-select', core.SORT_OPTIONS.searchProblems, 'Sort problems');
+  result.globalSortMenu=await exerciseMenu(ui,'#sort-select',{output,browserName,capture:'explorer-sort-menu-desktop',commit:true});
+  result.windowMenu=await exerciseMenu(ui,'#window-select');
+  await choose('#sort-select', 'name-desc'); await expectRows(problemIds, globalProblems({ sort: 'name-desc' }), 'slug');
+  await ui.click('#load-more'); await expectRows(problemIds, globalProblems({ sort: 'name-desc', limit: 100 }), 'slug');
+  await choose('#sort-select', 'companies-desc');
+  const popularProblems = globalProblems({ sort: 'companies-desc' }); await expectRows(problemIds, popularProblems, 'slug'); monotonic(popularProblems, 'companyCount', -1);
+  assert.ok(new Set(popularProblems.map(row => row.companyCount)).size > 1);
+  await ui.click('#load-more'); await expectRows(problemIds, globalProblems({ sort: 'companies-desc', limit: 100 }), 'slug');
+  await choose('#sort-select', 'companies-asc');
+  const sparseProblems = globalProblems({ sort: 'companies-asc' }); await expectRows(problemIds, sparseProblems, 'slug'); monotonic(sparseProblems, 'companyCount', 1);
+  await ui.fill('#global-search', 'sum'); await choose('#sort-select', 'difficulty-desc');
+  const hardFirst = globalProblems({ query: 'sum', sort: 'difficulty-desc' }); await expectRows(problemIds, hardFirst, 'slug');
+  monotonic(hardFirst.map(row => ({ difficulty: { Easy: 0, Medium: 1, Hard: 2 }[row.difficulty] })), 'difficulty', -1);
+  await ui.fill('#global-search', ''); await choose('#sort-select', 'companies-desc'); await expectRows(problemIds, popularProblems, 'slug');
+  await ui.mutate(`document.querySelector('#load-more').click();const n=document.querySelector('#sort-select');for(const value of ['name-desc','companies-asc','companies-desc']){n.value=value;n.dispatchEvent(new Event('change',{bubbles:true}));}`);
+  await expectRows(problemIds, popularProblems, 'slug'); await wait(350); await expectRows(problemIds, popularProblems, 'slug');
+  await expectRead(ui, 'document.querySelector("#results").getAttribute("aria-busy")', 'false');
+  checks.push('Problem sorts cover name, difficulty and both company-count directions; changing sort resets pagination and sorted Load more returns the complete first 100 without duplicates.');
+
+  await ui.click('#mode-companies'); await ui.fill('#global-search', '');
+  await options('#sort-select', core.SORT_OPTIONS.searchCompanies, 'Sort companies');
+  await choose('#sort-select', 'questions-desc');
+  const popularCompanies = globalCompanies({ sort: 'questions-desc' }); await expectRows(companyIds, popularCompanies, 'name'); monotonic(popularCompanies, 'problemCount', -1);
+  assert.ok(new Set(popularCompanies.map(row => row.problemCount)).size > 1);
+  await ui.click('#load-more'); await expectRows(companyIds, globalCompanies({ sort: 'questions-desc', limit: 100 }), 'name');
+  await choose('#sort-select', 'name-desc'); await expectRows(companyIds, globalCompanies({ sort: 'name-desc' }), 'name');
+  await choose('#sort-select', 'questions-asc');
+  const fewestCompanies = globalCompanies({ sort: 'questions-asc' }); await expectRows(companyIds, fewestCompanies, 'name'); monotonic(fewestCompanies, 'problemCount', 1);
+  await ui.select('#window-select', '30d'); await expectRows(companyIds, globalCompanies({ sort: 'questions-asc', window: '30d' }), 'name'); await expectRead(ui, selected('#sort-select'), 'questions-asc');
+  assert.equal(globalCompanies({ sort: 'questions-asc', window: '30d' })[0].problemCount, 0);
+  await ui.select('#window-select', 'all'); await choose('#sort-select', 'questions-desc');
+  await ui.fill('#global-search', 'Amazon'); await expectRows(companyIds, globalCompanies({ query: 'Amazon', sort: 'questions-desc' }), 'name');
+  await ui.click('#results .company-title[data-company="Amazon"]');
+  await expectRead(ui, text('#detail-title'), 'Amazon'); await options('#detail-sort-select', core.SORT_OPTIONS.practiceQuestions, 'Sort company questions');
+  result.detailSortMenu=await exerciseMenu(ui,'#detail-sort-select');
+  result.difficultyMenu=await exerciseMenu(ui,'#difficulty-select');
+  result.topicMenu=await exerciseMenu(ui,'#topic-select');
+  await choose('#detail-sort-select', 'frequency-asc');
+  const leastFrequent = practice({ sort: 'frequency-asc' }); await verifyPractice(leastFrequent); monotonic(leastFrequent, 'frequency', 1);
+  await ui.click('#detail-load-more'); await verifyPractice(practice({ sort: 'frequency-asc', limit: 100 }));
+  await choose('#detail-sort-select', 'companies-desc'); const popularQuestions = practice({ sort: 'companies-desc' }); await verifyPractice(popularQuestions); monotonic(popularQuestions, 'companyCount', -1);
+  await choose('#detail-sort-select', 'companies-asc'); const sparseQuestions = practice({ sort: 'companies-asc' }); await verifyPractice(sparseQuestions); monotonic(sparseQuestions, 'companyCount', 1);
+  await ui.fill('#question-search', 'sum'); await choose('#detail-sort-select', 'name-desc'); await verifyPractice(practice({ query: 'sum', sort: 'name-desc' }));
+  await choose('#detail-sort-select', 'difficulty-asc'); await verifyPractice(practice({ query: 'sum', sort: 'difficulty-asc' }));
+  await choose('#detail-sort-select', 'companies-desc'); await ui.select('#difficulty-select', 'Easy'); await ui.select('#topic-select', 'Array');
+  const filter = { query: 'sum', difficulty: 'Easy', topic: 'Array', sort: 'companies-desc' };
+  await verifyPractice(practice(filter));
+  await ui.select('#window-select', '30d'); currentWindow = '30d'; await verifyPractice(practice({ ...filter, window: '30d' })); await expectRead(ui, selected('#detail-sort-select'), 'companies-desc');
+  await ui.select('#window-select', 'all'); currentWindow = 'all'; await verifyPractice(practice(filter));
+  await ui.select('#difficulty-select', ''); await ui.select('#topic-select', ''); await ui.fill('#question-search', ''); await verifyPractice(popularQuestions);
+  await ui.mutate(`document.querySelector('#detail-load-more').click();const n=document.querySelector('#detail-sort-select');for(const value of ['frequency-asc','name-desc','companies-desc']){n.value=value;n.dispatchEvent(new Event('change',{bubbles:true}));}`);
+  await verifyPractice(popularQuestions); await wait(350); await verifyPractice(popularQuestions);
+  await ui.click('#detail-results [data-action="problem"][data-slug="two-sum"]');
+  await expectRead(ui, text('#detail-title'), 'Two Sum'); await options('#detail-sort-select', core.SORT_OPTIONS.sortCompanies, 'Sort problem companies');
+  const tags = sort => core.sortCompanies(core.companiesForSlug(data, 'two-sum', currentWindow), sort);
+  const verifyTags = async sort => {
+    const expected = tags(sort); await expectRows(tagIds, expected, 'name');
+    await expectRead(ui, texts('#detail-results .company-rank'), expected.map(row => row.rank == null ? 'Rank unavailable' : `Company rank #${row.rank}`));
+    await expectRead(ui, texts('#detail-results .frequency-score'), expected.map(row => row.frequency == null ? '—' : String(row.frequency)));
+    await expectRead(ui, texts('#detail-results .company-question-count'), expected.map(row => `${row.problemCount.toLocaleString('en')} ${row.problemCount === 1 ? 'question' : 'questions'} in this window`));
+    return expected;
+  };
+  await choose('#detail-sort-select', 'frequency-asc'); monotonic(await verifyTags('frequency-asc'), 'frequency', 1);
+  await choose('#detail-sort-select', 'name-desc'); await verifyTags('name-desc');
+  await choose('#detail-sort-select', 'questions-desc'); monotonic(await verifyTags('questions-desc'), 'problemCount', -1);
+  await choose('#detail-sort-select', 'questions-asc'); monotonic(await verifyTags('questions-asc'), 'problemCount', 1);
+  await ui.select('#window-select', '30d'); currentWindow = '30d'; await verifyTags('questions-asc'); await expectRead(ui, selected('#detail-sort-select'), 'questions-asc');
+  await ui.select('#window-select', 'all'); currentWindow = 'all'; await verifyTags('questions-asc');
+  await ui.click('#detail-back'); await expectRead(ui, text('#detail-title'), 'Amazon'); await expectRead(ui, selected('#detail-sort-select'), 'companies-desc'); await verifyPractice(popularQuestions);
+  await ui.click('#detail-back'); await expectRead(ui, selected('#sort-select'), 'questions-desc');
+  await ui.click('#mode-problems'); await ui.fill('#global-search', ''); await choose('#sort-select', 'name-desc'); await expectRows(problemIds, globalProblems({ sort: 'name-desc' }), 'slug');
+  const stored = { problems: 'name-desc', companies: 'questions-desc', companyQuestions: 'companies-desc', problemCompanies: 'questions-asc' };
+  // Read real storage after queued saves settle; only test globals are written.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await ui.mutate(`globalThis.__lctSortRead=null;(globalThis.browser||globalThis.chrome).storage.local.get('lctExplorerSorts').then(value=>{globalThis.__lctSortRead=value.lctExplorerSorts;});`);
+    await wait(50); if (JSON.stringify(await ui.read('globalThis.__lctSortRead')) === JSON.stringify(stored)) break;
+  }
+  await expectRead(ui, 'globalThis.__lctSortRead', stored); result.storedPreferences = stored;
+  if (ui.reload) {
+    await ui.reload(); await expectRead(ui, selected('#sort-select'), 'name-desc'); await expectRows(problemIds, globalProblems({ sort: 'name-desc' }), 'slug');
+    await ui.click('#mode-companies'); await ui.fill('#global-search', 'Amazon'); await expectRead(ui, selected('#sort-select'), 'questions-desc');
+    await expectRows(companyIds, ['Amazon'].map(name => ({ name })), 'name'); await ui.click('#results .company-title[data-company="Amazon"]');
+    await expectRead(ui, selected('#detail-sort-select'), 'companies-desc'); await verifyPractice(popularQuestions);
+    await ui.click('#detail-results [data-action="problem"][data-slug="two-sum"]'); await expectRead(ui, selected('#detail-sort-select'), 'questions-asc'); await verifyTags('questions-asc');
+    await ui.click('#detail-back'); await ui.click('#detail-back'); result.reload = 'Actual packaged document reload preserves all four independent sort choices.';
+  } else result.reload = 'Stored preferences verified plus mode/window/drilldown/Back roundtrips; Firefox console driver cannot reacquire a navigated tab.';
+  checks.push('Company question and problem-company sorts use real selected-window counts while retaining source frequency/rank, composed filters and independent sort choices through windows and Back.');
+  checks.push('Pending Load more followed by rapid sort changes cannot append an old-order page; all four validated preferences are saved independently.');
+  checks.push('All five visible combobox menus have synchronized selected labels, neutral rounded options, active-descendant focus, endpoint scrolling and Escape/Tab/outside dismissal; keyboard commits retain the chosen value.');
+  if (ui.reload) checks.push('A real explorer document reload restores global problem/company and both detail sort preferences from extension storage.');
+
+  if (ui.setViewport && ui.setColorScheme) {
+    const previous = ui.viewport(); await ui.setViewport({ width: 375, height: 720 });
+    for (const scheme of ['light', 'dark']) {
+      await ui.setColorScheme(scheme);
+      const geometry = async selectors => {
+        const measured = await ui.read(`({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,controls:${JSON.stringify(selectors)}.map(selector=>{const field=document.querySelector(selector),n=field.tagName==='SELECT'?document.getElementById(field.id+'-trigger')||field:field,r=n.getBoundingClientRect();return{selector,left:r.left,right:r.right,width:r.width,height:r.height};})})`);
+        assert.equal(measured.width,375); assert.ok(measured.scrollWidth<=375);
+        for (const row of measured.controls) assert.ok(row.width>0&&row.height>0&&row.left>=0&&row.right<=375,`${row.selector} must fit375px in ${scheme}.`);
+        return measured;
+      };
+      await ui.click('#mode-problems'); await ui.fill('#global-search',''); await expectRows(problemIds,globalProblems({sort:'name-desc'}),'slug');
+      result[`${scheme}Search375`] = await geometry(['#global-search','#window-select','#sort-select','#results a.leetcode-link']);
+      result[`${scheme}SortMenu375`]=await exerciseMenu(ui,'#sort-select',{output,browserName,capture:`explorer-sort-menu-375-${scheme}`});
+      if(ui.screenshot)await ui.screenshot(path.join(output,`${browserName}-explorer-sort-375-${scheme}.png`));
+      await ui.click('#mode-companies'); await ui.fill('#global-search','Amazon'); await expectRows(companyIds,[{name:'Amazon'}],'name'); await ui.click('#results .company-title[data-company="Amazon"]'); await verifyPractice(popularQuestions);
+      result[`${scheme}Detail375`] = await geometry(['#detail-back','#window-select','#detail-sort-select','#difficulty-select','#topic-select','#question-search','#detail-results a.leetcode-link']);
+      result[`${scheme}DetailMenu375`]=await exerciseMenu(ui,'#detail-sort-select',{output,browserName,capture:`explorer-detail-menu-375-${scheme}`});
+      if(ui.screenshot)await ui.screenshot(path.join(output,`${browserName}-explorer-question-sort-375-${scheme}.png`));
+      await ui.click('#detail-back');
+    }
+    await ui.setViewport(previous); await ui.setColorScheme('light');
+    checks.push('Labelled sort comboboxes and action links fit375px in both light/dark search and company detail views without horizontal overflow.');
+  }
+  // Do not let intentionally persisted nondefault choices affect subsequent checks.
+  await ui.click('#mode-companies'); await ui.fill('#global-search','Amazon'); await choose('#sort-select','name-asc'); await expectRows(companyIds,[{name:'Amazon'}],'name');
+  await ui.click('#results .company-title[data-company="Amazon"]'); await choose('#detail-sort-select','frequency-desc'); await verifyPractice(practice());
+  await ui.click('#detail-results [data-action="problem"][data-slug="two-sum"]'); await choose('#detail-sort-select','frequency-desc'); await verifyTags('frequency-desc');
+  await ui.click('#detail-back'); await ui.click('#detail-back'); await ui.click('#mode-problems'); await ui.fill('#global-search',''); await choose('#sort-select','relevance'); await expectRows(problemIds,globalProblems({}),'slug');
+  if(ui.screenshot)await ui.screenshot(path.join(output,`${browserName}-explorer-sort-desktop.png`),{fullPage:false});
+  return { checks, ...result };
+}
+
 export async function exerciseExplorer(ui, { data, core, output, browserName }) {
   const checks = [];
   const logos = {};
@@ -90,6 +319,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await expectRead(ui, visible('#global-search'), true);
   await expectRead(ui, 'document.querySelector("#window-select").value', 'all');
   await expectRead(ui, 'document.querySelector("#mode-problems").getAttribute("aria-selected")', 'true');
+  await expectRead(ui, 'document.querySelector("#sort-select").value', 'relevance');
 
   // Every catalog comes from the selected complete window, including questions
   // and companies that are absent from the current LeetCode problem's tags.
@@ -164,7 +394,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
     await ui.setViewport({ width: 375, height: 667 });
     const geometry = await ui.read(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
       controls: ['#detail-back', '#window-select', '#difficulty-select', '#topic-select', '#question-search', '#detail-results a[href*=problems]'].map(selector => {
-        const node = document.querySelector(selector); const rect = node.getBoundingClientRect();
+        const field=document.querySelector(selector);const node=field.tagName==='SELECT'?document.getElementById(field.id+'-trigger')||field:field;const rect=node.getBoundingClientRect();
         return { selector, left: rect.left, right: rect.right, width: rect.width, height: rect.height };
       }) })`);
     await verifyBadges(ui, { selector: '#detail-name > .company-logo', names: ['Acko'], size: 24, known: true });
@@ -276,5 +506,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await expectRead(ui, problemSlugs(), core.searchProblems(data, { window: 'all', limit: 50 }).problems.map(({ slug }) => slug));
   checks.push('Rapid query edits, Load more during debounce, window changes and Back navigation keep the latest view; stale responses cannot mix pages or reopen a closed view.');
   checks.push('Explorer decodes local SVG/PNG company logos in real search rows and company headings, preserves accessible names, and shows readable initials when a brand is unmapped or a packaged image fails.');
-  return { checks, logos, coverage, twoSumCompanies: expectedTags.length, ackoQuestions: 4, amazonQuestions: 2011, keyboardVerification: ui.keyboard };
+  const sorting = await exerciseSorting(ui, { data, core, output, browserName });
+  checks.push(...sorting.checks);
+  return { checks, logos, coverage, sorting, twoSumCompanies: expectedTags.length, ackoQuestions: 4, amazonQuestions: 2011, keyboardVerification: ui.keyboard };
 }

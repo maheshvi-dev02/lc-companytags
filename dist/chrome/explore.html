@@ -23,7 +23,7 @@
     <section id="search-view" aria-labelledby="search-heading">
       <div class="intro"><p class="eyebrow">Dataset explorer</p><h2 id="search-heading">Find a problem. See its companies.</h2><p id="search-help" class="muted">Search the saved dataset by problem title or slug.</p></div>
       <label class="global-search" for="global-search"><span id="search-label">Search problems</span><input id="global-search" type="search" placeholder="Search problems by title or slug" maxlength="200" autocomplete="off"></label>
-      <div class="results-heading"><p id="result-summary" role="status">Loading saved problems…</p><span id="result-order" class="muted">A–Z</span></div>
+      <div class="results-heading"><p id="result-summary" role="status">Loading saved problems…</p><label class="sort-filter" for="sort-select"><span>Sort by</span><select id="sort-select" aria-label="Sort problems"></select></label><span id="result-order" class="muted" hidden></span></div>
       <p id="search-message" class="message" role="status" hidden></p><button id="search-retry" class="secondary" type="button" hidden>Try again</button>
       <ul id="results" class="results" aria-label="Problem search results"></ul>
       <button id="load-more" class="load-more secondary" type="button" hidden>Load more problems</button>
@@ -38,7 +38,7 @@
         <label class="question-search">Search this company<input id="question-search" type="search" placeholder="Problem title or slug" aria-label="Search this company's questions" maxlength="200" autocomplete="off"></label>
       </div>
       <p id="frequency-help" class="frequency-help">Frequency scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.</p>
-      <div class="results-heading"><p id="detail-summary" role="status"></p><span id="detail-order" class="muted">Highest frequency first</span></div>
+      <div class="results-heading"><p id="detail-summary" role="status"></p><label class="sort-filter" for="detail-sort-select"><span>Sort by</span><select id="detail-sort-select" aria-label="Sort company questions"></select></label><span id="detail-order" class="muted" hidden></span></div>
       <p id="detail-message" class="message" role="status" hidden></p><button id="detail-retry" class="secondary" type="button" hidden>Try again</button>
       <ul id="detail-results" class="results" aria-label="Dataset details"></ul>
       <button id="detail-load-more" class="load-more secondary" type="button" hidden>Load more questions</button>

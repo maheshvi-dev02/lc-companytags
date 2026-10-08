@@ -6,6 +6,16 @@
   const $ = id => document.getElementById(id);
   const labels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
   const defaults = { enabled: true, collapsed: false, window: 'all' };
+  const sortDefaults = { problems: 'relevance', companies: 'name-asc', companyQuestions: 'frequency-desc', problemCompanies: 'frequency-desc' };
+  const sortOptions = {
+    problems: [['relevance','Relevance'],['name-asc','A–Z'],['name-desc','Z–A'],['difficulty-asc','Easy → hard'],['difficulty-desc','Hard → easy'],['companies-desc','Most companies'],['companies-asc','Fewest companies']],
+    companies: [['name-asc','A–Z'],['name-desc','Z–A'],['questions-desc','Most questions'],['questions-asc','Fewest questions']],
+    companyQuestions: [['frequency-desc','Highest frequency'],['frequency-asc','Lowest frequency'],['name-asc','A–Z'],['name-desc','Z–A'],['difficulty-asc','Easy → hard'],['difficulty-desc','Hard → easy'],['companies-desc','Most companies'],['companies-asc','Fewest companies']],
+    problemCompanies: [['frequency-desc','Highest frequency'],['frequency-asc','Lowest frequency'],['name-asc','A–Z'],['name-desc','Z–A'],['questions-desc','Most questions'],['questions-asc','Fewest questions']],
+  };
+  const sortNames = { problems: 'Sort problems', companies: 'Sort companies', companyQuestions: 'Sort company questions', problemCompanies: 'Sort problem companies' };
+  let sorts = { ...sortDefaults };
+  let sortSave = Promise.resolve();
   const params = new URLSearchParams(location.search);
   let mode = params.get('mode') === 'companies' ? 'companies' : 'problems';
   const queries = { problems: '', companies: '' };
@@ -24,8 +34,11 @@
   const activeDetail = () => stack[stack.length - 1];
   const version = () => `${mode}|${windowKey()}|${status.commit || ''}`;
   const count = value => Number(value || 0).toLocaleString();
-  const listVersion = () => `${version()}|${queries[mode]}`;
+  const detailSortKey = frame => frame.kind === 'company' ? 'companyQuestions' : 'problemCompanies';
+  const listVersion = () => JSON.stringify([version(), queries[mode], sorts[mode]]);
+  const detailVersion = frame => JSON.stringify([version(), frame.kind, frame.slug || frame.name, frame.sort, frame.filters]);
   const invalidate = () => {
+    closeSelectMenu();
     generation++; clearTimeout(searchTimer); clearTimeout(questionTimer);
     list.loading = false;
     for (const frame of stack) frame.loading = false;
@@ -36,6 +49,238 @@
     if (className) element.className = className;
     if (text !== undefined) element.textContent = text;
     return element;
+  }
+  const selectControls = new Map();
+  let openSelect = null;
+  function closeSelectMenu(returnFocus = false) {
+    if (!openSelect) return;
+    const control = openSelect;
+    openSelect = null;
+    control.menu.hidden = true;
+    control.button.setAttribute('aria-expanded', 'false');
+    control.button.removeAttribute('aria-activedescendant');
+    control.typeahead = '';
+    if (returnFocus) control.button.focus();
+  }
+  function setActiveOption(control, index) {
+    const options = Array.from(control.menu.children);
+    const enabled = options.map((option, position) => option.getAttribute('aria-disabled') === 'true' ? -1 : position).filter(position => position >= 0);
+    if (!enabled.length) return;
+    const next = enabled.includes(index) ? index : enabled[0];
+    control.activeIndex = next;
+    options.forEach((option, position) => option.toggleAttribute('data-active', position === next));
+    const active = options[next];
+    control.button.setAttribute('aria-activedescendant', active.id);
+    const top = active.offsetTop;
+    const bottom = top + active.offsetHeight;
+    if (top < control.menu.scrollTop) control.menu.scrollTop = top;
+    else if (bottom > control.menu.scrollTop + control.menu.clientHeight) control.menu.scrollTop = bottom - control.menu.clientHeight;
+  }
+  function syncSelectControl(select) {
+    const control = selectControls.get(select.id);
+    if (!control) return;
+    const options = Array.from(select.options);
+    const signature = JSON.stringify(options.map(option => [option.value, option.textContent, option.disabled]));
+    if (signature !== control.signature) {
+      if (openSelect === control) closeSelectMenu();
+      control.signature = signature;
+      control.menu.replaceChildren(...options.map((option, index) => {
+        const item = node('div', 'select-option', option.textContent);
+        item.id = `${select.id}-option-${index}`;
+        item.dataset.value = option.value;
+        item.setAttribute('role', 'option');
+        if (option.disabled) item.setAttribute('aria-disabled', 'true');
+        return item;
+      }));
+    }
+    const selected = options[select.selectedIndex];
+    control.value.textContent = selected?.textContent || 'Choose an option';
+    control.button.title = control.value.textContent;
+    const name = select.getAttribute('aria-label') || 'Choose an option';
+    control.button.setAttribute('aria-label', name);
+    control.menu.setAttribute('aria-label', name);
+    control.button.disabled = select.disabled || !options.some(option => !option.disabled);
+    Array.from(control.menu.children).forEach(item => item.setAttribute('aria-selected', String(item.dataset.value === select.value)));
+    if (control.button.disabled && openSelect === control) closeSelectMenu();
+  }
+  function positionSelectMenu(control) {
+    const rect = control.button.getBoundingClientRect();
+    const margin = 8;
+    const gap = 6;
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(Math.max(rect.width, 220), Math.max(0, viewportWidth - margin * 2));
+    control.menu.style.width = `${width}px`;
+    const below = viewportHeight - rect.bottom - gap - margin;
+    const above = rect.top - gap - margin;
+    const upward = below < 180 && above > below;
+    const space = Math.max(0, upward ? above : below);
+    control.menu.style.maxHeight = `${Math.min(320, space)}px`;
+    const height = control.menu.getBoundingClientRect().height;
+    control.menu.style.left = `${Math.max(margin, Math.min(rect.left, viewportWidth - width - margin))}px`;
+    control.menu.style.top = `${upward ? Math.max(margin, rect.top - gap - height) : rect.bottom + gap}px`;
+  }
+  function openSelectMenu(control, edge) {
+    if (control.button.disabled) return;
+    syncSelectControl(control.select);
+    closeSelectMenu();
+    openSelect = control;
+    control.menu.hidden = false;
+    control.button.setAttribute('aria-expanded', 'true');
+    control.button.focus();
+    positionSelectMenu(control);
+    const options = Array.from(control.menu.children);
+    const selected = options.findIndex(option => option.dataset.value === control.select.value);
+    setActiveOption(control, edge === 'first' ? 0 : edge === 'last' ? options.length - 1 : selected);
+  }
+  function pickSelectOption(control, option) {
+    if (!option || option.getAttribute('aria-disabled') === 'true') return;
+    const changed = control.select.value !== option.dataset.value;
+    control.select.value = option.dataset.value;
+    closeSelectMenu(true);
+    syncSelectControl(control.select);
+    if (changed) control.select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function selectKeydown(control, event) {
+    if (control.button.disabled) return;
+    const expanded = openSelect === control;
+    if (event.key === 'Tab') { closeSelectMenu(); return; }
+    if (event.key === 'Escape') {
+      if (expanded) { event.preventDefault(); closeSelectMenu(true); }
+      return;
+    }
+    if (['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      if (event.key === 'Enter' || event.key === ' ') {
+        if (expanded) pickSelectOption(control, control.menu.children[control.activeIndex]);
+        else openSelectMenu(control);
+        return;
+      }
+      if (event.altKey && event.key === 'ArrowUp') { closeSelectMenu(true); return; }
+      if (!expanded) { openSelectMenu(control, event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : undefined); return; }
+      const options = Array.from(control.menu.children);
+      const enabled = options.map((option, index) => option.getAttribute('aria-disabled') === 'true' ? -1 : index).filter(index => index >= 0);
+      const position = enabled.indexOf(control.activeIndex);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? enabled.length - 1 : Math.max(0, Math.min(enabled.length - 1, position + (event.key === 'ArrowDown' ? 1 : -1)));
+      setActiveOption(control, enabled[next]);
+      return;
+    }
+    if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      if (!expanded) openSelectMenu(control);
+      const now = Date.now();
+      const previous = now - control.typedAt < 700 ? control.typeahead : '';
+      control.typeahead = previous + event.key.toLocaleLowerCase();
+      control.typedAt = now;
+      const repeated = Array.from(control.typeahead).every(letter => letter === control.typeahead[0]);
+      const prefix = repeated ? control.typeahead[0] : control.typeahead;
+      const options = Array.from(control.menu.children);
+      const start = repeated ? control.activeIndex + 1 : control.activeIndex;
+      for (let step = 0; step < options.length; step++) {
+        const index = (start + step) % options.length;
+        const option = options[index];
+        if (option.getAttribute('aria-disabled') !== 'true' && option.textContent.toLocaleLowerCase().startsWith(prefix)) { setActiveOption(control, index); break; }
+      }
+    }
+  }
+  function enhanceSelects() {
+    for (const id of ['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'topic-select']) {
+      const select = $(id);
+      if (!select || selectControls.has(id)) continue;
+      const labels = Array.from(select.labels || []);
+      const wrapper = node('span', 'select-control');
+      const button = node('button', 'select-trigger');
+      button.id = `${id}-trigger`;
+      button.type = 'button';
+      button.dataset.selectFor = id;
+      button.setAttribute('role', 'combobox');
+      button.setAttribute('aria-haspopup', 'listbox');
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-controls', `${id}-menu`);
+      const value = node('span', 'select-value');
+      const chevron = node('span', 'select-chevron');
+      chevron.setAttribute('aria-hidden', 'true');
+      button.append(value, chevron);
+      wrapper.append(button);
+      select.before(wrapper);
+      const menu = node('div', 'select-menu');
+      menu.id = `${id}-menu`;
+      menu.setAttribute('role', 'listbox');
+      menu.hidden = true;
+      document.body.append(menu);
+      const control = { select, wrapper, button, value, menu, signature: null, activeIndex: -1, typeahead: '', typedAt: 0 };
+      selectControls.set(id, control);
+      labels.forEach(label => { label.htmlFor = button.id; });
+      select.hidden = true;
+      select.tabIndex = -1;
+      select.setAttribute('aria-hidden', 'true');
+      button.addEventListener('click', () => openSelect === control ? closeSelectMenu() : openSelectMenu(control));
+      button.addEventListener('keydown', event => selectKeydown(control, event));
+      menu.addEventListener('click', event => {
+        const option = event.target.closest('[role="option"]');
+        if (option?.parentNode === menu) pickSelectOption(control, option);
+      });
+      menu.addEventListener('pointermove', event => {
+        const option = event.target.closest('[role="option"]');
+        if (option?.parentNode === menu && option.getAttribute('aria-disabled') !== 'true') setActiveOption(control, Array.from(menu.children).indexOf(option));
+      });
+      select.addEventListener('change', () => syncSelectControl(select));
+      new MutationObserver(() => syncSelectControl(select)).observe(select, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'disabled', 'value', 'label', 'selected'] });
+      syncSelectControl(select);
+    }
+    document.addEventListener('pointerdown', event => {
+      if (openSelect && !openSelect.wrapper.contains(event.target) && !openSelect.menu.contains(event.target)) closeSelectMenu();
+    });
+    document.addEventListener('focusin', event => {
+      if (openSelect && event.target !== openSelect.button && !openSelect.menu.contains(event.target)) closeSelectMenu();
+    });
+    window.addEventListener('resize', () => closeSelectMenu());
+    window.addEventListener('scroll', event => {
+      if (openSelect && event.target !== openSelect.menu && !openSelect.menu.contains(event.target)) closeSelectMenu();
+    }, true);
+  }
+  function validatedSorts(value) {
+    const stored = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return Object.fromEntries(Object.entries(sortDefaults).map(([key, fallback]) => [key, sortOptions[key].some(([sort]) => sort === stored[key]) ? stored[key] : fallback]));
+  }
+  function orderLabel(key, sort) {
+    if (sort === 'relevance') return queries.problems.trim() ? 'Best match first' : 'A–Z';
+    return sortOptions[key].find(([value]) => value === sort)?.[1] || '';
+  }
+  function renderSortSelect(select, key, selected) {
+    if (select.dataset.sortKind !== key) {
+      select.replaceChildren(...sortOptions[key].map(([value, label]) => { const option = node('option', '', label); option.value = value; return option; }));
+      select.dataset.sortKind = key;
+    }
+    select.value = selected;
+    select.setAttribute('aria-label', sortNames[key]);
+    syncSelectControl(select);
+  }
+  function renderSortControls() {
+    renderSortSelect($('sort-select'), mode, sorts[mode]);
+    $('result-order').textContent = orderLabel(mode, sorts[mode]);
+    const frame = activeDetail();
+    if (frame) {
+      const key = detailSortKey(frame);
+      renderSortSelect($('detail-sort-select'), key, frame.sort);
+      $('detail-order').textContent = orderLabel(key, frame.sort);
+    }
+  }
+  function saveSorts() {
+    // Serialize saves; delayed storage events must not roll back the active view.
+    sortSave = sortSave.then(() => api.storage.local.set({ lctExplorerSorts: { ...sorts } })).catch(() => {
+      refreshError = 'Could not save your sort preference. The current view still works.';
+      renderStatus();
+    });
+  }
+  function changeSort(key, value) {
+    if (!sortOptions[key].some(([allowed]) => allowed === value) || sorts[key] === value) return;
+    sorts[key] = value;
+    invalidate();
+    for (const frame of stack) if (detailSortKey(frame) === key) { frame.sort = value; frame.version = null; frame.hasMore = false; }
+    renderSortControls();
+    if (activeDetail()) void loadDetail(); else void loadList();
+    saveSorts();
   }
   function date(value) {
     const parsed = new Date(value);
@@ -118,11 +363,12 @@
     $('search-heading').textContent = mode === 'problems' ? 'Find a problem. See its companies.' : 'Choose a company. Explore its questions.';
     $('search-help').textContent = mode === 'problems' ? 'Search the saved dataset by problem title or slug.' : 'Search every source company, including companies with no questions in this window.';
     $('window-select').value = windowKey();
+    syncSelectControl($('window-select'));
     $('search-view').hidden = Boolean(activeDetail());
     $('detail-view').hidden = !activeDetail();
     $('results').setAttribute('aria-label', mode === 'problems' ? 'Problem search results' : 'Company search results');
     $('load-more').textContent = `Load more ${mode}`;
-    $('result-order').textContent = 'A–Z';
+    renderSortControls();
   }
 
   function problemRow(problem, companyView = false) {
@@ -133,7 +379,8 @@
     if (companyView) {
       const score = Number.isFinite(problem.frequency) && problem.frequency >= 0 ? String(problem.frequency) : 'unavailable';
       const rank = Number.isInteger(problem.rank) && problem.rank > 0 ? `company rank #${problem.rank}` : 'rank unavailable';
-      info.append(node('span', 'question-meta', `${problem.difficulty || 'Difficulty unavailable'} · score ${score} · ${rank}`));
+      const companies = Number.isInteger(problem.companyCount) && problem.companyCount >= 0 ? `${count(problem.companyCount)} ${problem.companyCount === 1 ? 'company' : 'companies'} in this window` : 'Company count unavailable';
+      info.append(node('span', 'question-meta', `${problem.difficulty || 'Difficulty unavailable'} · score ${score} · ${rank} · ${companies}`));
       if (Array.isArray(problem.topics) && problem.topics.length) info.append(node('span', 'question-topics', problem.topics.join(' · ')));
     } else info.append(node('span', 'result-meta', `${problem.difficulty || 'Difficulty unavailable'} · ${count(problem.companyCount)} ${problem.companyCount === 1 ? 'company' : 'companies'}`));
     const actions = node('div', 'result-actions');
@@ -156,6 +403,7 @@
     info.append(button);
     if (problemView) {
       info.append(node('span', 'company-rank', Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}` : 'Rank unavailable'));
+      if (Number.isInteger(company.problemCount) && company.problemCount >= 0) info.append(node('span', 'company-question-count result-meta', `${count(company.problemCount)} ${company.problemCount === 1 ? 'question' : 'questions'} in this window`));
       const score = node('div', 'company-score');
       score.append(node('span', 'frequency-score', Number.isFinite(company.frequency) && company.frequency >= 0 ? String(company.frequency) : '—'), node('span', 'score-label', 'Frequency score'));
       row.append(info, score, sourceLink(company.sourceUrl));
@@ -185,6 +433,7 @@
     $('search-retry').hidden = !list.error;
     $('load-more').hidden = !list.hasMore;
     $('load-more').disabled = list.loading;
+    $('result-order').textContent = orderLabel(mode, sorts[mode]);
   }
   async function loadList(append = false) {
     if (activeDetail()) return;
@@ -193,11 +442,12 @@
     const stamp = generation;
     const requestedMode = mode;
     const requestedWindow = windowKey();
+    const requestedSort = sorts[requestedMode];
     if (!append) { list.rows = []; list.total = 0; list.hasMore = false; list.version = null; renderListRows([]); }
     list.loading = true; list.error = '';
     renderListSummary();
     try {
-      const result = await api.runtime.sendMessage({ type: requestedMode === 'problems' ? 'LCT_SEARCH_PROBLEMS' : 'LCT_SEARCH_COMPANIES', query: queries[requestedMode], window: requestedWindow, offset: append ? list.rows.length : 0, limit: 50 });
+      const result = await api.runtime.sendMessage({ type: requestedMode === 'problems' ? 'LCT_SEARCH_PROBLEMS' : 'LCT_SEARCH_COMPANIES', query: queries[requestedMode], window: requestedWindow, sort: requestedSort, offset: append ? list.rows.length : 0, limit: 50 });
       if (id !== listRequest || stamp !== generation || activeDetail()) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not search the saved dataset. Try again.');
       const rows = requestedMode === 'problems' ? result.problems : result.companies;
@@ -221,6 +471,7 @@
     const all = node('option', '', 'All topics'); all.value = '';
     $('topic-select').replaceChildren(all, ...values.map(topic => { const option = node('option', '', topic); option.value = topic; return option; }));
     $('topic-select').value = selected;
+    syncSelectControl($('topic-select'));
   }
   function renderDetailShell() {
     const frame = activeDetail();
@@ -233,11 +484,13 @@
     $('detail-name').replaceChildren(...(frame.kind === 'company' ? [logos.createBadge(frame.name), $('detail-title')] : [$('detail-title')]));
     $('detail-context').textContent = frame.kind === 'problem' ? `${frame.difficulty || 'Difficulty unavailable'} · ${labels[windowKey()].toLowerCase()}` : `Every question listed for ${frame.name} · ${labels[windowKey()].toLowerCase()}`;
     $('detail-filters').hidden = frame.kind !== 'company';
-    $('detail-results').setAttribute('aria-label', frame.kind === 'problem' ? 'Companies listed for this problem' : 'Company questions sorted by frequency');
+    $('detail-results').setAttribute('aria-label', frame.kind === 'problem' ? 'Companies listed for this problem' : `Company questions sorted by ${orderLabel(detailSortKey(frame), frame.sort).toLocaleLowerCase()}`);
+    renderSortControls();
     $('detail-source').hidden = !frame.sourceUrl;
     if (frame.sourceUrl) $('detail-source').href = sourceURL(frame.sourceUrl);
     if (frame.kind === 'company') {
       $('difficulty-select').value = frame.filters.difficulty;
+      syncSelectControl($('difficulty-select'));
       $('question-search').value = frame.filters.query;
       renderTopics(frame);
     }
@@ -261,31 +514,31 @@
     $('detail-retry').hidden = !frame.error;
     $('detail-load-more').hidden = frame.kind !== 'company' || !frame.hasMore;
     $('detail-load-more').disabled = frame.loading;
-    $('detail-order').textContent = frame.rows.some(row => Number.isFinite(row.frequency) && row.frequency >= 0) || frame.loading ? 'Highest frequency first' : 'Frequency unavailable · A–Z';
+    $('detail-order').textContent = orderLabel(detailSortKey(frame), frame.sort);
   }
   async function loadDetail(append = false) {
     const frame = activeDetail();
     if (!frame) return;
-    if (append && frame.version !== version()) append = false;
+    if (append && frame.version !== detailVersion(frame)) append = false;
     const id = ++detailRequest;
     const stamp = generation;
     if (!append) { frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null; renderDetailRows([]); }
     frame.loading = true; frame.error = '';
     renderDetailSummary();
     try {
-      const message = frame.kind === 'problem' ? { type: 'LCT_GET', slug: frame.slug, window: windowKey() } : { type: 'LCT_PRACTICE', company: frame.name, window: windowKey(), query: frame.filters.query, difficulty: frame.filters.difficulty, topic: frame.filters.topic, offset: append ? frame.rows.length : 0, limit: 50 };
+      const message = frame.kind === 'problem' ? { type: 'LCT_GET', slug: frame.slug, window: windowKey() } : { type: 'LCT_PRACTICE', company: frame.name, window: windowKey(), sort: frame.sort, query: frame.filters.query, difficulty: frame.filters.difficulty, topic: frame.filters.topic, offset: append ? frame.rows.length : 0, limit: 50 };
       const result = await api.runtime.sendMessage(message);
       if (id !== detailRequest || stamp !== generation || frame !== activeDetail()) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load these details. Try again.');
       status = result.status || status;
-      const next = frame.kind === 'problem' ? core.sortCompanies(Array.isArray(result.companies) ? result.companies : []) : Array.isArray(result.questions) ? result.questions : [];
+      const next = frame.kind === 'problem' ? core.sortCompanies(Array.isArray(result.companies) ? result.companies : [], frame.sort) : Array.isArray(result.questions) ? result.questions : [];
       frame.rows = append ? frame.rows.concat(next) : next;
       frame.total = frame.kind === 'problem' ? next.length : Number(result.total) || 0;
       frame.available = result.available !== false;
       frame.hasMore = frame.kind === 'company' && Boolean(result.hasMore);
       frame.topics = result.topics || frame.topics;
       frame.sourceUrl = typeof result.sourceUrl === 'string' ? result.sourceUrl : null;
-      frame.version = version();
+      frame.version = detailVersion(frame);
       renderDetailRows(next, append);
       renderDetailShell();
       renderStatus();
@@ -295,7 +548,7 @@
 
   function openDetail(value) {
     invalidate();
-    stack.push({ ...value, rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null, filters: { difficulty: '', topic: '', query: '' } });
+    stack.push({ ...value, sort: sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'], rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null, filters: { difficulty: '', topic: '', query: '' } });
     renderShell(); renderDetailShell();
     $('detail-back').focus();
     void loadDetail();
@@ -310,7 +563,7 @@
     const frame = activeDetail();
     if (frame) {
       renderDetailShell(); renderDetailRows(frame.rows); renderDetailSummary();
-      if (frame.version !== version()) void loadDetail();
+      if (frame.version !== detailVersion(frame)) void loadDetail();
       focusResult($('detail-results'), previous);
     } else {
       renderListRows(list.rows); renderListSummary();
@@ -345,6 +598,8 @@
     renderListSummary();
     searchTimer = setTimeout(() => void loadList(), 150);
   });
+  $('sort-select').addEventListener('change', () => changeSort(mode, $('sort-select').value));
+  $('detail-sort-select').addEventListener('change', () => { const frame = activeDetail(); if (frame) changeSort(detailSortKey(frame), $('detail-sort-select').value); });
   $('load-more').addEventListener('click', () => void loadList(true));
   $('search-retry').addEventListener('click', () => void loadList());
   $('detail-load-more').addEventListener('click', () => void loadDetail(true));
@@ -393,10 +648,12 @@
   });
   async function start() {
     try {
-      const stored = await api.storage.local.get(['lctSettings', 'lctStatus']);
+      const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctExplorerSorts']);
       settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
+      sorts = validatedSorts(stored.lctExplorerSorts);
     } catch (_) { /* The cache request below reports a usable connection error. */ }
     renderShell(); renderStatus(); await loadList();
   }
+  enhanceSelects();
   void start();
 })();
