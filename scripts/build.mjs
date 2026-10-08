@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
 const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
 const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
 assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');
@@ -72,12 +72,12 @@ function icon(size) {
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const px = x / size, py = y / size;
     const round = Math.hypot(Math.max(0.15 - px, 0, px - 0.85), Math.max(0.15 - py, 0, py - 0.85)) < 0.15;
-    let color = [22, 48, 61, round ? 255 : 0];
+    let color = [36, 36, 36, round ? 255 : 0];
     const left = Math.abs(px - (0.24 + Math.abs(py - 0.5) * 0.75)) < 0.035 && Math.abs(py - 0.5) < 0.22;
     const right = Math.abs(px - (0.76 - Math.abs(py - 0.5) * 0.75)) < 0.035 && Math.abs(py - 0.5) < 0.22;
     const dot = Math.hypot(px - 0.5, py - 0.5) < 0.065;
-    if (left || right) color = [126, 224, 207, 255];
-    if (dot) color = [244, 183, 88, 255];
+    if (left || right) color = [226, 226, 226, 255];
+    if (dot) color = [255, 161, 22, 255];
     const i = y * (1 + size * 4) + 1 + x * 4;
     pixels.set(color, i);
   }

@@ -67,23 +67,23 @@ export async function exercisePanelLogos(page, companies) {
   const ui = { read: expression => page.evaluate(expression), mutate: source => page.evaluate(source) };
   const rows = 'ul.companies > li > a.company-chip > .company-logo';
   const names = companies.map(company => company.name);
-  const first = await verifyBadges(ui, { root: panelRoot,
+  const first = await verifyBadges(ui, { root: panelRoot, size: 24,
     selector: 'ul.companies > li:nth-child(-n+5) > a.company-chip > .company-logo',
     names: names.slice(0, 5), known: true, label: '{name}, view source' });
-  const all = await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
+  const all = await verifyBadges(ui, { root: panelRoot, size: 24, selector: rows, names, label: '{name}, view source' });
   assert.ok(all.initials.length > 0, 'The real source list should exercise unmapped-company initials.');
   await page.evaluate(() => { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); });
   await page.waitForFunction(() => !document.querySelector('#company-lens-root').hasAttribute('data-dark'));
-  const light = await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
+  const light = await verifyBadges(ui, { root: panelRoot, size: 24, selector: rows, names, label: '{name}, view source' });
   await page.evaluate(() => { document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); });
   await page.waitForFunction(() => document.querySelector('#company-lens-root').hasAttribute('data-dark'));
-  const dark = await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
+  const dark = await verifyBadges(ui, { root: panelRoot, size: 24, selector: rows, names, label: '{name}, view source' });
   assert.deepEqual(dark.initials, light.initials);
   await page.evaluate(() => document.documentElement.classList.remove('dark'));
   await page.waitForFunction(() => !document.querySelector('#company-lens-root').hasAttribute('data-dark'));
-  await verifyBadges(ui, { root: panelRoot, selector: rows, names, label: '{name}, view source' });
+  await verifyBadges(ui, { root: panelRoot, size: 24, selector: rows, names, label: '{name}, view source' });
   return { ...first, realSource: all, lightAndDark: true,
-    check: 'Offline inline company bar decodes real local 20px company logos for every source company, preserves accessible source names, and shows readable initials in light/dark themes.' };
+    check: 'Offline inline company bar decodes real local 24px company logos for every source company, preserves accessible source names, and shows readable initials in light/dark themes.' };
 }
 
 export async function exercisePopupLogos(ui, names) {

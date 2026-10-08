@@ -56,11 +56,18 @@
     return link;
   }
   function problemLink(slug) {
-    const link = node('a', 'leetcode-link', 'LeetCode ↗');
+    const link = node('a', 'leetcode-link');
+    const icon = node('img', 'leetcode-icon');
+    icon.src = api.runtime.getURL('icons/leetcode.svg');
+    icon.alt = '';
+    icon.width = 20; icon.height = 20;
+    icon.setAttribute('aria-hidden', 'true');
+    link.append(icon);
     link.href = `https://leetcode.com/problems/${encodeURIComponent(slug)}/`;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.setAttribute('aria-label', `Open ${core.formatProblemTitle(slug)} on LeetCode`);
+    link.title = `Open ${core.formatProblemTitle(slug)} on LeetCode`;
     return link;
   }
   function action(kind, value, text) {
