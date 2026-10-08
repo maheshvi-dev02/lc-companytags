@@ -1,8 +1,8 @@
-/* global LCTCore, LCTSync */
+/* global LCTCore, LCTSync, LCTSeed */
 'use strict';
 
 if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
-  importScripts('core.js', 'sync.js');
+  importScripts('core.js', 'archive.js', 'seed.js', 'sync.js');
 }
 
 (function () {
@@ -12,16 +12,16 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
   const service = LCTSync.createSyncService({
     storage: api.storage.local,
     fetch: globalThis.fetch.bind(globalThis),
+    loadSnapshot: () => LCTSeed.loadBundledSnapshot({ url: api.runtime.getURL('data/snapshot.json.gz') }),
     onPending: async (hasPending) => {
       if (hasPending) await api.alarms.create(RESUME_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
       else await api.alarms.clear(RESUME_ALARM);
     },
-    onError: (error) => console.error('LeetCode Company Tags storage error:', error.message)
+    onError: (error) => console.error('LeetCode Company Tags storage/snapshot error:', error.message)
   });
 
   async function boot() {
     await service.initialize();
-    // Alarms can be lost across browser restarts, so recreate missing alarms.
     if (!(await api.alarms.get(DAILY_ALARM))) {
       await api.alarms.create(DAILY_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
     }

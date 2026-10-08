@@ -91,28 +91,27 @@
       return item;
     }));
     $('search-wrap').hidden = companies.length < 6 && !query;
-    $('empty').hidden = !slug || filtered.length > 0;
+    renderCompanyMessage(filtered.length > 0);
+  }
+
+  function renderCompanyMessage(hasMatches = $('companies').childElementCount > 0) {
+    const query = $('search').value.trim();
+    $('empty').hidden = !slug || hasMatches;
     if (query && companies.length) $('empty').textContent = 'No company names match your search.';
     else if (loading && !status.hasData) $('empty').textContent = 'Loading company tags…';
-    else if (!status.hasData && status.phase === 'syncing') $('empty').textContent = 'The first sync may take a minute.';
+    else if (!status.hasData && status.phase === 'syncing') $('empty').textContent = 'Preparing company tags…';
     else if (!windowAvailable) $('empty').textContent = status.phase === 'syncing' ? 'This time window is syncing. It will appear when the updated dataset is ready.' : 'This time window is not downloaded yet. Refresh to load it.';
     else $('empty').textContent = 'No company matches in this dataset. Coverage may be incomplete.';
   }
 
-  function render() {
+  function renderStatus() {
     const revision = /^[a-f0-9]{40}$/i.test(status.commit || '') ? status.commit : '';
     $('source').href = revision ? `${core.SOURCE_URL.replace(/\/$/, '')}/tree/${revision}` : core.SOURCE_URL;
     $('source').title = revision ? `Dataset revision ${revision.slice(0, 7)}` : 'Public company dataset';
     const syncedDate = new Date(status.lastSyncedAt);
     $('status').title = status.lastSyncedAt && Number.isFinite(syncedDate.getTime()) ? `Last synced: ${syncedDate.toLocaleString()}` : '';
-    $('enabled').checked = settings.enabled;
-    $('problem-title').textContent = slug ? core.formatProblemTitle(slug) : 'Open a LeetCode problem';
-    $('problem-summary').textContent = slug ? `${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}` : 'Company tags appear as you browse problem pages.';
-    $('window-select').value = selectedWindow();
-    $('window-note').textContent = status.sourceUpdatedAt ? `Windows relative to source updated ${dateLabel(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';
-    $('company-view').hidden = Boolean(practiceCompany);
-    $('practice-view').hidden = !practiceCompany;
-    $('open-problems').hidden = Boolean(slug);
+    const snapshot = status.dataSource === 'bundled' ? 'Bundled snapshot · ' : '';
+    $('window-note').textContent = status.sourceUpdatedAt ? `${snapshot}Windows relative to source updated ${dateLabel(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';
     const failure = error || (status.phase === 'error' ? status.message || 'Refresh failed. Check your connection and try again.' : '');
     const stale = status.lastCheckedAt && Date.now() - new Date(status.lastCheckedAt).getTime() > 48 * 60 * 60 * 1000;
     $('dataset-state').textContent = status.phase === 'syncing' ? 'Syncing' : failure ? 'Needs attention' : stale ? 'Saved data' : status.hasData ? 'Ready' : 'Not synced';
@@ -120,10 +119,10 @@
     $('dataset-summary').textContent = status.hasData ? `${Number(status.companyCount || 0).toLocaleString()} companies · ${Number(status.problemCount || 0).toLocaleString()} problems indexed` : 'Live data from liquidslr’s public GitHub repository.';
     $('status').toggleAttribute('data-warning', Boolean(failure || stale));
     if (failure) $('status').textContent = `${status.hasData ? 'Showing saved data. ' : ''}${failure}`;
-    else if (status.phase === 'syncing') $('status').textContent = status.total > 0 ? `Syncing dataset · ${status.completed || 0} of ${status.total}` : 'Checking the latest dataset…';
-    else if (stale) $('status').textContent = `Last checked ${dateLabel(status.lastCheckedAt)}. Refresh for updates.`;
-    else if (status.sourceUpdatedAt) $('status').textContent = `Source updated ${dateLabel(status.sourceUpdatedAt)} · checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
-    else if (status.lastCheckedAt || status.lastSyncedAt) $('status').textContent = `Last checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
+    else if (status.phase === 'syncing') $('status').textContent = status.total > 0 ? `${snapshot}Syncing dataset · ${status.completed || 0} of ${status.total}` : `${snapshot}Checking the latest dataset…`;
+    else if (stale) $('status').textContent = `${snapshot}Last checked ${dateLabel(status.lastCheckedAt)}. Refresh for updates.`;
+    else if (status.sourceUpdatedAt) $('status').textContent = `${snapshot}Source updated ${dateLabel(status.sourceUpdatedAt)} · checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
+    else if (status.lastCheckedAt || status.lastSyncedAt) $('status').textContent = `${snapshot}Last checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
     else $('status').textContent = 'Refresh to save the latest company index for offline use.';
     $('refresh').disabled = status.phase === 'syncing';
     $('refresh').textContent = status.phase === 'syncing' ? 'Syncing…' : 'Refresh dataset';
@@ -132,8 +131,21 @@
       $('progress').max = status.total;
       $('progress').value = Math.min(status.completed || 0, status.total);
     } else $('progress').removeAttribute('value');
+    renderCompanyMessage();
+    renderPracticeSummary();
+  }
+
+  function render() {
+    $('enabled').checked = settings.enabled;
+    $('problem-title').textContent = slug ? core.formatProblemTitle(slug) : 'Open a LeetCode problem';
+    $('problem-summary').textContent = slug ? `${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}` : 'Company tags appear as you browse problem pages.';
+    $('window-select').value = selectedWindow();
+    $('company-view').hidden = Boolean(practiceCompany);
+    $('practice-view').hidden = !practiceCompany;
+    $('open-problems').hidden = Boolean(slug);
     renderCompanies();
     renderPractice();
+    renderStatus();
   }
 
   function resetWindow() {
@@ -156,9 +168,8 @@
     void loadPractice();
   }
 
-  function renderPractice() {
+  function renderPracticeSummary() {
     if (!practiceCompany) return;
-    $('practice-title').textContent = practiceCompany;
     if (practiceError) $('practice-summary').textContent = practiceError;
     else if (practiceLoading) $('practice-summary').textContent = 'Loading practice questions…';
     else if (!practiceAvailable) $('practice-summary').textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
@@ -167,6 +178,12 @@
       const order = practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0) ? 'highest frequency first' : 'frequency unavailable';
       $('practice-summary').textContent = `${practiceQuestions.length} of ${practiceTotal} questions · ${order}`;
     }
+  }
+
+  function renderPractice() {
+    if (!practiceCompany) return;
+    $('practice-title').textContent = practiceCompany;
+    renderPracticeSummary();
     $('practice-questions').replaceChildren(...practiceQuestions.map(question => {
       const item = document.createElement('li');
       const link = document.createElement('a');
@@ -223,7 +240,7 @@
   async function load() {
     const id = ++requestId;
     loading = true;
-    render();
+    renderStatus();
     try {
       const result = await api.runtime.sendMessage(slug ? { type: 'LCT_GET', slug, window: selectedWindow() } : { type: 'LCT_STATUS' });
       if (id !== requestId) return;
@@ -278,7 +295,7 @@
   $('refresh').addEventListener('click', async () => {
     error = '';
     status = { ...status, phase: 'syncing', total: 0, completed: 0 };
-    render();
+    renderStatus();
     try {
       const result = await api.runtime.sendMessage({ type: 'LCT_REFRESH' });
       if (!result?.ok) throw new Error(result?.error || 'Refresh failed. Check your connection and try again.');
@@ -288,26 +305,30 @@
     } catch (cause) {
       status = { ...status, phase: 'error' };
       error = cause.message || 'Refresh failed. Check your connection and try again.';
-      render();
+      renderStatus();
     }
   });
   api.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
+    if (area !== 'local' || (!changes.lctSettings && !changes.lctStatus && !changes.lctData)) return;
     if (changes.lctSettings) {
       const previousWindow = selectedWindow();
       settings = { ...defaults, ...changes.lctSettings.newValue };
+      $('enabled').checked = settings.enabled;
       if (previousWindow !== selectedWindow()) resetWindow();
     }
+    let dataChanged = Boolean(changes.lctData?.newValue);
     if (changes.lctStatus) {
       const previous = status;
       status = changes.lctStatus.newValue || {};
       if (status.phase !== 'error') error = '';
-      if (status.hasData && status.phase !== 'syncing' && (previous.phase === 'syncing' || previous.lastSyncedAt !== status.lastSyncedAt)) {
-        void load();
-        if (practiceCompany) void loadPractice();
-      }
+      dataChanged ||= Boolean(status.hasData && (!previous.hasData || status.commit !== previous.commit || status.lastSyncedAt !== previous.lastSyncedAt));
+      // Status-only changes leave company and practice DOM nodes intact.
+      renderStatus();
     }
-    render();
+    if (dataChanged) {
+      void load();
+      if (practiceCompany) void loadPractice();
+    }
   });
 
   async function start() {

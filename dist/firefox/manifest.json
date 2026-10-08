@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Company Lens for LeetCode",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "See company tags on LeetCode problems, synced from the public liquidslr GitHub repository.",
   "permissions": [
     "storage",
@@ -11,6 +11,7 @@
   "host_permissions": [
     "https://api.github.com/*",
     "https://raw.githubusercontent.com/*",
+    "https://codeload.github.com/*",
     "https://leetcode.com/*",
     "https://www.leetcode.com/*",
     "https://leetcode.cn/*",
@@ -46,11 +47,13 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://api.github.com https://raw.githubusercontent.com"
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com"
   },
   "background": {
     "scripts": [
       "core.js",
+      "archive.js",
+      "seed.js",
       "sync.js",
       "background.js"
     ]

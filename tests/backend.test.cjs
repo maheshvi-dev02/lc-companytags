@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
+const { deflateRawSync } = require('node:zlib');
 const core = require('../extension/core.js');
 const { createSyncService, MAX_RUN_FAILURES, REQUEST_TIMEOUT_MS } = require('../extension/sync.js');
 
@@ -14,21 +16,32 @@ const FIXED_NOW = Date.parse('2026-10-07T12:00:00Z');
 
 function memoryStorage(initial = {}, delay = false) {
   const values = structuredClone(initial);
+  const writes = [];
+  const removals = [];
   return {
-    values,
+    values, writes, removals,
     async get(keys) {
-      return Object.fromEntries(keys.filter((key) => Object.hasOwn(values, key)).map((key) => [key, structuredClone(values[key])]));
+      if (keys === null || keys === undefined) return structuredClone(values);
+      const requested = typeof keys === 'string' ? [keys] : Array.isArray(keys) ? keys : Object.keys(keys);
+      return Object.fromEntries(requested.filter((key) => Object.hasOwn(values, key)).map((key) => [key, structuredClone(values[key])]));
     },
     async set(next) {
       if (delay) await new Promise((resolve) => setTimeout(resolve, 1));
+      writes.push(structuredClone(next));
       Object.assign(values, structuredClone(next));
+    },
+    async remove(keys) {
+      const requested = typeof keys === 'string' ? [keys] : keys;
+      removals.push(requested.slice());
+      for (const key of requested) delete values[key];
     }
   };
 }
 
 function response(body, status = 200, headers = {}) {
   return { ok: status >= 200 && status < 300, status,
-    headers: new Headers(headers), async json() { return structuredClone(body); }, async text() { return body; } };
+    headers: new Headers(headers), async json() { return structuredClone(body); }, async text() { return body; },
+    async arrayBuffer() { const bytes = Buffer.from(body); return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength); } };
 }
 
 function csv(slugs) {
@@ -50,7 +63,7 @@ function company(name, sha) {
 
 function sourceFixture() {
   const source = { commit: SHA_A, files: [company('Amazon', BLOB_A), company('Google', BLOB_B)],
-    csvByCompany: { Amazon: csv(['two-sum']), Google: csv(['two-sum', 'add-two-numbers']) }, csvByPath: {}, failures: {}, calls: [], active: 0, maxActive: 0 };
+    csvByCompany: { Amazon: csv(['two-sum']), Google: csv(['two-sum', 'add-two-numbers']) }, csvByPath: {}, failures: {}, delays: {}, calls: [], active: 0, maxActive: 0 };
   source.fetch = async (url, options) => {
     source.calls.push(url);
     assert.equal(options.credentials, 'omit');
@@ -61,6 +74,11 @@ function sourceFixture() {
       return response({ sha: source.commit, commit: { committer: { date: '2026-08-16T22:18:35Z' }, tree: { sha: TREE_SHA } } });
     }
     if (url.includes('/git/trees/')) return response({ truncated: false, tree: source.files });
+    if (url.startsWith('https://codeload.github.com/')) {
+      assert.ok(url.endsWith('/zip/' + source.commit), 'archive is pinned to the selected commit');
+      if (source.failures.archive) return source.failures.archive();
+      return response(source.archive || '', source.archive ? 200 : 404);
+    }
     assert.ok(url.startsWith(core.RAW_URL + '/' + source.commit + '/'), 'raw requests are pinned to the selected commit');
     const name = decodeURIComponent(url.split('/').at(-2));
     const path = url.split('/').slice(-2).map(decodeURIComponent).join('/');
@@ -68,7 +86,8 @@ function sourceFixture() {
     if (source.failures[name]) return source.failures[name]();
     source.active += 1;
     source.maxActive = Math.max(source.active, source.maxActive);
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    if (source.delays[path] || source.delays[name]) await (source.delays[path] || source.delays[name]);
+    else await new Promise((resolve) => setTimeout(resolve, 1));
     source.active -= 1;
     return response(source.csvByPath[path] || source.csvByCompany[name]);
   };
@@ -76,7 +95,9 @@ function sourceFixture() {
 }
 
 function makeService(storage, source, extras = {}) {
-  return createSyncService({ storage, fetch: source.fetch, now: () => FIXED_NOW, sleep: async () => {}, ...extras });
+  // Most original regressions intentionally exercise the CSV fallback/incremental path.
+  // Archive-specific tests below enable the production decoder explicitly.
+  return createSyncService({ storage, fetch: source.fetch, now: () => FIXED_NOW, sleep: async () => {}, archive: false, ...extras });
 }
 
 test('CSV parser supports BOM, commas, escaped quotes, CRLF and embedded newlines', () => {
@@ -199,7 +220,9 @@ test('a failed file never replaces the previous full index; restart resumes comp
   await service.waitForIdle();
   assert.equal((await service.getStatus()).phase, 'error');
   assert.deepEqual(storage.values.lctData, previous);
-  assert.deepEqual(Object.keys(storage.values.lctStage.done), ['Amazon/5. All.csv']);
+  assert.ok(storage.values.lctStage.completed.includes('Amazon/5. All.csv'));
+  assert.equal(storage.values.lctStage.done, undefined, 'parsed records are stored in separate checkpoint chunks');
+  assert.ok(storage.values['lctChunk:' + SHA_B + ':Amazon/5. All.csv']);
   assert.deepEqual((await service.getCompanies('two-sum')).map((company) => company.name), ['Amazon', 'Google']);
   delete source.failures.Google;
   source.calls.length = 0;
@@ -516,4 +539,329 @@ test('changed frequency in one window reuses other file blobs and reranks only t
   assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 1);
   assert.deepEqual((await service.getCompanies('two-sum', '30d')).map((company) => [company.frequency, company.rank]), [[40, 2]]);
   assert.deepEqual((await service.getCompanies('two-sum', 'all')).map((company) => company.frequency), [20, 20]);
+});
+// ZIP fixtures are constructed locally from known CSV bytes. Matching Git blob
+// hashes make these tests exercise the actual production archive integrity checks.
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const value of bytes) {
+    crc ^= value;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zipEntries(entries, commit = SHA_A) {
+  const localParts = [], centralParts = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from('leetcode-company-wise-problems-' + commit + '/' + entry.path);
+    const body = Buffer.from(entry.body);
+    const method = entry.method === undefined ? 8 : entry.method;
+    const packed = method === 8 ? deflateRawSync(body) : body;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x800, 6);
+    local.writeUInt16LE(method, 8);
+    local.writeUInt32LE(crc32(body), 14);
+    local.writeUInt32LE(packed.length, 18);
+    local.writeUInt32LE(body.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x800, 8);
+    central.writeUInt16LE(method, 10);
+    central.writeUInt32LE(crc32(body), 16);
+    central.writeUInt32LE(packed.length, 20);
+    central.writeUInt32LE(body.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    localParts.push(local, name, packed);
+    centralParts.push(central, name);
+    offset += local.length + name.length + packed.length;
+  }
+  const central = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(central.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...localParts, central, end]);
+}
+
+function enableArchive(source, omit = []) {
+  const entries = source.files.map((file) => {
+    const name = file.path.split('/')[0];
+    const body = source.csvByPath[file.path] || source.csvByCompany[name];
+    file.sha = createHash('sha1').update('blob ' + Buffer.byteLength(body) + '\0').update(body).digest('hex');
+    return { path: file.path, body };
+  });
+  source.archive = zipEntries(entries.filter((entry) => !omit.includes(entry.path)), source.commit);
+}
+
+function snapshotFixture() {
+  const source = sourceFixture();
+  source.csvByCompany.Amazon = recordsCSV([
+    { slug: 'two-sum', frequency: 100, topics: ['Array'], difficulty: 'Easy' },
+    { slug: 'add-two-numbers', frequency: 70, topics: ['Linked List'], difficulty: 'Medium' }
+  ]);
+  source.csvByCompany.Google = recordsCSV([{ slug: 'two-sum', frequency: 90 }]);
+  for (const window of ['30d', '3m', '6m', 'older']) {
+    addWindow(source, 'Amazon', window, [{ slug: 'two-sum', frequency: 80 }, { slug: 'binary-search', frequency: 40 }]);
+    addWindow(source, 'Google', window, [{ slug: 'two-sum', frequency: 60 }]);
+  }
+  const files = core.selectWindowFiles({ truncated: false, tree: source.files });
+  const parsed = Object.fromEntries(files.map((file) => [file.path, {
+    sha: file.sha, records: core.parseCompanyRecords(source.csvByPath[file.path] || source.csvByCompany[file.name])
+  }]));
+  return { source, data: core.buildData(files, parsed, SHA_A, '2026-08-16T22:18:35Z', new Date(FIXED_NOW).toISOString()) };
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function settleUntil(predicate) {
+  const deadline = performance.now() + 2000;
+  while (!predicate() && performance.now() < deadline) await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(predicate(), 'expected asynchronous progress without releasing the held request');
+}
+
+test('a fresh install publishes every bundled window before starting remote refresh', async () => {
+  const { source, data } = snapshotFixture();
+  const gate = deferred();
+  source.failures.metadata = async () => { await gate.promise; return response({}, 503); };
+  const storage = memoryStorage();
+  let seedLoads = 0;
+  const service = makeService(storage, source, { loadSnapshot: async () => { seedLoads += 1; return data; } });
+  await service.initialize();
+  assert.equal(seedLoads, 1);
+  assert.equal(source.calls.length, 0, 'publishing the packaged seed needs no network');
+  assert.equal((await service.getStatus()).dataSource, 'bundled');
+  assert.equal((await service.getStatus()).hasData, true);
+  for (const window of Object.keys(core.WINDOW_FILES)) {
+    assert.equal(await service.windowAvailable(window), true);
+    assert.equal((await service.getCompanies('two-sum', window)).length, 2);
+  }
+  const practice = await service.getPractice({ company: 'Amazon', excludeSlug: 'two-sum' });
+  assert.deepEqual(practice.questions.map((question) => [question.slug, question.frequency, question.rank]), [['add-two-numbers', 70, 2]]);
+  const saved = structuredClone(storage.values.lctData);
+  await service.startAutomatic();
+  await settleUntil(() => source.calls.some((url) => url.endsWith('/commits/main')));
+  assert.equal((await service.getStatus()).phase, 'syncing');
+  assert.equal((await service.getCompanies('two-sum'))[0].frequency, 100, 'tags stay available while metadata is pending');
+  gate.resolve();
+  await service.waitForIdle();
+  assert.equal((await service.getStatus()).phase, 'error');
+  assert.equal((await service.getStatus()).hasData, true);
+  assert.equal((await service.getStatus()).dataSource, 'bundled');
+  assert.deepEqual(storage.values.lctData, saved, 'an offline refresh preserves the complete packaged seed');
+});
+
+test('bundled data never replaces an existing cache and boot does not reload it', async () => {
+  const { source, data } = snapshotFixture();
+  const existing = structuredClone(data);
+  existing.commit = SHA_B;
+  existing.files['Amazon/5. All.csv'].records[0].frequency = 97;
+  const storage = memoryStorage({ lctData: existing, lctStatus: { phase: 'idle', lastCheckedAt: new Date(FIXED_NOW).toISOString(), dataSource: 'live' } });
+  let loads = 0;
+  const service = makeService(storage, source, { loadSnapshot: async () => { loads += 1; return data; } });
+  await service.startAutomatic();
+  assert.equal(loads, 0);
+  assert.equal(source.calls.length, 0);
+  assert.equal((await service.getStatus()).commit, SHA_B);
+  assert.equal((await service.getCompanies('two-sum'))[0].frequency, 97);
+  assert.deepEqual(storage.values.lctData, existing);
+});
+
+test('automatic refresh checks the latest commit immediately after seeding and only downloads changed blobs', async () => {
+  const { source, data } = snapshotFixture();
+  source.commit = SHA_B;
+  source.files.find((file) => file.path === 'Google/5. All.csv').sha = '4'.repeat(40);
+  source.csvByCompany.Google = recordsCSV([{ slug: 'two-sum', frequency: 99 }, { slug: 'reverse-linked-list', frequency: 100 }]);
+  const storage = memoryStorage();
+  const service = makeService(storage, source, { loadSnapshot: async () => data });
+  await service.startAutomatic();
+  await service.waitForIdle();
+  assert.equal(source.calls.filter((url) => url.endsWith('/commits/main')).length, 1);
+  assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 1);
+  assert.equal((await service.getStatus()).dataSource, 'live');
+  assert.equal((await service.getStatus()).commit, SHA_B);
+  assert.deepEqual((await service.getCompanies('reverse-linked-list')).map((company) => company.name), ['Google']);
+  for (const window of Object.keys(core.WINDOW_FILES)) assert.equal(await service.windowAvailable(window), true);
+});
+
+test('an invalid or unreadable bundled snapshot falls through to a complete remote sync', async () => {
+  for (const loadSnapshot of [async () => { throw new Error('damaged gzip'); }, async () => ({ version: 2, schema: core.DATA_SCHEMA, files: {} })]) {
+    const source = sourceFixture();
+    enableArchive(source);
+    const service = makeService(memoryStorage(), source, { loadSnapshot, archive: undefined });
+    await service.startAutomatic();
+    await service.waitForIdle();
+    assert.equal((await service.getStatus()).phase, 'idle');
+    assert.deepEqual((await service.getCompanies('two-sum')).map((company) => company.name), ['Amazon', 'Google']);
+    assert.equal(source.calls.filter((url) => url.startsWith('https://codeload.github.com/')).length, 1);
+    assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 0);
+  }
+});
+
+test('initial archive sync publishes all five windows with one pinned archive download', async () => {
+  const { source } = snapshotFixture();
+  enableArchive(source);
+  const storage = memoryStorage();
+  const service = makeService(storage, source, { archive: undefined });
+  await service.refresh();
+  await service.waitForIdle();
+  assert.equal((await service.getStatus()).phase, 'idle');
+  assert.equal(source.calls.filter((url) => url.startsWith('https://codeload.github.com/')).length, 1);
+  assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 0);
+  for (const window of Object.keys(core.WINDOW_FILES)) {
+    assert.equal(await service.windowAvailable(window), true);
+    assert.equal((await service.getCompanies('two-sum', window)).length, 2);
+  }
+  const published = storage.writes.filter((values) => values.lctData);
+  assert.equal(published.length, 1, 'only the validated complete index is published');
+  assert.equal(published[0].lctStatus.phase, 'idle');
+  assert.equal(storage.values.lctStage, null);
+  assert.equal(Object.keys(storage.values).some((key) => key.startsWith('lctChunk:') || key.startsWith('lctManifest:')), false, 'completed checkpoints are cleaned up');
+});
+
+test('missing or corrupt archive data falls back to individual CSV files without publishing partial data', async () => {
+  for (const kind of ['missing', 'corrupt', 'unavailable']) {
+    const { source } = snapshotFixture();
+    enableArchive(source, kind === 'missing' ? ['Google/4. More Than Six Months.csv'] : []);
+    if (kind === 'corrupt') source.archive = Buffer.from('not a ZIP file');
+    if (kind === 'unavailable') source.failures.archive = () => response('', 404);
+    const storage = memoryStorage();
+    const service = makeService(storage, source, { archive: undefined });
+    await service.refresh();
+    await service.waitForIdle();
+    assert.equal((await service.getStatus()).phase, 'idle', kind);
+    assert.ok(source.calls.some((url) => url.startsWith(core.RAW_URL)), kind + ' uses CSV fallback');
+    assert.equal(storage.writes.filter((values) => values.lctData).length, 1, kind);
+    for (const window of Object.keys(core.WINDOW_FILES)) assert.equal(await service.windowAvailable(window), true, kind);
+    assert.equal((await service.getCompanies('two-sum', 'older')).length, 2, kind);
+  }
+});
+
+test('migration uses the archive fast path and removes legacy cache without partial publication', async () => {
+  const { source } = snapshotFixture();
+  enableArchive(source);
+  const storage = memoryStorage(legacyState());
+  const service = makeService(storage, source, { archive: undefined });
+  assert.equal(await service.windowAvailable('30d'), false);
+  await service.startAutomatic();
+  await service.waitForIdle();
+  assert.equal(source.calls.filter((url) => url.startsWith('https://codeload.github.com/')).length, 1);
+  assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 0);
+  assert.equal(storage.values.lctCache, null);
+  assert.equal(await service.windowAvailable('30d'), true);
+  assert.equal((await service.getCompanies('two-sum'))[0].frequency, 100);
+});
+
+test('the rolling CSV queue launches the next file while an earlier request is still pending', async () => {
+  const source = sourceFixture();
+  source.files.push(company('Zebra', BLOB_C));
+  source.csvByCompany.Zebra = csv(['binary-search']);
+  const gate = deferred();
+  source.delays.Amazon = gate.promise;
+  const service = makeService(memoryStorage(), source, { concurrency: 2 });
+  await service.refresh();
+  try {
+    await settleUntil(() => source.calls.some((url) => url.includes('/Zebra/')) && source.active === 1);
+    assert.equal(source.maxActive, 2);
+    assert.equal(source.active, 1, 'the slow request is still held while another queue slot has progressed');
+  } finally {
+    gate.resolve();
+    await service.waitForIdle();
+  }
+  assert.equal((await service.getStatus()).phase, 'idle');
+});
+
+test('fallback checkpoints persist compact manifests and new chunks instead of rewriting accumulated records', async () => {
+  const source = sourceFixture();
+  source.files = [];
+  source.csvByCompany = {};
+  for (let index = 0; index < 80; index += 1) {
+    const name = 'Company ' + String(index).padStart(3, '0');
+    source.files.push(company(name, BLOB_A));
+    source.csvByCompany[name] = recordsCSV(Array.from({ length: 100 }, (_, number) => ({
+      slug: 'question-' + number, title: 'Question ' + number + ' for ' + name,
+      frequency: 100 - number, topics: ['Array', 'Hash Table']
+    })));
+  }
+  const storage = memoryStorage();
+  const service = makeService(storage, source);
+  await service.refresh();
+  await service.waitForIdle();
+  assert.equal((await service.getStatus()).phase, 'idle');
+  const stageWrites = storage.writes.filter((values) => values.lctStage);
+  assert.ok(stageWrites.length > 0);
+  for (const values of stageWrites) {
+    assert.equal(values.lctStage.done, undefined);
+    assert.equal(values.lctStage.files, undefined);
+    assert.ok(Buffer.byteLength(JSON.stringify(values.lctStage)) < 10000, 'stage contains only progress metadata');
+  }
+  const manifestWrites = storage.writes.filter((values) => Object.keys(values).some((key) => key.startsWith('lctManifest:')));
+  assert.equal(manifestWrites.length, 1, 'immutable manifest is saved once');
+  const chunkCounts = new Map();
+  for (const values of storage.writes) for (const key of Object.keys(values).filter((key) => key.startsWith('lctChunk:'))) {
+    chunkCounts.set(key, (chunkCounts.get(key) || 0) + 1);
+  }
+  assert.equal(chunkCounts.size, 80);
+  assert.ok([...chunkCounts.values()].every((count) => count === 1), 'completed CSV records are checkpointed once');
+  const checkpointBytes = storage.writes.filter((values) => !values.lctData).reduce((sum, values) => sum + Buffer.byteLength(JSON.stringify(values)), 0);
+  assert.ok(checkpointBytes < 2 * Buffer.byteLength(JSON.stringify(storage.values.lctData)), 'checkpoint traffic scales with dataset size');
+});
+
+test('an unchanged source commit confirms bundled data as live without downloading or rewriting it', async () => {
+  const { source, data } = snapshotFixture();
+  const storage = memoryStorage();
+  const service = makeService(storage, source, { loadSnapshot: async () => data, archive: undefined });
+  await service.initialize();
+  const dataWrites = storage.writes.filter((values) => values.lctData).length;
+  await service.startAutomatic();
+  await service.waitForIdle();
+  assert.deepEqual(source.calls, [core.API_URL + '/commits/main']);
+  assert.equal((await service.getStatus()).dataSource, 'live');
+  assert.equal((await service.getStatus()).commit, SHA_A);
+  assert.equal(storage.writes.filter((values) => values.lctData).length, dataWrites, 'confirming freshness does not rewrite the full snapshot');
+});
+
+test('old v2 stages migrate completed records once and resume without metadata or duplicate downloads', async () => {
+  const source = sourceFixture();
+  const storage = memoryStorage();
+  const first = makeService(storage, source);
+  await first.refresh();
+  await first.waitForIdle();
+  source.commit = SHA_B;
+  source.files = [company('Amazon', BLOB_C), company('Google', BLOB_C)];
+  source.csvByCompany.Amazon = csv(['reverse-linked-list']);
+  source.csvByCompany.Google = csv(['binary-search']);
+  const selected = core.selectWindowFiles({ truncated: false, tree: source.files });
+  storage.values.lctStage = {
+    version: core.DATA_VERSION, schema: core.DATA_SCHEMA, commit: SHA_B,
+    sourceUpdatedAt: '2026-08-16T22:18:35Z', files: selected,
+    done: { 'Amazon/5. All.csv': { sha: BLOB_C, records: core.parseCompanyRecords(source.csvByCompany.Amazon) } },
+    failureCount: 1, retryAt: 0
+  };
+  source.calls.length = 0;
+  storage.writes.length = 0;
+  const restarted = makeService(storage, source);
+  await restarted.resume();
+  await restarted.waitForIdle();
+  assert.equal((await restarted.getStatus()).phase, 'idle');
+  assert.equal(source.calls.length, 1);
+  assert.match(source.calls[0], /Google/);
+  assert.equal((await restarted.getStatus()).commit, SHA_B);
+  assert.deepEqual((await restarted.getCompanies('reverse-linked-list')).map((company) => company.name), ['Amazon']);
+  const savedAmazon = storage.writes.filter((values) => Object.hasOwn(values, 'lctChunk:' + SHA_B + ':Amazon/5. All.csv'));
+  assert.equal(savedAmazon.length, 1, 'legacy completed records are migrated to a chunk once');
+  assert.equal(storage.values.lctStage, null);
 });

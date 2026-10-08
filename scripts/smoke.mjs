@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
 
 // Optional browser verification: uses an existing Playwright installation, never
 // downloads a runtime or adds a production dependency. See output/playwright.
@@ -88,11 +89,12 @@ async function prepare(context, blockGitHub = true) {
   // Supplemental routing for page requests. Service-worker requests bypass these
   // routes, so deterministic browser launches also block these hosts in Chromium's
   // resolver before the extension starts.
-  if (blockGitHub) await context.route(/https:\/\/(?:api\.github\.com|raw\.githubusercontent\.com)\//, (route) => route.abort());
+  if (blockGitHub) await context.route(/https:\/\/(?:api\.github\.com|raw\.githubusercontent\.com|codeload\.github\.com)\//, (route) => route.abort());
 }
 
 async function seedFromPopup(popup) {
-  // Let first-install download failure settle, then seed and restart the browser.
+  // After first-install offline snapshot checks, let background refresh settle.
+  // Then seed deterministic edge cases and restart the browser.
   // The worker intentionally retains a memory snapshot until its next startup.
   let settled = false;
   let initialStatus;
@@ -105,7 +107,8 @@ async function seedFromPopup(popup) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   assert.ok(settled, 'First-install sync must settle before seeding the UI fixture.');
-  assert.equal(initialStatus.hasData, false, 'Deterministic setup must never download the live dataset.');
+  assert.equal(initialStatus.hasData, true, 'The bundled snapshot must remain available after blocked background refresh.');
+  assert.equal(initialStatus.dataSource, 'bundled', 'Blocked GitHub access must not produce live data.');
   await popup.evaluate(async (data) => {
     const api = globalThis.browser || globalThis.chrome;
     await api.alarms.clearAll();
@@ -255,6 +258,37 @@ async function exercise(context, extensionUrl, browserName) {
   await popup.getByRole('button', { name: 'Back to companies', exact: false }).click();
   results.push('Company practice lists exclude the current problem and support difficulty/topic filtering in both panel and popup.');
 
+  // Progress events and pending-file checkpoints must not disrupt cached results.
+  await page.bringToFront();
+  await page.waitForTimeout(200);
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await popup.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await expectTexts(host.locator('.practice-questions .question-title'), amazonPractice);
+  await expectTexts(popup.locator('#practice-questions .question-title'), amazonPractice);
+  const retainedPanelCompany = await host.locator('.companies a').first().elementHandle();
+  const retainedPopupCompany = await popup.locator('#companies a').first().elementHandle();
+  const retainedPanelQuestion = await host.locator('.practice-questions a').first().elementHandle();
+  const retainedPopupQuestion = await popup.locator('#practice-questions a').first().elementHandle();
+  await host.locator('.practice-questions a').first().focus();
+  const statusBeforeProgress = await popup.evaluate(async () => (await chrome.storage.local.get('lctStatus')).lctStatus);
+  await popup.evaluate(async (status) => {
+    await chrome.storage.local.set({ lctStatus: { ...status, phase: 'syncing', completed: 3, total: 35 },
+      lctStage: { auditCheckpoint: true }, lctAuditChunk: { progress: 3 } });
+  }, statusBeforeProgress);
+  await host.locator('.status-message').filter({ hasText: '3 of 35' }).waitFor();
+  await page.waitForTimeout(1100); // Includes the SPA-navigation polling interval.
+  for (const retained of [retainedPanelCompany, retainedPopupCompany, retainedPanelQuestion, retainedPopupQuestion])
+    assert.equal(await retained.evaluate((node) => node.isConnected), true, 'Progress updates must retain existing result links.');
+  assert.equal(await retainedPanelQuestion.evaluate((node) => node.getRootNode().activeElement === node), true, 'A focused practice link must survive refresh progress.');
+  await popup.evaluate(async (status) => {
+    await chrome.storage.local.set({ lctStatus: status, lctStage: null });
+    await chrome.storage.local.remove('lctAuditChunk');
+  }, statusBeforeProgress);
+  for (const retained of [retainedPanelCompany, retainedPopupCompany, retainedPanelQuestion, retainedPopupQuestion]) await retained.dispose();
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  await popup.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  results.push('Background sync progress and unrelated storage checkpoints preserve company/practice result nodes and the focused practice link.');
+
   // Disabling the panel must not retain filtered results under newly reset controls.
   await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
   await host.locator('.difficulty-select').selectOption('Medium');
@@ -370,34 +404,56 @@ async function chromiumRun() {
   };
   const deterministicOptions = { ...options, args: [...options.args,
     '--no-proxy-server',
-    '--host-resolver-rules=MAP api.github.com ~NOTFOUND, MAP raw.githubusercontent.com ~NOTFOUND',
+    '--host-resolver-rules=MAP api.github.com ~NOTFOUND, MAP raw.githubusercontent.com ~NOTFOUND, MAP codeload.github.com ~NOTFOUND',
   ] };
+  const expectedBundle = await bundledExpectations(directory, core);
+  const startupStartedAt = Date.now();
   let context = await playwright.chromium.launchPersistentContext(profile, deterministicOptions);
   try {
     await prepare(context);
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    const workerUrl = new URL(worker.url());
+    const extensionUrl = `${workerUrl.protocol}//${workerUrl.host}`;
+    const firstPage = await context.newPage();
+    const navigationStartedAt = Date.now();
+    await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
+    const firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt });
+    await firstPage.screenshot({ path: path.join(output, 'chromium-first-install.png'), fullPage: true, animations: 'disabled' });
     const blockedHosts = await worker.evaluate(async () => Promise.all(
-      ['https://api.github.com/', 'https://raw.githubusercontent.com/'].map(async (url) => {
+      ['https://api.github.com/', 'https://raw.githubusercontent.com/', 'https://codeload.github.com/'].map(async (url) => {
         try { await fetch(url); return { url, blocked: false }; }
         catch { return { url, blocked: true }; }
       })
     ));
     assert.ok(blockedHosts.every(({ blocked }) => blocked), 'Deterministic extension workers must have no GitHub network access.');
-    const workerUrl = new URL(worker.url());
-    const extensionUrl = `${workerUrl.protocol}//${workerUrl.host}`;
+    const localArchive = await archiveFixture(root, core);
+    const archive = await worker.evaluate(browserArchiveCheck, localArchive.payload);
+    assertArchiveResult(archive, localArchive);
     const setupPopup = await context.newPage();
+    await firstPage.bringToFront();
     await setupPopup.goto(`${extensionUrl}/popup.html`);
+    await setupPopup.getByRole('link', { name: 'Amazon, view source', exact: true }).waitFor();
+    assert.equal(await setupPopup.locator('#window-select').inputValue(), 'all');
+    assert.match(await setupPopup.locator('#window-note').textContent(), /Bundled snapshot/i);
+    assert.deepEqual(await setupPopup.locator('.company-name').allTextContents(), expectedBundle.windows.all.slice(0, 5).map(({ name }) => name));
+    const offlineStatus = await setupPopup.evaluate(async () => (await chrome.runtime.sendMessage({ type: 'LCT_STATUS' })).status);
+    assert.equal(offlineStatus.hasData, true);
+    assert.equal(offlineStatus.dataSource, 'bundled');
+    assert.equal(offlineStatus.commit, expectedBundle.data.commit);
+    firstInstall.popup = 'Actual packaged popup displays the same bundled all-time tags and source date.';
     await seedFromPopup(setupPopup);
     await context.close();
     context = await playwright.chromium.launchPersistentContext(profile, deterministicOptions);
     await prepare(context);
     const { results, errors, popup } = await exercise(context, extensionUrl, 'chromium');
-    results.unshift('GitHub hosts are blocked in the browser resolver, including extension service-worker requests.');
+    results.unshift(firstInstall.check, firstInstall.popup,
+      'Native browser deflate-raw decoder extracts every real source archive CSV with CRC and Git blob validation.',
+      'GitHub API, raw-file and codeload hosts are blocked in the browser resolver, including extension service-worker requests.');
     assert.deepEqual(errors, [], 'Unexpected page errors');
     let live;
     if (process.argv.includes('--live')) {
       const liveSeed = JSON.parse(await readFile(path.join(root, 'output', 'live-source', 'storage.json'), 'utf8'));
-      assert.ok(liveSeed.lctData?.index?.['two-sum'], 'Live source check must have saved a valid storage fixture first.');
+      assert.ok(core.companiesForSlug(liveSeed.lctData, 'two-sum').length, 'Live source check must have saved a valid storage fixture first.');
       await popup.evaluate(async (data) => {
         const api = globalThis.browser || globalThis.chrome;
         await api.alarms.clearAll();
@@ -452,7 +508,7 @@ async function chromiumRun() {
       await livePage.screenshot({ path: path.join(output, 'chromium-live-data.png'), fullPage: true, animations: 'disabled' });
       results.push('Actual extension background fetched current GitHub metadata using declared permissions and displayed live-source Two Sum tags.');
     }
-    return { status: 'passed', mode: 'actual unpacked extension', results, live };
+    return { status: 'passed', mode: 'actual unpacked extension', firstInstall, archive, results, live };
   } finally { await context.close(); }
 }
 

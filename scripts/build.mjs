@@ -1,11 +1,24 @@
 import { readFile, writeFile, mkdir, copyFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { deflateSync } from 'node:zlib';
+import { deflateSync, gunzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
+import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'sync.js', 'background.js', 'content.js', 'popup.html', 'popup.js', 'popup.css'];
+const files = ['core.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'content.js', 'popup.html', 'popup.js', 'popup.css', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
+const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
+assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');
+const snapshot = JSON.parse(gunzipSync(snapshotBytes).toString('utf8'));
+assert.equal(snapshot.commit, snapshotMeta.commit);
+assert.equal(snapshot.companyCount, snapshotMeta.companies);
+assert.equal(snapshot.problemCount, snapshotMeta.problems);
+for (const window of ['all', '30d', '3m', '6m', 'older']) {
+  assert.ok(snapshot.windows[window].available && snapshot.windows[window].companyCount === snapshot.companyCount,
+    'The bundled snapshot must include complete company coverage in every window');
+}
 const matches = ['https://leetcode.com/*', 'https://www.leetcode.com/*', 'https://leetcode.cn/*', 'https://www.leetcode.cn/*'];
 const common = {
   manifest_version: 3,
@@ -13,11 +26,11 @@ const common = {
   version: pkg.version,
   description: 'See company tags on LeetCode problems, synced from the public liquidslr GitHub repository.',
   permissions: ['storage', 'unlimitedStorage', 'alarms'],
-  host_permissions: ['https://api.github.com/*', 'https://raw.githubusercontent.com/*', ...matches],
+  host_permissions: ['https://api.github.com/*', 'https://raw.githubusercontent.com/*', 'https://codeload.github.com/*', ...matches],
   action: { default_title: 'Company Lens', default_popup: 'popup.html', default_icon: {16:'icons/16.png',32:'icons/32.png'} },
   icons: {16:'icons/16.png',32:'icons/32.png',48:'icons/48.png',128:'icons/128.png'},
   content_scripts: [{ matches, js: ['core.js', 'content.js'], run_at: 'document_idle' }],
-  content_security_policy: {extension_pages: "script-src 'self'; object-src 'none'; connect-src https://api.github.com https://raw.githubusercontent.com"}
+  content_security_policy: {extension_pages: "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com"}
 };
 
 function crc32(bytes) {
@@ -84,14 +97,17 @@ async function zip(directory, output) {
 for (const browser of ['chrome','firefox']) {
   const out = path.join(root,'dist',browser);
   await mkdir(path.join(out,'icons'),{recursive:true});
-  for (const file of files) await copyFile(path.join(root,'extension',file),path.join(out,file));
+  for (const file of files) {
+    await mkdir(path.dirname(path.join(out,file)), {recursive:true});
+    await copyFile(path.join(root,'extension',file),path.join(out,file));
+  }
   for (const size of [16,32,48,128]) await writeFile(path.join(out,'icons',`${size}.png`),icon(size));
   const manifest = structuredClone(common);
   if (browser === 'chrome') {
     manifest.minimum_chrome_version = '120';
     manifest.background = {service_worker:'background.js'};
   } else {
-    manifest.background = {scripts:['core.js','sync.js','background.js']};
+    manifest.background = {scripts:['core.js','archive.js','seed.js','sync.js','background.js']};
     manifest.browser_specific_settings = {gecko:{id:'company-lens@leetcode-tags.local',strict_min_version:'140.0',data_collection_permissions:{required:['none']}}};
   }
   await writeFile(path.join(out,'manifest.json'), JSON.stringify(manifest,null,2)+'\n');

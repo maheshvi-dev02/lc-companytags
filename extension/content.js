@@ -325,35 +325,31 @@
       return item;
     }));
     view.searchWrap.hidden = companies.length < 6 && !query;
-    view.empty.hidden = filtered.length > 0;
+    renderCompanyMessage(filtered.length > 0);
+  }
+
+  function renderCompanyMessage(hasMatches = view?.list.childElementCount > 0) {
+    if (!view) return;
+    const query = view.search.value.trim();
+    view.empty.hidden = hasMatches;
     if (query && companies.length) view.empty.textContent = 'No company names match your search.';
     else if (loading && !status.hasData) view.empty.textContent = 'Loading company tags…';
-    else if (!status.hasData && status.phase === 'syncing') view.empty.textContent = 'Building your company index. The first sync may take a minute.';
+    else if (!status.hasData && status.phase === 'syncing') view.empty.textContent = 'Preparing company tags…';
     else if (!status.hasData && (error || status.phase === 'error')) view.empty.textContent = 'Company data is unavailable. Check your connection, then refresh.';
     else if (!windowAvailable) view.empty.textContent = status.phase === 'syncing' ? 'This time window is syncing. It will appear when the updated dataset is ready.' : 'This time window is not downloaded yet. Refresh to load it.';
     else view.empty.textContent = 'No company matches in this dataset. This does not mean the problem has never been asked.';
   }
 
-  function render() {
+  function renderStatus() {
     if (!view) return;
-    const total = companies.length;
     const revision = /^[a-f0-9]{40}$/i.test(status.commit || '') ? status.commit : '';
     view.source.href = revision ? `${core.SOURCE_URL.replace(/\/$/, '')}/tree/${revision}` : core.SOURCE_URL;
     view.source.title = revision ? `Dataset revision ${revision.slice(0, 7)}` : 'Public company dataset';
     const syncedDate = new Date(status.lastSyncedAt);
     view.statusMessage.title = status.lastSyncedAt && Number.isFinite(syncedDate.getTime()) ? `Last synced: ${syncedDate.toLocaleString()}` : '';
-    view.title.textContent = core.formatProblemTitle(slug);
-    view.count.textContent = `${total} ${total === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}`;
-    view.windowSelect.value = selectedWindow();
-    view.windowNote.textContent = status.sourceUpdatedAt ? `Windows relative to source updated ${dateLabel(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';
-    view.companyView.hidden = Boolean(practiceCompany);
-    view.practiceView.hidden = !practiceCompany;
-    view.badge.textContent = status.phase === 'syncing' ? 'syncing' : `${total} ${total === 1 ? 'company' : 'companies'}`;
-    view.body.hidden = settings.collapsed;
-    view.collapse.textContent = settings.collapsed ? '+' : '−';
-    view.collapse.setAttribute('aria-expanded', String(!settings.collapsed));
-    view.collapse.setAttribute('aria-label', settings.collapsed ? 'Expand Company Lens' : 'Collapse Company Lens');
-    view.collapse.title = settings.collapsed ? 'Expand' : 'Collapse';
+    const snapshot = status.dataSource === 'bundled' ? 'Bundled snapshot · ' : '';
+    view.windowNote.textContent = status.sourceUpdatedAt ? `${snapshot}Windows relative to source updated ${dateLabel(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';
+    view.badge.textContent = status.phase === 'syncing' ? 'syncing' : `${companies.length} ${companies.length === 1 ? 'company' : 'companies'}`;
     view.refresh.disabled = status.phase === 'syncing';
     view.refresh.textContent = status.phase === 'syncing' ? 'Syncing…' : 'Refresh';
     view.progress.hidden = status.phase !== 'syncing';
@@ -365,13 +361,31 @@
     const stale = status.lastCheckedAt && Date.now() - new Date(status.lastCheckedAt).getTime() > 48 * 60 * 60 * 1000;
     view.statusBox.toggleAttribute('data-warning', Boolean(failure || stale));
     if (failure) view.statusMessage.textContent = `${status.hasData ? 'Showing saved data. ' : ''}${failure}`;
-    else if (status.phase === 'syncing') view.statusMessage.textContent = status.total > 0 ? `Syncing dataset · ${status.completed || 0} of ${status.total}` : 'Checking the latest dataset…';
-    else if (stale) view.statusMessage.textContent = `Saved data · last checked ${dateLabel(status.lastCheckedAt)}. Refresh for updates.`;
-    else if (status.sourceUpdatedAt) view.statusMessage.textContent = `Source updated ${dateLabel(status.sourceUpdatedAt)}`;
-    else if (status.lastCheckedAt || status.lastSyncedAt) view.statusMessage.textContent = `Last checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
+    else if (status.phase === 'syncing') view.statusMessage.textContent = status.total > 0 ? `${snapshot}Syncing dataset · ${status.completed || 0} of ${status.total}` : `${snapshot}Checking the latest dataset…`;
+    else if (stale) view.statusMessage.textContent = `${snapshot}Saved data · last checked ${dateLabel(status.lastCheckedAt)}. Refresh for updates.`;
+    else if (status.sourceUpdatedAt) view.statusMessage.textContent = `${snapshot}Source updated ${dateLabel(status.sourceUpdatedAt)}`;
+    else if (status.lastCheckedAt || status.lastSyncedAt) view.statusMessage.textContent = `${snapshot}Last checked ${dateLabel(status.lastCheckedAt || status.lastSyncedAt)}`;
     else view.statusMessage.textContent = loading ? 'Connecting to the company dataset…' : 'Live source · saved locally after sync';
+    renderCompanyMessage();
+    renderPracticeSummary();
+  }
+
+  function render() {
+    if (!view) return;
+    const total = companies.length;
+    view.title.textContent = core.formatProblemTitle(slug);
+    view.count.textContent = `${total} ${total === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}`;
+    view.windowSelect.value = selectedWindow();
+    view.companyView.hidden = Boolean(practiceCompany);
+    view.practiceView.hidden = !practiceCompany;
+    view.body.hidden = settings.collapsed;
+    view.collapse.textContent = settings.collapsed ? '+' : '−';
+    view.collapse.setAttribute('aria-expanded', String(!settings.collapsed));
+    view.collapse.setAttribute('aria-label', settings.collapsed ? 'Expand Company Lens' : 'Collapse Company Lens');
+    view.collapse.title = settings.collapsed ? 'Expand' : 'Collapse';
     renderCompanies();
     renderPractice();
+    renderStatus();
   }
 
   function resetWindow() {
@@ -394,9 +408,8 @@
     void loadPractice();
   }
 
-  function renderPractice() {
+  function renderPracticeSummary() {
     if (!view || !practiceCompany) return;
-    view.practiceTitle.textContent = practiceCompany;
     if (practiceError) view.practiceSummary.textContent = practiceError;
     else if (practiceLoading) view.practiceSummary.textContent = 'Loading practice questions…';
     else if (!practiceAvailable) view.practiceSummary.textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
@@ -405,6 +418,12 @@
       const order = practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0) ? 'highest frequency first' : 'frequency unavailable';
       view.practiceSummary.textContent = `${practiceQuestions.length} of ${practiceTotal} questions · ${order}`;
     }
+  }
+
+  function renderPractice() {
+    if (!view || !practiceCompany) return;
+    view.practiceTitle.textContent = practiceCompany;
+    renderPracticeSummary();
     view.practiceList.replaceChildren(...practiceQuestions.map(question => {
       const item = element('li');
       const link = element('a');
@@ -457,7 +476,7 @@
     if (!currentSlug || !settings.enabled) return;
     loading = true;
     error = '';
-    render();
+    renderStatus();
     try {
       const result = await api.runtime.sendMessage({ type: 'LCT_GET', slug: currentSlug, window: selectedWindow() });
       if (currentRequest !== requestId || currentSlug !== slug) return;
@@ -480,7 +499,7 @@
     const currentSlug = slug;
     error = '';
     status = { ...status, phase: 'syncing', completed: 0, total: 0 };
-    render();
+    renderStatus();
     try {
       const result = await api.runtime.sendMessage({ type: 'LCT_REFRESH' });
       if (!result?.ok) throw new Error(result?.error || 'Refresh failed. Check your connection and try again.');
@@ -492,7 +511,7 @@
       if (slug !== currentSlug) return;
       status = { ...status, phase: 'error' };
       error = cause.message || 'Refresh failed. Check your connection and try again.';
-      render();
+      renderStatus();
     }
   }
 
@@ -517,9 +536,10 @@
       if (!slug) unmount();
       if (slug && settings.enabled) { mount(); render(); void loadCompanies(); }
     } else if (slug && settings.enabled) {
-      if (host && !host.isConnected) unmount();
-      mount();
-      render();
+      if (!host?.isConnected) {
+        if (host) unmount();
+        mount();
+      }
       if (force) void loadCompanies();
     }
   }
@@ -531,7 +551,7 @@
   });
 
   api.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
+    if (area !== 'local' || (!changes.lctSettings && !changes.lctStatus && !changes.lctData)) return;
     if (changes.lctSettings) {
       const previousEnabled = settings.enabled;
       const previousWindow = selectedWindow();
@@ -541,15 +561,18 @@
       if (previousWindow !== selectedWindow()) resetWindow();
       render();
     }
+    let dataChanged = Boolean(changes.lctData?.newValue);
     if (changes.lctStatus) {
       const previous = status;
       status = changes.lctStatus.newValue || {};
       if (status.phase !== 'error') error = '';
-      render();
-      if (status.hasData && status.phase !== 'syncing' && (previous.phase === 'syncing' || status.lastSyncedAt !== previous.lastSyncedAt)) {
-        void loadCompanies();
-        if (practiceCompany) void loadPractice();
-      }
+      dataChanged ||= Boolean(status.hasData && (!previous.hasData || status.commit !== previous.commit || status.lastSyncedAt !== previous.lastSyncedAt));
+      // Progress and source verification must preserve focused links and filter inputs.
+      renderStatus();
+    }
+    if (dataChanged && slug && settings.enabled) {
+      void loadCompanies();
+      if (practiceCompany) void loadPractice();
     }
   });
 

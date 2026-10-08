@@ -6,17 +6,20 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { makeFixture } from './firefox-fixture.mjs';
+import { bundledExpectations, exerciseBundledPanel, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
 
 // Installs and exercises the real Firefox MV3 addon. The default is deterministic:
-// a dead proxy blocks extension requests, and the fixture is seeded through the
-// addon's real background console before reloading its unmodified distribution.
+// a dead proxy blocks extension requests. The packaged snapshot is verified on a
+// fresh install before edge-case fixtures are seeded through the real background
+// console and the unmodified distribution is reloaded.
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'output/playwright');
 await mkdir(output, { recursive: true });
 const { firefox } = require(process.env.PLAYWRIGHT_MODULE || path.join(process.env.USERPROFILE,
   '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
-const { seed, html, commit } = makeFixture(require(path.join(root, 'dist/firefox/core.js')));
+const core = require(path.join(root, 'dist/firefox/core.js'));
+const { seed, html, commit } = makeFixture(core);
 const id = 'company-lens@leetcode-tags.local';
 const uuid = randomUUID();
 const port = 23000 + Math.floor(Math.random() * 20000);
@@ -117,6 +120,8 @@ async function expectTexts(locator, expected) {
 }
 
 try {
+  const expectedBundle = await bundledExpectations(path.join(root, 'dist/firefox'), core);
+  const startupStartedAt = Date.now();
   context = await firefox.launchPersistentContext(path.join(output, `firefox-profile-${Date.now()}`), {
     headless: true, viewport: null, executablePath: await executable(),
     args: ['-start-debugger-server', String(port)],
@@ -137,6 +142,7 @@ try {
   rdp = await rdpConnect();
   await rdp.waitFor(() => true);
   const actors = await rdp.send({ to: 'root', type: 'getRoot' });
+  const addonInstallationStartedAt = Date.now();
   const installed = await rdp.send({ to: actors.addonsActor, type: 'installTemporaryAddon', addonPath: path.join(root, 'dist/firefox') });
   assert.ok(installed.addon);
   const addons = await rdp.send({ to: 'root', type: 'listAddons' });
@@ -149,18 +155,52 @@ try {
     packet.target?.url?.includes('_generated_background_page.html'));
   backgroundConsole = background.target.consoleActor;
   report.background = { url: background.target.url, actor: background.target.actor, consoleActor: backgroundConsole };
+  const firstPage = await context.newPage();
+  const navigationStartedAt = Date.now();
+  await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
+  report.firstInstall = await exerciseBundledPanel(firstPage, expectedBundle, { startupStartedAt, navigationStartedAt });
+  report.firstInstall.addonInstallationToFirstPanelResultsMs = report.firstInstall.startupToFirstPanelResultsMs - (addonInstallationStartedAt - startupStartedAt);
+  await firstPage.screenshot({ path: path.join(output, 'firefox-first-install.png'), fullPage: true, animations: 'disabled' });
+  report.checks.push(report.firstInstall.check);
+  const offlineStatus = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);'));
+  assert.equal(offlineStatus.hasData, true);
+  assert.equal(offlineStatus.dataSource, 'bundled');
+  assert.equal(offlineStatus.commit, expectedBundle.data.commit);
+  const freshPopupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
+  const freshPopupTab = await evaluateBackground(`return (await browser.tabs.create({ url: ${JSON.stringify(freshPopupUrl)}, active: false })).id;`);
+  const freshPopupTarget = await rdp.waitFor((packet) => packet.type === 'target-available-form' && packet.target?.url === freshPopupUrl);
+  let freshPopupObserved;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    freshPopupObserved = JSON.parse(await evaluateConsoleRaw(`JSON.stringify({
+      names: Array.from(document.querySelectorAll('.company-name'), node => node.textContent),
+      window: document.querySelector('#window-select')?.value,
+      note: document.querySelector('#window-note')?.textContent,
+    })`, freshPopupTarget.target.consoleActor));
+    if (freshPopupObserved.names.length) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.deepEqual(freshPopupObserved.names, expectedBundle.windows.all.slice(0, 5).map(({ name }) => name));
+  assert.equal(freshPopupObserved.window, 'all');
+  assert.match(freshPopupObserved.note, /Bundled snapshot/i);
+  await evaluateBackground(`await browser.tabs.remove(${freshPopupTab}); return 'closed';`);
+  report.firstInstall.popup = 'Actual packaged Firefox popup displays bundled all-time tags and source date, verified via Mozilla RDP.';
+  report.checks.push(report.firstInstall.popup);
   const blocked = JSON.parse(await evaluateBackground(`return JSON.stringify(await Promise.all(
-    ['https://api.github.com/', 'https://raw.githubusercontent.com/'].map(async (url) => {
+    ['https://api.github.com/', 'https://raw.githubusercontent.com/', 'https://codeload.github.com/'].map(async (url) => {
       try { await fetch(url); return { url, blocked: false }; }
       catch { return { url, blocked: true }; }
     })));`));
   assert.ok(blocked.every(({ blocked }) => blocked), 'Extension GitHub requests must be blocked before fixture seeding');
-  report.checks.push('Real Firefox MV3 addon installs without manifest warnings; GitHub networking is blocked in its background process.');
+  report.checks.push('Real Firefox MV3 addon installs without manifest warnings; GitHub API, raw-file and codeload networking is blocked in its background process.');
+  const localArchive = await archiveFixture(root, core);
+  report.archive = JSON.parse(await evaluateBackground(`return JSON.stringify(await (${browserArchiveCheck.toString()})(${JSON.stringify(localArchive.payload)}));`));
+  assertArchiveResult(report.archive, localArchive);
+  report.checks.push('Native Firefox deflate-raw decoder extracts every real source archive CSV with CRC and Git blob validation.');
   let settled = false;
   for (let attempt = 0; attempt < 120; attempt++) {
     const status = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);'));
     if (status && status.phase !== 'syncing') {
-      assert.equal(status.hasData, false); settled = true; break;
+      assert.equal(status.hasData, true); assert.equal(status.dataSource, 'bundled'); settled = true; break;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -297,6 +337,37 @@ try {
   await popupClick('#back-companies');
   report.popupVerification = 'Actual packaged popup DOM, inspected and operated via Mozilla RDP console; Playwright does not expose this extension-process tab.';
   report.checks.push('Actual packaged popup displays ranked tags, expansion, full-list search, shared windows and difficulty/topic-filtered practice questions.');
+
+  await page.bringToFront();
+  await page.waitForTimeout(200);
+  await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
+  await popupClick('[data-company="Amazon"]');
+  await expectTexts(host.locator('.practice-questions .question-title'), ['Two Sum', ...amazonPractice.slice(1)]);
+  await popupTexts('#practice-questions .question-title', ['Two Sum', ...amazonPractice.slice(1)]);
+  const retainedCompany = await host.locator('.companies a').first().elementHandle();
+  const retainedQuestion = await host.locator('.practice-questions a').first().elementHandle();
+  await host.locator('.practice-questions a').first().focus();
+  await evaluateConsoleRaw(`globalThis.__lctProgressNodes = {
+    company: document.querySelector('#companies a'), question: document.querySelector('#practice-questions a')
+  }; 'retained'`, popupConsole);
+  const statusBeforeProgress = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);'));
+  await evaluateBackground(`await browser.storage.local.set({
+    lctStatus: { ...${JSON.stringify(statusBeforeProgress)}, phase: 'syncing', completed: 3, total: 35 },
+    lctStage: { auditCheckpoint: true }, lctAuditChunk: { progress: 3 }
+  }); return 'progress';`);
+  await host.locator('.status-message').filter({ hasText: '3 of 35' }).waitFor();
+  await page.waitForTimeout(1100);
+  assert.equal(await retainedCompany.evaluate((node) => node.isConnected), true);
+  assert.equal(await retainedQuestion.evaluate((node) => node.isConnected), true);
+  assert.equal(await retainedQuestion.evaluate((node) => node.getRootNode().activeElement === node), true);
+  assert.equal(await popupRead('globalThis.__lctProgressNodes.company.isConnected && globalThis.__lctProgressNodes.question.isConnected'), true);
+  await evaluateBackground(`await browser.storage.local.set({ lctStatus: ${JSON.stringify(statusBeforeProgress)}, lctStage: null });
+    await browser.storage.local.remove('lctAuditChunk'); return 'restored';`);
+  await evaluateConsoleRaw("delete globalThis.__lctProgressNodes; 'cleared'", popupConsole);
+  await retainedCompany.dispose(); await retainedQuestion.dispose();
+  await host.getByRole('button', { name: 'Back to companies', exact: false }).click();
+  await popupClick('#back-companies');
+  report.checks.push('Background progress and unrelated storage checkpoints retain company/practice result nodes and the focused practice link.');
 
   await host.getByRole('button', { name: 'Practice Amazon', exact: true }).click();
   await host.locator('.difficulty-select').selectOption('Medium');
