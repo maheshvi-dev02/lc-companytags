@@ -20,6 +20,7 @@
   let renderedKey = null;
   let disposed = false;
   let scheduled = false;
+  let companyLoadQueued = false;
   const selectedWindow = () => Object.hasOwn(labels, settings.window) ? settings.window : 'all';
   const css = `
     :host { all:initial; display:block; width:100%; min-width:0; margin:10px 0 14px; color-scheme:light; font:12px/1.4 "Segoe UI",sans-serif; --ink:#262626; --muted:#737373; --line:#e5e5e5; --wash:#fafafa; }
@@ -183,6 +184,25 @@
     }
     renderStatus();
   }
+  function requestIsStale(id, currentSlug, window) {
+    return id !== requestId || disposed || currentSlug !== slug || window !== selectedWindow() ||
+      core.getProblemSlug(location.href) !== currentSlug;
+  }
+  function applyCompaniesResult(result, window) {
+    companies = Array.isArray(result.companies) ? result.companies : [];
+    available = result.available ?? result.windowAvailable ?? Boolean(result.status?.hasData && window === 'all');
+    status = result.status || status;
+  }
+  async function readCachedCompanies(currentSlug, window) {
+    const lookup = globalThis.LCTLookup;
+    if (!lookup || typeof lookup.readProblem !== 'function') return null;
+    try {
+      const result = await lookup.readProblem(api.storage.local, currentSlug, window);
+      return result && result.ok === true ? result : null;
+    } catch (_) {
+      return null;
+    }
+  }
   async function loadCompanies() {
     const currentSlug = slug;
     const window = selectedWindow();
@@ -190,18 +210,38 @@
     if (!currentSlug || !settings.enabled) return;
     loading = true; error = ''; renderStatus();
     try {
-      const result = await api.runtime.sendMessage({ type:'LCT_GET', slug:currentSlug, window });
-      if (id !== requestId || currentSlug !== slug || window !== selectedWindow() || core.getProblemSlug(location.href) !== currentSlug) return;
+      let result = await readCachedCompanies(currentSlug, window);
+      if (requestIsStale(id, currentSlug, window)) return;
+      if (!result) {
+        result = await api.runtime.sendMessage({ type:'LCT_GET', slug:currentSlug, window });
+        if (requestIsStale(id, currentSlug, window)) return;
+      }
       if (!result?.ok) throw new Error(result?.error || 'Could not load company tags.');
-      companies = Array.isArray(result.companies) ? result.companies : [];
-      available = result.available ?? Boolean(result.status?.hasData && window === 'all');
-      status = result.status || status;
+      applyCompaniesResult(result, window);
     } catch (cause) {
-      if (id !== requestId || currentSlug !== slug || window !== selectedWindow()) return;
+      if (requestIsStale(id, currentSlug, window)) return;
       error = cause.message || 'Could not load company tags.';
     } finally {
-      if (id === requestId && currentSlug === slug && window === selectedWindow()) { loading = false; renderCompanies(); scheduleCheck(); }
+      if (!requestIsStale(id, currentSlug, window)) { loading = false; renderCompanies(); scheduleCheck(); }
     }
+  }
+  function queueCompanyLoad() {
+    if (companyLoadQueued || !slug || !settings.enabled) return;
+    companyLoadQueued = true;
+    Promise.resolve().then(() => {
+      companyLoadQueued = false;
+      if (slug && settings.enabled) void loadCompanies();
+    });
+  }
+  function lookupRevision(value) {
+    if (!value || typeof value !== 'object') return '';
+    return String(value.revision || value.commit || value.schema || value.updatedAt || value.lastSyncedAt || value.sourceUpdatedAt || '');
+  }
+  function lookupMetaChanged(change) {
+    if (!change?.newValue) return false;
+    const previous = lookupRevision(change.oldValue);
+    const next = lookupRevision(change.newValue);
+    return previous !== next || (!previous && change.oldValue !== change.newValue);
   }
   function checkPage() {
     scheduled = false;
@@ -228,8 +268,8 @@
     sendResponse({ slug:core.getProblemSlug(location.href) }); return false;
   });
   api.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || (!changes.lctSettings && !changes.lctStatus && !changes.lctData)) return;
-    let reload = Boolean(changes.lctData?.newValue);
+    if (area !== 'local' || (!changes.lctSettings && !changes.lctStatus && !changes.lctData && !changes.lctLookupMeta)) return;
+    let reload = Boolean(changes.lctData?.newValue || lookupMetaChanged(changes.lctLookupMeta));
     if (changes.lctSettings) {
       const previousWindow = selectedWindow(); const previousEnabled = settings.enabled;
       settings = { ...defaults, ...changes.lctSettings.newValue };
@@ -243,7 +283,7 @@
       reload ||= Boolean(status.hasData && (!previous.hasData || previous.commit !== status.commit || previous.lastSyncedAt !== status.lastSyncedAt));
       renderStatus();
     }
-    if (reload && slug && settings.enabled) void loadCompanies();
+    if (reload) queueCompanyLoad();
   });
   async function start() {
     try {

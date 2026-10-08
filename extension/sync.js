@@ -1,10 +1,11 @@
 (function (root, factory) {
   const commonJS = typeof module === 'object' && module.exports;
   const api = factory(commonJS ? require('./core.js') : root.LCTCore,
-    commonJS ? require('./archive.js') : root.LCTArchive, commonJS ? require('./seed.js') : root.LCTSeed);
+    commonJS ? require('./archive.js') : root.LCTArchive, commonJS ? require('./seed.js') : root.LCTSeed,
+    commonJS ? require('./lookup.js') : root.LCTLookup);
   if (commonJS) module.exports = api;
   root.LCTSync = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (core, defaultArchive, seed) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (core, defaultArchive, seed, lookup) {
   'use strict';
 
   const DAY = 24 * 60 * 60 * 1000;
@@ -14,7 +15,7 @@
   const CHECKPOINT_FILES = 64;
   const CHUNK_PREFIX = 'lctChunk:';
   const MANIFEST_PREFIX = 'lctManifest:';
-  const KEYS = ['lctData', 'lctStatus', 'lctSettings', 'lctCache', 'lctStage'];
+  const KEYS = ['lctData', 'lctStatus', 'lctSettings', 'lctStage', lookup.META_KEY];
 
   class SyncError extends Error {
     constructor(message, retryAt, transient) {
@@ -83,13 +84,20 @@
             const status = Object.assign({}, dataStatus(data), { phase: 'idle', completed: Object.keys(data.files).length,
               total: Object.keys(data.files).length, lastCheckedAt: null, dataSource: 'bundled',
               message: 'Bundled company snapshot is ready.' });
-            await write({ lctData: data, lctStatus: status });
+            await write(Object.assign({ lctData: data, lctStatus: status }, lookup.buildStorage(data, status) || {}));
           } catch (error) {
             if (error instanceof StorageError) throw error;
             if (options.onError) options.onError(error);
           }
         }
         if (!state.lctStatus) await updateStatus({ message: 'Company data has not been downloaded yet.' });
+        // Existing installations migrate once. Tags can then read one small
+        // shard on a cold worker wake without deserializing practice records.
+        if (state.lctData && state.lctData.schema === core.DATA_SCHEMA &&
+            !lookup.matchesData(state[lookup.META_KEY], state.lctData)) {
+          const compact = lookup.buildStorage(state.lctData, state.lctStatus);
+          if (compact) await write(compact);
+        }
       })().catch((error) => { initialized = null; throw error; });
       await initialized;
     }
@@ -331,7 +339,7 @@
         const status = Object.assign({}, state.lctStatus, dataStatus(data), {
           phase: 'idle', completed: stage.files.length, total: stage.files.length,
           lastCheckedAt: iso(), dataSource: 'live', message: 'Company data is up to date.' });
-        await write({ lctData: data, lctCache: null, lctStage: null, lctStatus: status });
+        await write(Object.assign({ lctData: data, lctCache: null, lctStage: null, lctStatus: status }, lookup.buildStorage(data, status) || {}));
         await pending(false);
         // Cleanup follows publication; a cleanup problem must never turn a
         // successful complete refresh back into an interrupted download.

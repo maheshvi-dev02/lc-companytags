@@ -84,6 +84,7 @@ async function installedExecutable(kind) {
 }
 
 async function prepare(context, blockGitHub = true) {
+  await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
   await context.route(/https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//, (route) => route.fulfill({ contentType: 'text/html', body: problemFixture({ anchor: !new URL(route.request().url()).searchParams.has('late') }) }));
   // Supplemental routing for page requests. Service-worker requests bypass these
   // routes, so deterministic browser launches also block these hosts in Chromium's
@@ -203,7 +204,6 @@ async function chromiumRun() {
     firstInstall.windowNote = firstInstall.bundledPopup.windowNote;
     firstInstall.popupLogos = await exercisePopupLogos(chromiumExplorerDriver(setupPopup), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
     firstInstall.popup = 'Actual packaged popup displays the same bundled all-time tags and source date.';
-    await context.route('https://example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
     const unrelatedPage = await context.newPage();
     await unrelatedPage.goto('https://example.com/');
     await unrelatedPage.bringToFront();

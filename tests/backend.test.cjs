@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { deflateRawSync } = require('node:zlib');
 const core = require('../extension/core.js');
+const lookup = require('../extension/lookup.js');
 const { createSyncService, MAX_RUN_FAILURES, REQUEST_TIMEOUT_MS } = require('../extension/sync.js');
 
 const SHA_A = 'a'.repeat(40);
@@ -1331,5 +1332,165 @@ test('each query endpoint rejects malformed and irrelevant sort modes before tou
     await assert.rejects(service.getPractice({ company: 'Alpha', sort }), /sort/i, sort);
   }
   assert.equal(storageReads, 0, 'invalid requests fail before loading the cache');
+  assert.equal(source.calls.length, 0);
+});
+
+
+function savedLookup(storage) {
+  return Object.fromEntries(Object.entries(storage.values).filter(([key]) => key === lookup.META_KEY || key.startsWith(lookup.SHARD_PREFIX)));
+}
+
+function assertAtomicLookupPublication(publication) {
+  assert.ok(publication.lctData, 'complete records are part of the publication');
+  assert.ok(publication.lctStatus, 'status is part of the same storage write');
+  assert.ok(publication[lookup.META_KEY], 'lookup metadata is part of the same storage write');
+  assert.equal(publication[lookup.META_KEY].commit, publication.lctData.commit);
+  assert.equal(publication[lookup.META_KEY].revision, publication.lctData.commit + ':' + publication.lctData.lastSyncedAt);
+  assert.equal(publication.lctStatus.commit, publication.lctData.commit);
+  const shards = Object.entries(publication).filter(([key]) => key.startsWith(lookup.SHARD_PREFIX));
+  assert.equal(shards.length, 5 * lookup.SHARD_COUNT, 'all old buckets are replaced together, including empty ones');
+  for (const [, shard] of shards) assert.equal(shard.revision, publication[lookup.META_KEY].revision);
+}
+
+test('bundled seed atomically publishes compact lookups before remote requests', async () => {
+  const { source, data } = snapshotFixture();
+  const storage = memoryStorage();
+  const service = makeService(storage, source, { loadSnapshot: async () => data });
+  await service.initialize();
+  assert.equal(source.calls.length, 0);
+  const publications = storage.writes.filter((write) => write.lctData);
+  assert.equal(publications.length, 1);
+  assertAtomicLookupPublication(publications[0]);
+  for (const window of Object.keys(core.WINDOW_FILES)) {
+    const result = await lookup.readProblem(storage, 'two-sum', window);
+    assert.equal(result.status.dataSource, 'bundled');
+    assert.deepEqual(result.companies, core.companiesForSlug(storage.values.lctData, 'two-sum', window));
+  }
+});
+
+test('failed refresh preserves the previous compact revision and completed refresh replaces data and every shard atomically', async () => {
+  const source = sourceFixture();
+  const storage = memoryStorage();
+  const service = makeService(storage, source);
+  await service.refresh();
+  await service.waitForIdle();
+  const firstPublication = storage.writes.find((write) => write.lctData);
+  assertAtomicLookupPublication(firstPublication);
+  const previous = structuredClone(savedLookup(storage));
+  source.commit = SHA_B;
+  source.files = [company('Amazon', BLOB_C), company('Google', BLOB_C)];
+  source.csvByCompany.Amazon = csv(['reverse-linked-list']);
+  source.failures.Google = () => response('', 503);
+  await service.refresh();
+  await service.waitForIdle();
+  assert.equal((await service.getStatus()).phase, 'error');
+  assert.deepEqual(savedLookup(storage), previous, 'a partial sync never changes the published tags');
+  const offline = await lookup.readProblem(storage, 'two-sum', 'all');
+  assert.equal(offline.status.commit, SHA_A);
+  assert.equal(offline.status.phase, 'error');
+  assert.deepEqual(offline.companies.map((entry) => entry.name), ['Amazon', 'Google']);
+  assert.deepEqual((await lookup.readProblem(storage, 'reverse-linked-list', 'all')).companies, []);
+  delete source.failures.Google;
+  await service.refresh();
+  await service.waitForIdle();
+  const publications = storage.writes.filter((write) => write.lctData);
+  assert.equal(publications.length, 2, 'only complete datasets are published');
+  assertAtomicLookupPublication(publications[1]);
+  assert.notEqual(storage.values[lookup.META_KEY].revision, previous[lookup.META_KEY].revision);
+  const result = await lookup.readProblem(storage, 'reverse-linked-list', 'all');
+  assert.equal(result.status.commit, SHA_B);
+  assert.deepEqual(result.companies, core.companiesForSlug(storage.values.lctData, 'reverse-linked-list'));
+  assert.deepEqual((await lookup.readProblem(storage, 'two-sum', 'all')).companies.map((entry) => entry.name), ['Google']);
+});
+
+test('existing complete caches backfill compact lookup once while warm queries and worker restarts never rewrite it', async () => {
+  const { source, data } = snapshotFixture();
+  const storage = memoryStorage({ lctData: data,
+    lctStatus: { phase: 'idle', lastCheckedAt: new Date(FIXED_NOW).toISOString(), dataSource: 'live' } });
+  const originalData = structuredClone(storage.values.lctData);
+  const service = makeService(storage, source);
+  await service.initialize();
+  assert.ok(storage.values[lookup.META_KEY]);
+  assert.equal(storage.writes.filter((write) => write[lookup.META_KEY]).length, 1);
+  assert.deepEqual(storage.values.lctData, originalData, 'backfill does not republish or alter full records');
+  const writes = storage.writes.length;
+  const previousLookup = structuredClone(savedLookup(storage));
+  for (let repeat = 0; repeat < 3; repeat += 1) {
+    const compact = await lookup.readProblem(storage, 'two-sum', '30d');
+    assert.deepEqual(compact.companies, await service.getCompanies('two-sum', '30d'));
+    await service.getStatus();
+    await service.initialize();
+  }
+  const restarted = makeService(storage, source);
+  await restarted.initialize();
+  await restarted.getCompanies('two-sum');
+  assert.equal(storage.writes.length, writes);
+  assert.deepEqual(savedLookup(storage), previousLookup);
+  assert.equal(source.calls.length, 0);
+  const legacy = memoryStorage(legacyState());
+  const legacyService = makeService(legacy, source);
+  await legacyService.initialize();
+  assert.equal(legacy.values[lookup.META_KEY], undefined, 'legacy tags continue to use the full-cache fallback until migration completes');
+  assert.equal((await legacyService.getCompanies('two-sum')).length, 2);
+});
+
+
+test('unchanged-commit confirmation updates compact read status to live without rewriting the bundled revision', async () => {
+  const { source, data } = snapshotFixture();
+  const storage = memoryStorage();
+  const service = makeService(storage, source, { loadSnapshot: async () => data });
+  await service.initialize();
+  const previousLookup = structuredClone(savedLookup(storage));
+  const previousData = structuredClone(storage.values.lctData);
+  assert.equal((await lookup.readStatus(storage)).dataSource, 'bundled');
+  await service.startAutomatic();
+  await service.waitForIdle();
+  assert.deepEqual(source.calls, [core.API_URL + '/commits/main']);
+  assert.deepEqual(storage.values.lctData, previousData);
+  assert.deepEqual(savedLookup(storage), previousLookup);
+  assert.equal(storage.writes.filter((write) => write.lctData).length, 1);
+  assert.equal(storage.writes.filter((write) => write[lookup.META_KEY]).length, 1);
+  const result = await lookup.readProblem(storage, 'two-sum', 'all');
+  const status = await lookup.readStatus(storage);
+  for (const value of [result.status, status]) {
+    assert.equal(value.phase, 'idle');
+    assert.equal(value.dataSource, 'live');
+    assert.equal(value.commit, data.commit);
+    assert.equal(value.sourceUpdatedAt, data.sourceUpdatedAt);
+    assert.equal(value.lastSyncedAt, data.lastSyncedAt);
+    assert.equal(value.companyCount, data.companyCount);
+    assert.equal(value.problemCount, data.problemCount);
+  }
+  assert.deepEqual(result.companies, core.companiesForSlug(previousData, 'two-sum'));
+});
+
+
+test('a newer full cache and status repair stale compact rows before answering a fallback query', async () => {
+  const { source, data } = snapshotFixture();
+  const oldStatus = { phase: 'idle', dataSource: 'bundled', commit: SHA_A,
+    lastSyncedAt: data.lastSyncedAt, sourceUpdatedAt: data.sourceUpdatedAt };
+  const oldLookup = lookup.buildStorage(data, oldStatus);
+  const newer = structuredClone(data);
+  newer.commit = SHA_B;
+  newer.lastSyncedAt = new Date(FIXED_NOW + 60000).toISOString();
+  newer.files['Amazon/5. All.csv'].records[0].frequency = 97;
+  const storage = memoryStorage({ ...oldLookup, lctData: newer,
+    lctStatus: { phase: 'idle', dataSource: 'live', commit: SHA_B,
+      lastSyncedAt: newer.lastSyncedAt, sourceUpdatedAt: newer.sourceUpdatedAt,
+      lastCheckedAt: new Date(FIXED_NOW).toISOString() } });
+  assert.equal(await lookup.readProblem(storage, 'two-sum', 'all'), null);
+  assert.equal(await lookup.readStatus(storage), null);
+  const service = makeService(storage, source);
+  const companies = await service.getCompanies('two-sum');
+  assert.deepEqual(companies, core.companiesForSlug(newer, 'two-sum'));
+  assert.equal(companies[0].frequency, 97, 'the fallback returns newly published scores instead of the stale bundled value');
+  assert.equal(storage.values[lookup.META_KEY].commit, SHA_B);
+  assert.equal(storage.writes.filter((write) => write[lookup.META_KEY]).length, 1);
+  assert.equal(storage.writes.filter((write) => write.lctData).length, 0, 'repair derives from existing full records without republishing them');
+  const repaired = await lookup.readProblem(storage, 'two-sum', 'all');
+  assert.deepEqual(repaired.companies, companies);
+  assert.equal(repaired.status.commit, SHA_B);
+  assert.equal((await lookup.readStatus(storage)).dataSource, 'live');
+  assert.deepEqual(storage.values.lctData, newer);
   assert.equal(source.calls.length, 0);
 });
