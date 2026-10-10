@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { verifyBadges, exerciseBrokenLogo } from './browser-logos.mjs';
+import { acceptanceLabel, exerciseAcceptanceControl } from './browser-first-install.mjs';
 
 // Both drivers operate the actual packaged document. Firefox extension-process
 // tabs are unavailable to Playwright, so its driver uses Mozilla's DOM console.
@@ -299,6 +300,7 @@ async function exerciseSorting(ui, { data, core, output, browserName }) {
 
 export async function exerciseExplorer(ui, { data, core, output, browserName }) {
   const checks = [];
+  const acceptance = {};
   const logos = {};
   const resultProblems = '#results [data-action="problem"]';
   const resultCompanies = '#results .company-title[data-action="company"]';
@@ -310,7 +312,10 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   const companyNamesGlobal = () => values(resultCompanies, 'data-company');
   const questions = (company, options = {}) => core.practiceQuestions(data, { company, window: 'all', limit: 50, ...options });
   const companyRecords = (company, window = 'all') => data.files[company + '/' + core.WINDOW_FILES[window]].records;
-  const expectQuestions = async (expected) => expectRead(ui, texts(questionTitles), expected.map(({ title }) => title));
+  const expectQuestions = async (expected) => {
+    await expectRead(ui, texts(questionTitles), expected.map(({ title }) => title));
+    await expectRead(ui, texts('#detail-results .acceptance-rate'), expected.map(question => acceptanceLabel(core, core.problemForSlug(data, question.slug)?.acceptanceRate)));
+  };
   const expectCompanies = async (expected) => {
     await expectRead(ui, texts(companyNames), expected.map(({ name }) => name));
     await expectRead(ui, texts(companyScores), expected.map(({ frequency }) => frequency == null ? '—' : String(frequency)));
@@ -329,6 +334,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
     await ui.fill('#global-search', '');
     const expected = core.searchProblems(data, { window, limit: 50 });
     await expectRead(ui, problemSlugs(), expected.problems.map(({ slug }) => slug));
+    await expectRead(ui, texts('#results .acceptance-rate'), expected.problems.map(problem => acceptanceLabel(core, problem.acceptanceRate)));
     await expectSummary(ui, '#result-summary', expected.total);
     coverage[window] = expected.total;
   }
@@ -342,10 +348,19 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
     node.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('#load-more').click();`);
   const twoSumSearch = core.searchProblems(data, { query: 'two sum', window: 'all', limit: 50 });
   await expectRead(ui, problemSlugs(), twoSumSearch.problems.map(({ slug }) => slug));
+  const twoSumLabel = acceptanceLabel(core, core.problemForSlug(data, 'two-sum').acceptanceRate);
+  const globalAcceptance = '#results .question-row[data-slug="two-sum"] .acceptance-rate';
+  acceptance.global = await exerciseAcceptanceControl(ui, { selector: globalAcceptance, label: twoSumLabel, core });
+  if (ui.screenshot) {
+    await ui.click(globalAcceptance);
+    await ui.screenshot(path.join(output, `${browserName}-acceptance-explorer-help.png`));
+    await ui.press(globalAcceptance, 'Escape');
+  }
   if (ui.screenshot) await ui.screenshot(path.join(output, `${browserName}-explorer-problems.png`));
   await ui.activateWithKeyboard('#results [data-action="problem"][data-slug="two-sum"]');
   await expectRead(ui, visible('#detail-view'), true);
   await expectRead(ui, text('#detail-title'), 'Two Sum');
+  acceptance.problem = await exerciseAcceptanceControl(ui, { selector: '#detail-context .acceptance-rate', label: twoSumLabel, core });
   const expectedTags = core.companiesForSlug(data, 'two-sum', 'all');
   await expectCompanies(expectedTags);
   await expectSummary(ui, '#detail-summary', expectedTags.length);
@@ -360,6 +375,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await ui.activateWithKeyboard('#detail-results .company-title[data-company="Amazon"]');
   await expectRead(ui, text('#detail-title'), 'Amazon');
   await expectQuestions(questions('Amazon').questions);
+  acceptance.company = await exerciseAcceptanceControl(ui, { selector: '#detail-results .question-row[data-slug="two-sum"] .acceptance-rate', label: twoSumLabel, core });
   logos.amazonHeading = await verifyBadges(ui, { selector: '#detail-name > .company-logo', names: ['Amazon'], size: 24, known: true });
   await ui.activateWithKeyboard('#detail-back');
   await expectRead(ui, text('#detail-title'), 'Two Sum');
@@ -369,12 +385,14 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   if (ui.screenshot) await ui.screenshot(path.join(output, `${browserName}-explorer-two-sum.png`));
   await ui.select('#window-select', '30d');
   await expectCompanies(core.companiesForSlug(data, 'two-sum', '30d'));
+  await expectRead(ui, texts('#detail-context .acceptance-rate'), [twoSumLabel]);
   await ui.select('#window-select', 'all');
   await expectCompanies(expectedTags);
   await ui.activateWithKeyboard('#detail-back');
   await expectRead(ui, visible('#results'), true);
   await expectRead(ui, problemSlugs(), twoSumSearch.problems.map(({ slug }) => slug));
   checks.push('Global Two Sum lookup opens all 115 companies sorted by source score with ranks and correctly refreshes its selected window.');
+  checks.push('Explorer renders saved acceptance beside difficulty in global and company question rows, preserves the same global rate in problem/company/window views, and reveals the submission-rate explanation by click/keyboard with Escape dismissal.');
 
   await ui.activateWithKeyboard('#mode-companies');
   await ui.fill('#global-search', 'Acko');
@@ -393,7 +411,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
     const previousViewport = ui.viewport();
     await ui.setViewport({ width: 375, height: 667 });
     const geometry = await ui.read(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
-      controls: ['#detail-back', '#window-select', '#difficulty-select', '#topic-select', '#question-search', '#detail-results a[href*=problems]'].map(selector => {
+      controls: ['#detail-back', '#window-select', '#difficulty-select', '#topic-select', '#question-search', '#detail-results a[href*=problems]', '#detail-results .acceptance-rate'].map(selector => {
         const field=document.querySelector(selector);const node=field.tagName==='SELECT'?document.getElementById(field.id+'-trigger')||field:field;const rect=node.getBoundingClientRect();
         return { selector, left: rect.left, right: rect.right, width: rect.width, height: rect.height };
       }) })`);
@@ -508,5 +526,5 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   checks.push('Explorer decodes local SVG/PNG company logos in real search rows and company headings, preserves accessible names, and shows readable initials when a brand is unmapped or a packaged image fails.');
   const sorting = await exerciseSorting(ui, { data, core, output, browserName });
   checks.push(...sorting.checks);
-  return { checks, logos, coverage, sorting, twoSumCompanies: expectedTags.length, ackoQuestions: 4, amazonQuestions: 2011, keyboardVerification: ui.keyboard };
+  return { checks, acceptance, logos, coverage, sorting, twoSumCompanies: expectedTags.length, ackoQuestions: 4, amazonQuestions: 2011, keyboardVerification: ui.keyboard };
 }

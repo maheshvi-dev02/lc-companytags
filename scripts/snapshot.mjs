@@ -50,7 +50,7 @@ for (const window of Object.keys(core.WINDOW_FILES)) {
 }
 const bytes = gzipSync(Buffer.from(JSON.stringify(data)), { level: 9 });
 const metadata = {
-  version: 1, schema: data.schema, source: core.SOURCE_URL,
+  version: 1, schema: data.schema, acceptanceVersion: data.acceptanceVersion, source: core.SOURCE_URL,
   commit: data.commit, sourceUpdatedAt: data.sourceUpdatedAt,
   bundledAt: new Date().toISOString(), companies: data.companyCount, problems: data.problemCount,
   files: files.length, windows: Object.fromEntries(Object.entries(data.windows).map(([key, value]) => [key, value.problemCount])),

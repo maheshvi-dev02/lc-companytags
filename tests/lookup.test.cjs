@@ -124,7 +124,7 @@ test('incompatible metadata and a cross-revision shard never return a false comp
   const { values, status } = fixture();
   const key = lookup.shardKey('two-sum', 'all');
   const mutations = [
-    (state) => { state[lookup.META_KEY].version = 2; },
+    (state) => { state[lookup.META_KEY].version = lookup.VERSION + 1; },
     (state) => { state[lookup.META_KEY].commit = 'invalid'; },
     (state) => { state[lookup.META_KEY].revision += '-stale'; },
     (state) => { state[lookup.META_KEY].windows.all.available = 'yes'; },
@@ -175,4 +175,40 @@ test('a newer published status commit rejects stale compact problem rows and sta
   assert.equal((await lookup.readProblem(storage, 'two-sum', 'all')).companies.length, 2,
     'matching commit restores the valid lookup');
   assert.equal((await lookup.readStatus(storage)).commit, COMMIT);
+});
+
+
+test('acceptance metadata uses the same compact read and remains problem-level across windows', async () => {
+  const { data, status } = fixture();
+  data.problems['two-sum'].acceptanceRate = 58.009183274;
+  const values = lookup.buildStorage(data, status);
+  const storage = compactStorage({ ...values, lctStatus: status });
+  for (const window of ['all', '30d', 'older']) {
+    const result = await lookup.readProblem(storage, 'two-sum', window);
+    assert.deepEqual(result.problem, { title: 'Two Sum', difficulty: 'Easy', acceptanceRate: 58.009183274 });
+    assert.deepEqual(storage.reads.at(-1).slice().sort(), [lookup.META_KEY, lookup.shardKey('two-sum', window), 'lctStatus'].sort());
+  }
+  const unknown = await lookup.readProblem(storage, 'not-in-source', 'all');
+  assert.equal(unknown.problem, null);
+  assert.equal((await lookup.readStatus(storage)).acceptanceVersion, core.ACCEPTANCE_VERSION);
+});
+
+test('old lookup formats and malformed acceptance metadata fall back rather than returning stale rates', async () => {
+  const { data, status } = fixture();
+  const key = lookup.shardKey('two-sum', 'all');
+  const values = lookup.buildStorage(data, status);
+  const mutations = [
+    (state) => { state[lookup.META_KEY].version = 1; },
+    (state) => { delete state[key].problems; },
+    (state) => { state[key].problems['two-sum'].acceptanceRate = NaN; },
+    (state) => { state[key].problems['two-sum'].acceptanceRate = 100.1; },
+    (state) => { state[key].problems['two-sum'].acceptanceRate = -1; },
+    (state) => { state[key].problems['two-sum'].acceptanceRate = '58'; },
+    (state) => { state[key].problems['two-sum'].difficulty = 'Unknown'; }
+  ];
+  for (const mutate of mutations) {
+    const changed = structuredClone({ ...values, lctStatus: status });
+    mutate(changed);
+    assert.equal(await lookup.readProblem(compactStorage(changed), 'two-sum', 'all'), null);
+  }
 });

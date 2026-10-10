@@ -114,3 +114,8 @@ a.leetcode-link:hover { border-color:var(--muted); text-decoration:none; }
 .select-option[aria-selected="true"]::after { content:'✓'; position:absolute; right:10px; top:8px; color:var(--muted); }
 .select-option[aria-disabled="true"] { opacity:.5; cursor:default; }
 @media(max-width:440px) { .window-filter .select-control { max-width:190px; } .sort-filter .select-control { max-width:200px; } }
+
+/* Acceptance is problem-wide; the text control also opens its explanation on tap or Enter. */
+button.acceptance-rate { display:inline; color:inherit; background:transparent; border:0; border-radius:2px; padding:0; font:inherit; text-align:left; text-decoration:underline dotted; text-underline-offset:3px; cursor:help; }
+button.acceptance-rate:hover { background:transparent; text-decoration-style:solid; }
+.acceptance-help { display:block; max-width:680px; margin:6px 0 0; padding:8px 10px; color:var(--muted); background:var(--wash); border:1px solid var(--line); border-radius:8px; font-size:11px; line-height:1.5; overflow-wrap:anywhere; }

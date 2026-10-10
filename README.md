@@ -34,6 +34,8 @@ Open **Explore dataset** in the toolbar popup to search the whole cached dataset
 
 The company filter in the toolbar popup searches only the current problem’s tags; **Explore dataset** searches the whole collection.
 
+**Acceptance** appears beside difficulty in explorer and company practice question lists, and beneath the current problem title in the toolbar popup. Hover over the acceptance text for its meaning, or activate it with a click, tap, or Enter to read the explanation. This is the problem’s overall LeetCode submission acceptance rate, shared across companies. The inline company bar continues to show company logos, names and frequency.
+
 Use **Sort** in the explorer to change the order of each list. Companies can be ordered by name (A–Z or Z–A) or by most/fewest questions in the selected window. Problems can be ordered by search relevance, name, difficulty (easy to hard or hard to easy), or most/fewest associated companies. Company question lists also support highest/lowest frequency, and a problem’s company list supports frequency, name and question count. Counts follow the selected time window; source frequency scores and company ranks keep their original meaning. Sorting applies to all matching results before pagination, and each list’s sort preference is saved on your device. Explorer dropdowns use rounded menus that follow the light/dark theme, with keyboard navigation and click-outside dismissal.
 
 Company logos appear beside names in the inline bar, popup, explorer and company practice headings. Logos are bundled in the extension and work offline, with no calls to third-party logo services while you browse. Companies without a verified asset, or whose image cannot load, show a small initials badge. The bundled catalog includes 277 verified company logos (103 of the 115 companies listed for Two Sum in the current snapshot). Logo credits and source details are included in `extension/logos/catalog.json`.
@@ -53,6 +55,8 @@ The extension supports LeetCode.com, LeetCode.cn, contest problem URLs, and navi
 ## What the tags mean
 
 The extension matches each CSV's **Link** column to the problem URL and uses the **Frequency** column as a source score. Companies are ordered by descending score, then alphabetically for ties. These values are not documented interview counts or probabilities, and comparisons between companies may not use a common scale. Scores are displayed without a percentage sign.
+
+Acceptance comes from the source CSV’s **Acceptance Rate** column and measures accepted submissions divided by total submissions for a problem across LeetCode users. It is a snapshot value, not a company interview pass rate or a percentage for the selected interview time window. The verified source revision has a [reported scaling error](https://github.com/liquidslr/leetcode-company-wise-problems/issues/49); the parser corrects that revision’s known format to percentages. Missing, invalid, or ambiguous formats show **Acceptance unavailable**. See [LeetCode’s description of submission statistics](https://support.leetcode.com/hc/en-us/articles/360012016874-Start-your-Coding-Practice).
 
 The five source files are **1. Thirty Days.csv**, **2. Three Months.csv**, **3. Six Months.csv**, **4. More Than Six Months.csv**, and **5. All.csv**. Time windows are relative to the repository's snapshot, not today's date. The source date and selected window are available in the bar and toolbar popup.
 

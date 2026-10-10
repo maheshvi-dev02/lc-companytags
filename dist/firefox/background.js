@@ -28,7 +28,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
       const status = await LCTLookup.readStatus(api.storage.local);
       if (status) {
         const checked = Date.parse(status.lastCheckedAt || '');
-        const needsRefresh = status.dataSource === 'bundled' || status.phase === 'syncing' ||
+        const needsRefresh = status.acceptanceVersion !== LCTCore.ACCEPTANCE_VERSION || status.dataSource === 'bundled' || status.phase === 'syncing' ||
           !Number.isFinite(checked) || Date.now() - checked >= LCTSync.DAY;
         if (needsRefresh && !(await api.alarms.get(RESUME_ALARM))) {
           // Leave existing alarm deadlines untouched. The normal resume path
@@ -85,7 +85,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         if (compact) return compact;
         const companies = await service.getCompanies(message.slug, message.window);
         const available = await service.windowAvailable(message.window);
-        return { ok: true, companies, available, windowAvailable: available, status: await service.getStatus() };
+        return { ok: true, problem: await service.getProblem(message.slug), companies, available, windowAvailable: available, status: await service.getStatus() };
       }
       if (message.type === 'LCT_PRACTICE') return Object.assign({ ok: true, status: await service.getStatus() }, await service.getPractice(message));
       if (message.type === 'LCT_SEARCH_PROBLEMS') return Object.assign({ ok: true }, await service.searchProblems(message), { status: await service.getStatus() });

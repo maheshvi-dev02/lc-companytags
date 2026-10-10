@@ -143,7 +143,7 @@
     for (const file of options.files) {
       const bytes = await unpack(entries.get(prefix + file.path));
       if ((await gitBlobSHA(bytes)).toLowerCase() !== file.sha.toLowerCase()) throw new Error('GitHub archive company CSV does not match its source blob SHA.');
-      const value = { sha: file.sha, records: core.parseCompanyRecords(textDecoder.decode(bytes)) };
+      const value = { sha: file.sha, records: core.parseCompanyRecords(textDecoder.decode(bytes), { commit: options.commit }) };
       parsed[file.path] = value;
       if (options.onFile) await options.onFile(file, value);
       if (options.yield) await options.yield();

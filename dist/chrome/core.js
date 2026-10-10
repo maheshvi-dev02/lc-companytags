@@ -10,6 +10,11 @@
   const RAW_URL = 'https://raw.githubusercontent.com/liquidslr/leetcode-company-wise-problems';
   const DATA_VERSION = 2;
   const DATA_SCHEMA = 'company-windows-v1';
+  const ACCEPTANCE_VERSION = 1;
+  const ACCEPTANCE_TOOLTIP = 'Percentage of LeetCode submissions accepted for this problem, across all users.';
+  // This pinned source revision has the verified upstream 100x fraction scale
+  // bug (issue #49). Unknown revisions never inherit the correction by magnitude.
+  const SCALED_ACCEPTANCE_COMMITS = new Set(['03850eb5d16892514491cf1381c32ec0330a2719']);
   const WINDOW_FILES = Object.freeze({
     all: '5. All.csv', '30d': '1. Thirty Days.csv', '3m': '2. Three Months.csv',
     '6m': '3. Six Months.csv', older: '4. More Than Six Months.csv'
@@ -91,7 +96,48 @@
     return validFrequency(Number(value.trim()));
   }
 
-  function parseCompanyRecords(text) {
+  function validAcceptanceRate(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
+  }
+
+  function formatAcceptanceRate(value) {
+    const rate = validAcceptanceRate(value);
+    return rate === null ? null : rate.toFixed(1) + '%';
+  }
+
+  function acceptanceNumber(value) {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    const text = value.trim();
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)) return null;
+    const number = Number(text);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  }
+
+  function acceptanceFormat(rows, column, options) {
+    if (['fraction', 'percent', 'scaled-fraction'].includes(options.acceptanceFormat)) return options.acceptanceFormat;
+    if (SCALED_ACCEPTANCE_COMMITS.has(options.commit)) return 'scaled-fraction';
+    const numbers = rows.slice(1).map((row) => acceptanceNumber(row[column])).filter((value) => value !== null && value <= 100);
+    const maximum = numbers.length ? Math.max(...numbers) : null;
+    // Infer one scale for the whole column, never a different scale per row.
+    // All-tiny values could be legitimate low fractions or an unknown source
+    // scale regression; keep them unavailable without verified provenance.
+    if (maximum !== null && maximum > 1) return 'percent';
+    if (maximum !== null && maximum > 0.01) return 'fraction';
+    return null;
+  }
+
+  function parseAcceptanceRate(value, format) {
+    if (typeof value !== 'string') return null;
+    const text = value.trim();
+    const percent = text.endsWith('%');
+    const number = acceptanceNumber(percent ? text.slice(0, -1) : text);
+    if (number === null) return null;
+    if (percent) return validAcceptanceRate(number);
+    const multiplier = format === 'fraction' ? 100 : format === 'scaled-fraction' ? 10000 : format === 'percent' ? 1 : null;
+    return multiplier === null ? null : validAcceptanceRate(number * multiplier);
+  }
+
+  function parseCompanyRecords(text, options = {}) {
     const rows = parseCSV(text);
     if (!rows.length) throw new Error('Company CSV is empty.');
     const header = rows[0].map((value) => value.trim().toLowerCase());
@@ -100,6 +146,8 @@
     const titleColumn = header.indexOf('title');
     const difficultyColumn = header.indexOf('difficulty');
     const topicsColumn = header.indexOf('topics');
+    const acceptanceColumn = header.indexOf('acceptance rate');
+    const acceptanceUnit = acceptanceColumn === -1 ? null : acceptanceFormat(rows, acceptanceColumn, options);
     if (linkColumn === -1) throw new Error('Company CSV is missing its Link column.');
     const records = new Map();
     for (const row of rows.slice(1)) {
@@ -116,6 +164,7 @@
           title: titleColumn === -1 ? formatProblemTitle(slug) : row[titleColumn].trim() || formatProblemTitle(slug),
           difficulty: ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty[0].toUpperCase() + difficulty.slice(1) : null,
           topics: topicsColumn === -1 ? [] : Array.from(new Set(row[topicsColumn].split(',').map((topic) => topic.trim()).filter(Boolean))).sort(),
+          acceptanceRate: acceptanceColumn === -1 ? null : parseAcceptanceRate(row[acceptanceColumn], acceptanceUnit),
           frequency, rank: null });
       }
     }
@@ -240,6 +289,8 @@
       cached.records.every((record) => record && typeof record.slug === 'string' && SLUG_PATTERN.test(record.slug) &&
         typeof record.title === 'string' && (record.difficulty === null || ['Easy', 'Medium', 'Hard'].includes(record.difficulty)) &&
         Array.isArray(record.topics) && record.topics.every((topic) => typeof topic === 'string') &&
+        Object.prototype.hasOwnProperty.call(record, 'acceptanceRate') &&
+        (record.acceptanceRate === null || validAcceptanceRate(record.acceptanceRate) !== null) &&
         (record.frequency === null ? record.rank === null : validFrequency(record.frequency) !== null && Number.isInteger(record.rank) && record.rank > 0)) &&
       new Set(cached.records.map((record) => record.slug)).size === cached.records.length ? cached : null;
   }
@@ -274,7 +325,18 @@
       });
     }
     for (const windowData of Object.values(windows)) windowData.problemCount = Object.keys(windowData.index).length;
-    return { version: DATA_VERSION, schema: DATA_SCHEMA, commit, sourceUpdatedAt, lastSyncedAt, companies, windows, files: storedFiles,
+    const problems = Object.create(null);
+    // Acceptance belongs to a problem. Prefer all-time rows and then a stable
+    // company order so every company/window view shows the same source value.
+    const orderedFiles = files.slice().sort((a, b) => ((a.window || 'all') === 'all' ? 0 : 1) -
+      ((b.window || 'all') === 'all' ? 0 : 1) || a.name.localeCompare(b.name, 'en') || a.path.localeCompare(b.path, 'en'));
+    for (const file of orderedFiles) for (const record of storedFiles[file.path].records) {
+      let problem = problems[record.slug];
+      if (!problem) problem = problems[record.slug] = { title: record.title, difficulty: record.difficulty, acceptanceRate: null };
+      if (!problem.difficulty && record.difficulty) problem.difficulty = record.difficulty;
+      if (problem.acceptanceRate === null) problem.acceptanceRate = validAcceptanceRate(record.acceptanceRate);
+    }
+    return { version: DATA_VERSION, schema: DATA_SCHEMA, acceptanceVersion: ACCEPTANCE_VERSION, commit, sourceUpdatedAt, lastSyncedAt, companies, windows, files: storedFiles, problems,
       companyCount: companies.length, problemCount: allSlugs.size };
   }
 
@@ -321,6 +383,18 @@
       return { name: company.name, sourceUrl: company.sourceUrl, frequency, rank: null, problemCount: null };
     });
     return sortCompanies(companies);
+  }
+
+  function hasAcceptanceData(data) {
+    return Boolean(data && data.acceptanceVersion === ACCEPTANCE_VERSION && data.problems && typeof data.problems === 'object' && !Array.isArray(data.problems));
+  }
+
+  function problemForSlug(data, slug) {
+    if (!hasAcceptanceData(data) || !SLUG_PATTERN.test(slug || '') || !Object.prototype.hasOwnProperty.call(data.problems, slug)) return null;
+    const problem = data.problems[slug];
+    if (!problem || typeof problem.title !== 'string') return null;
+    return { title: problem.title, difficulty: ['Easy', 'Medium', 'Hard'].includes(problem.difficulty) ? problem.difficulty : null,
+      acceptanceRate: validAcceptanceRate(problem.acceptanceRate) };
   }
 
   function normalizedSearchText(value) {
@@ -371,6 +445,7 @@
       if (!representative || !companies.size) continue;
       const problem = { slug, title: typeof representative.title === 'string' && representative.title.trim() ?
         representative.title : formatProblemTitle(slug), difficulty: knownDifficulty,
+        acceptanceRate: problemForSlug(data, slug)?.acceptanceRate ?? null,
         companyCount: companies.size, url: 'https://leetcode.com/problems/' + slug + '/' };
       if ((!difficulty || (problem.difficulty || '').toLowerCase() === difficulty) && matchesProblem(problem, terms)) problems.push(problem);
     }
@@ -423,6 +498,7 @@
       (!difficulty || (record.difficulty || '').toLowerCase() === difficulty) &&
       (!topic || record.topics.some((value) => value.toLowerCase() === topic)) && matchesProblem(record, terms))
       .map((record) => Object.assign({}, record, { topics: record.topics.slice(),
+        acceptanceRate: problemForSlug(data, record.slug)?.acceptanceRate ?? null,
         companyCount: matchingCompanyRecords(data, record.slug, window).length,
         url: 'https://leetcode.com/problems/' + record.slug + '/' }));
     filtered.sort((a, b) => compareProblemRows(a, b, sort));
@@ -431,7 +507,7 @@
       available: true, windowAvailable: true, sourceUrl: sourceFileURL(data.commit, path) };
   }
 
-  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, getProblemSlug, formatProblemTitle,
+  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, getProblemSlug, formatProblemTitle,
     parseCSV, parseCompanyCSV, parseCompanyRecords, sortCompanies, selectCompanyFiles, selectWindowFiles, encodedPath, sourceFileURL, rawFileURL,
-    reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
+    validAcceptanceRate, formatAcceptanceRate, hasAcceptanceData, problemForSlug, reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
 });

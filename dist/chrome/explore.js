@@ -39,6 +39,7 @@
   const detailVersion = frame => JSON.stringify([version(), frame.kind, frame.slug || frame.name, frame.sort, frame.filters]);
   const invalidate = () => {
     closeSelectMenu();
+    closeAcceptanceHelp();
     generation++; clearTimeout(searchTimer); clearTimeout(questionTimer);
     list.loading = false;
     for (const frame of stack) frame.loading = false;
@@ -50,6 +51,48 @@
     if (text !== undefined) element.textContent = text;
     return element;
   }
+
+  let acceptanceHelpId = 0;
+  function closeAcceptanceHelp(except = null) {
+    document.querySelectorAll('.acceptance-rate[aria-expanded="true"]').forEach(button => {
+      if (button === except) return;
+      button.setAttribute('aria-expanded', 'false');
+      const help = document.getElementById(button.getAttribute('aria-controls'));
+      if (help) help.hidden = true;
+    });
+  }
+  function acceptanceInfo(value) {
+    const formatted = core.formatAcceptanceRate(value);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'acceptance-rate';
+    button.textContent = formatted === null ? 'Acceptance unavailable' : `Acceptance ${formatted}`;
+    const help = document.createElement('span');
+    help.className = 'acceptance-help';
+    help.id = `acceptance-help-${++acceptanceHelpId}`;
+    help.textContent = core.ACCEPTANCE_TOOLTIP + (formatted === null ? ' No valid acceptance rate is available in the saved dataset.' : '');
+    help.hidden = true;
+    button.title = help.textContent;
+    button.dataset.acceptanceControl = '';
+    help.dataset.acceptanceControl = '';
+    button.setAttribute('aria-describedby', help.id);
+    button.setAttribute('aria-controls', help.id);
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', () => {
+      const show = help.hidden;
+      closeAcceptanceHelp(button);
+      help.hidden = !show;
+      button.setAttribute('aria-expanded', String(show));
+    });
+    return { button, help };
+  }
+  document.addEventListener('click', event => {
+    if (!event.target.closest('[data-acceptance-control]')) closeAcceptanceHelp();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeAcceptanceHelp();
+  });
+
   const selectControls = new Map();
   let openSelect = null;
   function closeSelectMenu(returnFocus = false) {
@@ -380,13 +423,21 @@
       const score = Number.isFinite(problem.frequency) && problem.frequency >= 0 ? String(problem.frequency) : 'unavailable';
       const rank = Number.isInteger(problem.rank) && problem.rank > 0 ? `company rank #${problem.rank}` : 'rank unavailable';
       const companies = Number.isInteger(problem.companyCount) && problem.companyCount >= 0 ? `${count(problem.companyCount)} ${problem.companyCount === 1 ? 'company' : 'companies'} in this window` : 'Company count unavailable';
-      info.append(node('span', 'question-meta', `${problem.difficulty || 'Difficulty unavailable'} · score ${score} · ${rank} · ${companies}`));
+      const meta = node('span', 'question-meta');
+      const acceptance = acceptanceInfo(problem.acceptanceRate);
+      meta.append(document.createTextNode(`${problem.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · score ${score} · ${rank} · ${companies}`));
+      info.append(meta, acceptance.help);
       if (Array.isArray(problem.topics) && problem.topics.length) info.append(node('span', 'question-topics', problem.topics.join(' · ')));
-    } else info.append(node('span', 'result-meta', `${problem.difficulty || 'Difficulty unavailable'} · ${count(problem.companyCount)} ${problem.companyCount === 1 ? 'company' : 'companies'}`));
+    } else {
+      const meta = node('span', 'result-meta');
+      const acceptance = acceptanceInfo(problem.acceptanceRate);
+      meta.append(document.createTextNode(`${problem.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · ${count(problem.companyCount)} ${problem.companyCount === 1 ? 'company' : 'companies'}`));
+      info.append(meta, acceptance.help);
+    }
     const actions = node('div', 'result-actions');
     const button = action('problem', problem.slug, 'View companies');
     button.setAttribute('aria-label', `View companies for ${problem.title || core.formatProblemTitle(problem.slug)}`);
-    button.addEventListener('click', () => openDetail({ kind: 'problem', slug: problem.slug, title: problem.title || core.formatProblemTitle(problem.slug), difficulty: problem.difficulty }));
+    button.addEventListener('click', () => openDetail({ kind: 'problem', slug: problem.slug, title: problem.title || core.formatProblemTitle(problem.slug), difficulty: problem.difficulty, acceptanceRate: problem.acceptanceRate }));
     actions.append(button, problemLink(problem.slug));
     row.append(info, actions);
     return row;
@@ -482,7 +533,12 @@
     $('detail-title').textContent = frame.title;
     $('detail-name').classList.toggle('company-heading', frame.kind === 'company');
     $('detail-name').replaceChildren(...(frame.kind === 'company' ? [logos.createBadge(frame.name), $('detail-title')] : [$('detail-title')]));
-    $('detail-context').textContent = frame.kind === 'problem' ? `${frame.difficulty || 'Difficulty unavailable'} · ${labels[windowKey()].toLowerCase()}` : `Every question listed for ${frame.name} · ${labels[windowKey()].toLowerCase()}`;
+    const context = $('detail-context');
+    context.replaceChildren();
+    if (frame.kind === 'problem') {
+      const acceptance = acceptanceInfo(frame.acceptanceRate);
+      context.append(document.createTextNode(`${frame.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · ${labels[windowKey()].toLowerCase()}`), acceptance.help);
+    } else context.textContent = `Every question listed for ${frame.name} · ${labels[windowKey()].toLowerCase()}`;
     $('detail-filters').hidden = frame.kind !== 'company';
     $('detail-results').setAttribute('aria-label', frame.kind === 'problem' ? 'Companies listed for this problem' : `Company questions sorted by ${orderLabel(detailSortKey(frame), frame.sort).toLocaleLowerCase()}`);
     renderSortControls();
@@ -522,7 +578,11 @@
     if (append && frame.version !== detailVersion(frame)) append = false;
     const id = ++detailRequest;
     const stamp = generation;
-    if (!append) { frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null; renderDetailRows([]); }
+    if (!append) {
+      frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null;
+      if (frame.kind === 'problem') { frame.acceptanceRate = null; renderDetailShell(); }
+      renderDetailRows([]);
+    }
     frame.loading = true; frame.error = '';
     renderDetailSummary();
     try {
@@ -531,6 +591,12 @@
       if (id !== detailRequest || stamp !== generation || frame !== activeDetail()) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load these details. Try again.');
       status = result.status || status;
+      if (frame.kind === 'problem') {
+        const problem = result.problem && typeof result.problem === 'object' ? result.problem : null;
+        frame.acceptanceRate = problem?.acceptanceRate ?? null;
+        if (typeof problem?.title === 'string' && problem.title.trim()) frame.title = problem.title;
+        if (typeof problem?.difficulty === 'string') frame.difficulty = problem.difficulty;
+      }
       const next = frame.kind === 'problem' ? core.sortCompanies(Array.isArray(result.companies) ? result.companies : [], frame.sort) : Array.isArray(result.questions) ? result.questions : [];
       frame.rows = append ? frame.rows.concat(next) : next;
       frame.total = frame.kind === 'problem' ? next.length : Number(result.total) || 0;
@@ -579,7 +645,7 @@
   function reloadCurrent() {
     invalidate();
     list.version = null;
-    for (const frame of stack) { frame.version = null; frame.sourceUrl = null; }
+    for (const frame of stack) { frame.version = null; frame.sourceUrl = null; frame.acceptanceRate = null; }
     renderShell();
     if (activeDetail()) { renderDetailShell(); void loadDetail(); } else void loadList();
   }

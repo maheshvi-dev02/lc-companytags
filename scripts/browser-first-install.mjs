@@ -17,7 +17,7 @@ export async function bundledExpectations(directory, core) {
     assert.ok(companies.length > 0, `Bundled Two Sum tags must exist in ${window}.`);
     return [window, companies];
   }));
-  return { data, meta, windows, practice: core.practiceQuestions(data,
+  return { data, meta, windows, problem: core.problemForSlug(data, 'two-sum'), practice: core.practiceQuestions(data,
     { company: 'Amazon', window: 'all', excludeSlug: 'two-sum' }) };
 }
 
@@ -57,6 +57,43 @@ async function expectUI(ui, expression, expected) {
 }
 const uiTexts = selector => `Array.from(document.querySelectorAll(${JSON.stringify(selector)}), node => node.textContent)`;
 
+export function acceptanceLabel(core, value) {
+  const formatted = core.formatAcceptanceRate(value);
+  return formatted === null ? 'Acceptance unavailable' : `Acceptance ${formatted}`;
+}
+
+export async function exerciseAcceptanceControl(ui, { selector, label, core }) {
+  await expectUI(ui, `document.querySelector(${JSON.stringify(selector)})?.textContent`, label);
+  const state = () => ui.read(`(() => {
+    const button = document.querySelector(${JSON.stringify(selector)});
+    const help = document.getElementById(button.getAttribute('aria-controls'));
+    return { tag: button.tagName, type: button.type, tabIndex: button.tabIndex, title: button.title,
+      expanded: button.getAttribute('aria-expanded'), described: button.getAttribute('aria-describedby'),
+      helpId: help?.id, helpText: help?.textContent, helpHidden: help?.hidden,
+      insideLink: Boolean(button.closest('a')), visible: Boolean(button.getClientRects().length) };
+  })()`);
+  const initial = await state();
+  assert.equal(initial.tag, 'BUTTON'); assert.equal(initial.type, 'button'); assert.equal(initial.tabIndex, 0);
+  assert.equal(initial.insideLink, false, 'Acceptance help must not be nested in a navigation link.');
+  assert.equal(initial.visible, true); assert.equal(initial.expanded, 'false'); assert.equal(initial.helpHidden, true);
+  assert.equal(initial.described, initial.helpId);
+  assert.ok(initial.title.includes(core.ACCEPTANCE_TOOLTIP));
+  assert.match(initial.title, /submissions accepted.*across all users/i);
+  assert.match(initial.title, /LeetCode submissions/);
+  if (label === 'Acceptance unavailable') assert.match(initial.helpText, /No valid acceptance rate/);
+  await ui.click(selector);
+  await expectUI(ui, `document.querySelector(${JSON.stringify(selector)}).getAttribute('aria-expanded')`, 'true');
+  assert.equal((await state()).helpHidden, false);
+  assert.ok((await state()).helpText.includes(core.ACCEPTANCE_TOOLTIP));
+  await ui.press(selector, 'Escape');
+  assert.equal((await state()).helpHidden, true);
+  await ui.activateWithKeyboard(selector);
+  assert.equal((await state()).helpHidden, false);
+  await ui.press(selector, 'Escape');
+  assert.equal((await state()).expanded, 'false');
+  return { label, meaning: initial.helpText, keyboard: ui.keyboard };
+}
+
 export async function exerciseBundledPanel(page, expected, timings) {
   const host = page.locator('#company-lens-root');
   await host.waitFor({ state: 'visible' });
@@ -72,25 +109,29 @@ export async function exerciseBundledPanel(page, expected, timings) {
   };
 }
 
-export async function exerciseBundledPopup(ui, page, expected) {
+export async function exerciseBundledPopup(ui, page, expected, core) {
   const topNames = companies => companies.slice(0, 5).map(company => company.name);
   await expectUI(ui, 'document.querySelector("#window-select").value', 'all');
   const note = await ui.read('document.querySelector("#window-note").textContent');
   assert.match(note, /Bundled snapshot/i);
   assert.ok(note.includes(String(new Date(expected.data.sourceUpdatedAt).getUTCFullYear())));
+  const acceptance = await exerciseAcceptanceControl(ui, { selector: '#problem-acceptance .acceptance-rate',
+    label: acceptanceLabel(core, expected.problem.acceptanceRate), core });
   for (const window of ['all', '30d', '3m', '6m', 'older', 'all']) {
     await ui.select('#window-select', window);
     await expectUI(ui, uiTexts('.company-name'), topNames(expected.windows[window]));
+    await expectUI(ui, uiTexts('#problem-acceptance .acceptance-rate'), [acceptance.label]);
     await expectTexts(page.locator('#company-lens-root .company-name'), expected.windows[window].map(company => company.name));
   }
   await ui.click('#companies button[data-company="Amazon"]');
   await expectUI(ui, uiTexts('#practice-questions .question-title'), expected.practice.questions.map(question => question.title));
+  await expectUI(ui, uiTexts('#practice-questions .acceptance-rate'), expected.practice.questions.map(question => acceptanceLabel(core, question.acceptanceRate)));
   const first = expected.practice.questions[0];
   const meta = await ui.read('document.querySelector("#practice-questions .question-meta").textContent');
   assert.ok(meta.includes(`score ${first.frequency}`) && meta.includes(`company rank #${first.rank}`));
   await ui.click('#back-companies');
-  return { windowNote: note,
-    check: 'Offline toolbar popup exposes all five bundled windows, source date, frequency/rank scores and real Amazon practice questions; window selections update the complete inline chip list.' };
+  return { windowNote: note, acceptance,
+    check: 'Offline toolbar popup exposes all five bundled windows, source date, frequency/rank scores and saved acceptance rates with accessible global-submission explanations; changing windows preserves the current problem acceptance rate.' };
 }
 
 export async function archiveFixture(root, core) {
@@ -107,7 +148,11 @@ export async function archiveFixture(root, core) {
     return { path: relativePath, name, window, sha: file.sha };
   });
   const samplePath = 'Amazon/' + core.WINDOW_FILES.all;
-  const sample = data.files[samplePath].records.find(({ slug }) => slug === 'two-sum');
+  const csvs = JSON.parse(await readFile(path.join(fixtureRoot, 'csvs.json'), 'utf8'));
+  const sampleCSV = csvs.find(file => file.path === samplePath);
+  assert.equal(sampleCSV.sha, data.files[samplePath].sha);
+  const sample = core.parseCompanyRecords(sampleCSV.csv, { commit: data.commit }).find(({ slug }) => slug === 'two-sum');
+  assert.ok(Number.isFinite(sample.acceptanceRate), 'Archive validation must retain its real source acceptance rate.');
   return { payload: { base64: (await readFile(path.join(fixtureRoot, 'source.zip'))).toString('base64'),
     commit: data.commit, files, samplePath }, expected: { fileCount: files.length, sample } };
 }
@@ -170,6 +215,7 @@ export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum',
   const expected = await assertChips(page, core, data, slug);
   assert.equal(await host.getByRole('button', { name: 'Open extension', exact: true }).count(), 1, 'The inline caption must expose one accessible popup shortcut.');
   assert.equal(await host.locator('button.open-extension').count(), 1);
+  assert.equal(await host.locator('.acceptance-rate,.acceptance-help').count(), 0, 'Acceptance metadata must not add controls or text to the compact inline bar.');
   assert.equal(await host.locator('button:not(.open-extension),input,select,.card,.collapsed-bubble').count(), 0, 'The inline bar must have no unrelated or floating-panel controls.');
   const geometry = await inlineGeometry(page);
   assert.ok(['static', 'relative'].includes(geometry.position), 'Company bar must participate in the normal page flow.');
@@ -217,12 +263,14 @@ export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum',
   ] };
 }
 
-export async function exercisePopupFeatures(ui, page, { data, core, getStatus, setStorage, removeStorage, slug = 'two-sum' }) {
+export async function exercisePopupFeatures(ui, page, { data, core, getStatus, setStorage, removeStorage, slug = 'two-sum', output, browserName }) {
   const checks = [];
   const companies = window => core.companiesForSlug(data, slug, window);
   const names = window => companies(window).map(company => company.name);
   const top = window => names(window).slice(0, 5);
   await expectUI(ui, uiTexts('.company-name'), top('all'));
+  const acceptance = await exerciseAcceptanceControl(ui, { selector: '#problem-acceptance .acceptance-rate',
+    label: acceptanceLabel(core, core.problemForSlug(data, slug).acceptanceRate), core });
   await expectUI(ui, uiTexts('.frequency-score'), companies('all').slice(0, 5).map(company => company.frequency == null ? '—' : String(company.frequency)));
   await ui.click('#show-companies');
   await expectUI(ui, uiTexts('.company-name'), names('all'));
@@ -237,12 +285,28 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
   for (const window of ['30d', '3m', '6m', 'older', 'all']) {
     await ui.select('#window-select', window);
     await expectUI(ui, uiTexts('.company-name'), top(window));
+    await expectUI(ui, uiTexts('#problem-acceptance .acceptance-rate'), [acceptance.label]);
     await assertChips(page, core, data, slug, window);
   }
   checks.push('All five toolbar time windows rerank every inline company chip and update its source file and rank.');
   const practice = options => core.practiceQuestions(data, { company: 'Amazon', window: 'all', excludeSlug: slug, ...options });
   await ui.click('#companies button[data-company="Amazon"]');
   await expectUI(ui, uiTexts('#practice-questions .question-title'), practice().questions.map(question => question.title));
+  const practiceLabels = practice().questions.map(question => acceptanceLabel(core, question.acceptanceRate));
+  await expectUI(ui, uiTexts('#practice-questions .acceptance-rate'), practiceLabels);
+  assert.ok(practiceLabels.includes('Acceptance 0.0%') && practiceLabels.includes('Acceptance 100.0%'));
+  assert.equal(practiceLabels.filter(label => label === 'Acceptance unavailable').length, 2, 'The fixture must cover both missing and malformed source values.');
+  const missingIndex = practiceLabels.indexOf('Acceptance unavailable');
+  await exerciseAcceptanceControl(ui, { selector: `#practice-questions li:nth-child(${missingIndex + 1}) .acceptance-rate`,
+    label: 'Acceptance unavailable', core });
+  const knownSelector = '#practice-questions li:first-child .acceptance-rate';
+  await exerciseAcceptanceControl(ui, { selector: knownSelector, label: practiceLabels[0], core });
+  if (output && ui.screenshot) {
+    await ui.click(knownSelector);
+    await ui.screenshot(path.join(output, `${browserName}-acceptance-popup-practice.png`));
+    await ui.press(knownSelector, 'Escape');
+  }
+  checks.push('Toolbar acceptance displays normalized values including 0%/100%, marks missing and invalid source values unavailable, stays global across windows, and reveals/dismisses its submission-rate explanation by click and keyboard.');
   const first = practice().questions[0];
   const firstMeta = await ui.read('document.querySelector("#practice-questions .question-meta").textContent');
   assert.ok(firstMeta.includes(`score ${first.frequency}`) && firstMeta.includes(`company rank #${first.rank}`));
@@ -283,12 +347,13 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
   await ui.mutate(`const node = document.querySelector('#enabled'); node.checked = true; node.dispatchEvent(new Event('change', { bubbles: true }));`);
   await assertChips(page, core, data, slug);
   checks.push('Toolbar enable/disable removes and restores the inline company bar on the active problem page.');
-  return { checks };
+  return { checks, acceptance, practiceAcceptance: practiceLabels };
 }
 
 export async function exercisePopupContext(ui, { data, core, slug }) {
   const expected = core.companiesForSlug(data, slug, 'all').slice(0, 5).map(company => company.name);
   await expectUI(ui, uiTexts('.company-name'), expected);
+  await expectUI(ui, uiTexts('#problem-acceptance .acceptance-rate'), [acceptanceLabel(core, core.problemForSlug(data, slug).acceptanceRate)]);
   await ui.click('#companies button[data-company="Amazon"]');
   const practice = core.practiceQuestions(data, { company: 'Amazon', window: 'all', excludeSlug: slug });
   await expectUI(ui, uiTexts('#practice-questions .question-title'), practice.questions.map(question => question.title));

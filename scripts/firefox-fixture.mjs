@@ -1,12 +1,22 @@
 // Shared-shape deterministic fixture for the actual Firefox addon audit.
 // It deliberately includes more than five companies, tied, zero and unknown
-// scores, and a different ranking in every source time window.
+// scores, and a different ranking in every source time window. Acceptance values
+// include genuine zero/100%, fractional precision, missing and invalid inputs.
 export function makeFixture(core) {
   const commit = '1234567890abcdef1234567890abcdef12345678';
   const now = new Date().toISOString();
   const names = ['Amazon', 'Apple', 'Bloomberg', 'Google', 'Meta', 'Microsoft', 'Spotify'];
   const base = { Amazon: 100, Apple: 91, Bloomberg: 50, Google: 91, Meta: 0, Microsoft: null, Spotify: 65 };
   const second = { Amazon: 180, Apple: 100, Bloomberg: 40, Google: 200, Meta: 150, Microsoft: 90, Spotify: 50 };
+  const acceptance = {
+    'two-sum': 0.5,
+    'add-two-numbers': 0.456,
+    'merge-two-sorted-lists': 0,
+    'binary-tree-level-order-traversal': '',
+    'valid-parentheses': 1,
+    'longest-substring-without-repeating-characters': 'not-a-rate',
+    'maximum-depth-of-binary-tree': 0.74123,
+  };
   const scores = {
     all: base,
     '30d': { Amazon: 40, Apple: 0, Bloomberg: null, Google: 99, Meta: 88, Microsoft: null, Spotify: null },
@@ -32,7 +42,7 @@ export function makeFixture(core) {
       const relativePath = `${name}/${filename}`;
       const sha = (descriptors.length + 1).toString(16).padStart(40, '0');
       const csv = 'Difficulty,Title,Frequency,Acceptance Rate,Link,Topics\n' + records.map(
-        ([difficulty, title, frequency, slug, topics]) => [difficulty, title, frequency, 0.5,
+        ([difficulty, title, frequency, slug, topics]) => [difficulty, title, frequency, acceptance[slug],
           `https://leetcode.com/problems/${slug}/`, topics].map(cell).join(',')).join('\n');
       descriptors.push({ path: relativePath, name, window, sha });
       files[relativePath] = { sha, records: core.parseCompanyRecords(csv) };

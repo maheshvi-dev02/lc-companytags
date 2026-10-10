@@ -16,6 +16,15 @@ const snapshot = JSON.parse(gunzipSync(snapshotBytes).toString('utf8'));
 assert.equal(snapshot.commit, snapshotMeta.commit);
 assert.equal(snapshot.companyCount, snapshotMeta.companies);
 assert.equal(snapshot.problemCount, snapshotMeta.problems);
+const core = createRequire(import.meta.url)(path.join(root, 'extension', 'core.js'));
+assert.equal(snapshot.acceptanceVersion, core.ACCEPTANCE_VERSION, 'Regenerate the bundled snapshot with acceptance metadata');
+assert.equal(snapshotMeta.acceptanceVersion, core.ACCEPTANCE_VERSION);
+assert.equal(Object.keys(snapshot.problems || {}).length, snapshot.problemCount, 'The snapshot must include global problem metadata');
+for (const problem of Object.values(snapshot.problems)) {
+  assert.ok(Object.hasOwn(problem, 'acceptanceRate') && (problem.acceptanceRate === null ||
+    (Number.isFinite(problem.acceptanceRate) && problem.acceptanceRate >= 0 && problem.acceptanceRate <= 100)),
+  'The snapshot contains invalid acceptance metadata');
+}
 for (const window of ['all', '30d', '3m', '6m', 'older']) {
   assert.ok(snapshot.windows[window].available && snapshot.windows[window].companyCount === snapshot.companyCount,
     'The bundled snapshot must include complete company coverage in every window');

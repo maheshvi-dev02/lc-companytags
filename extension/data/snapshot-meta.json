@@ -1,10 +1,11 @@
 {
   "version": 1,
   "schema": "company-windows-v1",
+  "acceptanceVersion": 1,
   "source": "https://github.com/liquidslr/leetcode-company-wise-problems",
   "commit": "03850eb5d16892514491cf1381c32ec0330a2719",
   "sourceUpdatedAt": "2026-08-16T22:18:35Z",
-  "bundledAt": "2026-10-08T06:15:45.120Z",
+  "bundledAt": "2026-10-10T05:47:11.701Z",
   "companies": 470,
   "problems": 3392,
   "files": 2350,
@@ -15,6 +16,6 @@
     "6m": 1271,
     "older": 2602
   },
-  "compressedBytes": 1182313,
-  "sha256": "a0e5f772cb44a6e5b16a35dabbc3ae80a19a74e9b928362cb6ab8a158a345076"
+  "compressedBytes": 1704942,
+  "sha256": "32ce7230fffd94cbd070e6bb4293ca9777147ec2df138cdd0bede31c48c0c96b"
 }

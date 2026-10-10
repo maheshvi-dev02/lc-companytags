@@ -10,6 +10,9 @@
   let status = {};
   let companies = [];
   let slug = null;
+  let activeTabId = null;
+  let problem = null;
+  let problemLoaded = false;
   let error = '';
   let loading = false;
   let requestId = 0;
@@ -26,6 +29,47 @@
   const previewCount = 5;
   const frequencyHelp = 'Scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.';
   const selectedWindow = () => Object.hasOwn(windowLabels, settings.window) ? settings.window : 'all';
+
+  let acceptanceHelpId = 0;
+  function closeAcceptanceHelp(except = null) {
+    document.querySelectorAll('.acceptance-rate[aria-expanded="true"]').forEach(button => {
+      if (button === except) return;
+      button.setAttribute('aria-expanded', 'false');
+      const help = document.getElementById(button.getAttribute('aria-controls'));
+      if (help) help.hidden = true;
+    });
+  }
+  function acceptanceInfo(value) {
+    const formatted = core.formatAcceptanceRate(value);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'acceptance-rate';
+    button.textContent = formatted === null ? 'Acceptance unavailable' : `Acceptance ${formatted}`;
+    const help = document.createElement('span');
+    help.className = 'acceptance-help';
+    help.id = `acceptance-help-${++acceptanceHelpId}`;
+    help.textContent = core.ACCEPTANCE_TOOLTIP + (formatted === null ? ' No valid acceptance rate is available in the saved dataset.' : '');
+    help.hidden = true;
+    button.title = help.textContent;
+    button.dataset.acceptanceControl = '';
+    help.dataset.acceptanceControl = '';
+    button.setAttribute('aria-describedby', help.id);
+    button.setAttribute('aria-controls', help.id);
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', () => {
+      const show = help.hidden;
+      closeAcceptanceHelp(button);
+      help.hidden = !show;
+      button.setAttribute('aria-expanded', String(show));
+    });
+    return { button, help };
+  }
+  document.addEventListener('click', event => {
+    if (!event.target.closest('[data-acceptance-control]')) closeAcceptanceHelp();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeAcceptanceHelp();
+  });
 
   function dateLabel(value) {
     const date = new Date(value);
@@ -141,7 +185,9 @@
 
   function render() {
     $('enabled').checked = settings.enabled;
-    $('problem-title').textContent = slug ? core.formatProblemTitle(slug) : 'Open a LeetCode problem';
+    const title = typeof problem?.title === 'string' && problem.title.trim() ? problem.title : core.formatProblemTitle(slug);
+    $('problem-title').textContent = slug ? title : 'Open a LeetCode problem';
+    renderProblemAcceptance();
     $('problem-summary').textContent = slug ? `${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}` : 'Company tags appear as you browse problem pages.';
     $('window-select').value = selectedWindow();
     $('company-view').hidden = Boolean(practiceCompany);
@@ -152,9 +198,20 @@
     renderStatus();
   }
 
+  function renderProblemAcceptance() {
+    const line = $('problem-acceptance');
+    line.hidden = !slug || !problemLoaded;
+    line.replaceChildren();
+    if (line.hidden) return;
+    const acceptance = acceptanceInfo(problem?.acceptanceRate);
+    line.append(acceptance.button, acceptance.help);
+  }
+
   function resetWindow() {
     requestId++;
     companies = [];
+    problem = null;
+    problemLoaded = false;
     windowAvailable = false;
     companiesExpanded = false;
     error = '';
@@ -202,16 +259,17 @@
       const rank = Number.isInteger(question.rank) && question.rank > 0 ? `company rank #${question.rank}` : 'rank unavailable';
       const meta = document.createElement('span');
       meta.className = 'question-meta';
-      meta.textContent = `${question.difficulty || 'Difficulty unavailable'} · score ${score} · ${rank}`;
-      link.append(title, meta);
+      const acceptance = acceptanceInfo(question.acceptanceRate);
+      meta.append(document.createTextNode(`${question.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · score ${score} · ${rank}`));
+      link.append(title);
+      item.append(link, meta, acceptance.help);
       if (Array.isArray(question.topics) && question.topics.length) {
         const topics = document.createElement('span');
         topics.className = 'question-topics';
         topics.textContent = question.topics.slice(0, 3).join(' · ');
         topics.title = question.topics.join(', ');
-        link.append(topics);
+        item.append(topics);
       }
-      item.append(link);
       return item;
     }));
   }
@@ -245,6 +303,9 @@
   async function load() {
     const id = ++requestId;
     loading = true;
+    problem = null;
+    problemLoaded = false;
+    renderProblemAcceptance();
     renderStatus();
     try {
       const result = await api.runtime.sendMessage(slug ? { type: 'LCT_GET', slug, window: selectedWindow() } : { type: 'LCT_STATUS' });
@@ -252,6 +313,8 @@
       if (!result?.ok) throw new Error(result?.error || 'Could not load the dataset. Try Refresh.');
       status = result.status || status;
       if (Array.isArray(result.companies)) companies = result.companies;
+      problem = result.problem && typeof result.problem === 'object' ? result.problem : null;
+      problemLoaded = Boolean(slug);
       windowAvailable = result.available ?? Boolean(result.status?.hasData && selectedWindow() === 'all');
       error = '';
     } catch (cause) {
@@ -348,6 +411,15 @@
     }
   });
 
+  api.tabs.onUpdated?.addListener((tabId, change) => {
+    if (tabId !== activeTabId || typeof change.url !== 'string') return;
+    const nextSlug = core.getProblemSlug(change.url);
+    if (nextSlug === slug) return;
+    slug = nextSlug;
+    $('search').value = '';
+    resetWindow();
+  });
+
   async function start() {
     try {
       const stored = await api.storage.local.get(['lctSettings', 'lctStatus']);
@@ -357,8 +429,10 @@
     try {
       const tabs = await api.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]?.id !== undefined) {
+        activeTabId = tabs[0].id;
+        const contextRequest = requestId;
         const context = await api.tabs.sendMessage(tabs[0].id, { type: 'LCT_CONTEXT' });
-        slug = typeof context?.slug === 'string' ? context.slug : null;
+        if (contextRequest === requestId) slug = typeof context?.slug === 'string' ? context.slug : null;
       }
     } catch (_) { /* Other sites and tabs opened before installation have no content script. */ }
     render();

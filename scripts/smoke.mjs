@@ -30,6 +30,9 @@ const companyNames = ['Amazon', 'Apple', 'Bloomberg', 'Google', 'Meta', 'Microso
 const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 const allFrequency = { Amazon: 100, Apple: 91, Bloomberg: 50, Google: 91, Meta: 0, Microsoft: null, Spotify: 65 };
 const secondFrequency = { Amazon: 180, Apple: 100, Bloomberg: 40, Google: 200, Meta: 150, Microsoft: 90, Spotify: 50 };
+const acceptanceSource = { 'two-sum': 0.5, 'add-two-numbers': 0.456, 'merge-two-sorted-lists': 0,
+  'binary-tree-level-order-traversal': '', 'valid-parentheses': 1,
+  'longest-substring-without-repeating-characters': 'not-a-rate', 'maximum-depth-of-binary-tree': 0.74123 };
 const windowFrequency = {
   all: allFrequency,
   '30d': { Amazon: 40, Apple: 0, Bloomberg: null, Google: 99, Meta: 88, Microsoft: null, Spotify: null },
@@ -55,7 +58,7 @@ for (const [window, filename] of Object.entries(core.WINDOW_FILES)) {
     const relativePath = `${name}/${filename}`;
     const sha = (fileDescriptors.length + 1).toString(16).padStart(40, '0');
     const csv = 'Difficulty,Title,Frequency,Acceptance Rate,Link,Topics\n' + records.map(([difficulty, title, frequency, link, topics]) =>
-      [difficulty, title, frequency, 0.5, link, topics].map(csvCell).join(',')).join('\n');
+      [difficulty, title, frequency, acceptanceSource[core.getProblemSlug(link)], link, topics].map(csvCell).join(',')).join('\n');
     fileDescriptors.push({ path: relativePath, name, window, sha });
     parsedFiles[relativePath] = { sha, records: core.parseCompanyRecords(csv) };
   }
@@ -135,12 +138,14 @@ async function exercise(context, extensionUrl, browserName) {
   const host = page.locator('#company-lens-root');
   const inline = await exerciseInlineLayout(page, { core, data: fixtureData, output, browserName });
   results.push(...inline.checks);
-  const nativePopup = await exerciseNativePopup(context, page, { core, data: fixtureData, extensionUrl, output, browserName });
+  const nativePopup = process.argv.includes('--skip-native-popup')
+    ? { skipped: true, reason: 'Explicit --skip-native-popup; native-toolbar target discovery is not part of this run.', checks: [] }
+    : await exerciseNativePopup(context, page, { core, data: fixtureData, extensionUrl, output, browserName });
   results.push(...nativePopup.checks);
   const popup = await context.newPage();
   await page.bringToFront(); await popup.goto(`${extensionUrl}/popup.html`);
   const ui = chromiumExplorerDriver(popup);
-  const toolbar = await exercisePopupFeatures(ui, page, { data: fixtureData, core,
+  const toolbar = await exercisePopupFeatures(ui, page, { data: fixtureData, core, output, browserName,
     getStatus: () => popup.evaluate(async () => (await chrome.storage.local.get('lctStatus')).lctStatus),
     setStorage: data => popup.evaluate(data => chrome.storage.local.set(data), data),
     removeStorage: key => popup.evaluate(key => chrome.storage.local.remove(key), key),
@@ -203,7 +208,7 @@ async function chromiumRun() {
     assert.equal(offlineStatus.hasData, true);
     assert.equal(offlineStatus.dataSource, 'bundled');
     assert.equal(offlineStatus.commit, expectedBundle.data.commit);
-    firstInstall.bundledPopup = await exerciseBundledPopup(chromiumExplorerDriver(setupPopup), firstPage, expectedBundle);
+    firstInstall.bundledPopup = await exerciseBundledPopup(chromiumExplorerDriver(setupPopup), firstPage, expectedBundle, core);
     firstInstall.windowNote = firstInstall.bundledPopup.windowNote;
     firstInstall.popupLogos = await exercisePopupLogos(chromiumExplorerDriver(setupPopup), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
     firstInstall.popup = 'Actual packaged popup displays the same bundled all-time tags and source date.';

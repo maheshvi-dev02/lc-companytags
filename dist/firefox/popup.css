@@ -80,8 +80,9 @@ button:disabled { opacity:.6; cursor:wait; }
 .practice-filters input { width:176px; min-height:32px; padding:6px 8px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:7px; }
 .practice-summary { font-size:11px; color:var(--muted); margin:0 0 8px; }
 .practice-questions { list-style:none; margin:0; padding:0; max-height:210px; overflow:auto; }
+.practice-questions li { padding:9px 1px; }
 .practice-questions li + li { border-top:1px solid var(--line); }
-.practice-questions a { display:block; padding:9px 1px; color:var(--accent); text-decoration:none; font-size:12px; font-weight:600; }
+.practice-questions a { display:block; padding:0; color:var(--accent); text-decoration:none; font-size:12px; font-weight:600; }
 .practice-questions a:hover .question-title { text-decoration:underline; text-underline-offset:3px; }
 .question-meta,.question-topics { display:block; font-size:10px; color:var(--muted); font-weight:400; margin-top:3px; }
 footer { background:var(--wash); border-top:1px solid var(--line); padding:13px 19px; font-size:10px; color:var(--muted); }
@@ -91,3 +92,9 @@ footer { background:var(--wash); border-top:1px solid var(--line); padding:13px 
 a.leetcode-link { display:inline-flex; align-items:center; justify-content:center; width:36px; min-width:36px; height:36px; padding:7px; border:1px solid var(--line); border-radius:8px; background:var(--wash); text-decoration:none; vertical-align:middle; }
 a.leetcode-link:hover { border-color:var(--muted); text-decoration:none; }
 .leetcode-icon { display:block; width:20px; height:20px; object-fit:contain; }
+
+/* Acceptance describes the problem, not the company's interview pass rate. */
+.problem-acceptance { color:var(--muted); font-size:11px; margin:6px 0 0; }
+button.acceptance-rate { display:inline; color:inherit; background:transparent; border:0; border-radius:2px; padding:0; font:inherit; text-align:left; text-decoration:underline dotted; text-underline-offset:3px; cursor:help; }
+button.acceptance-rate:hover { background:transparent; text-decoration-style:solid; }
+.acceptance-help { display:block; margin:6px 0 0; padding:7px 9px; color:var(--muted); background:var(--wash); border:1px solid var(--line); border-radius:7px; font-size:11px; line-height:1.5; font-weight:400; overflow-wrap:anywhere; }

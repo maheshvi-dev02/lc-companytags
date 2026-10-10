@@ -87,7 +87,17 @@ function rdpConnect() {
   });
 }
 
-let context, rdp, page, backgroundConsole;
+let context, rdp, page, backgroundConsole, screenshotActor, lastPopupTarget;
+async function screenshotExtension(target, filename) {
+  const prepared = await rdp.send({ to: target.screenshotContentActor, type: 'prepareCapture', args: { selector: 'body' } });
+  const captured = await rdp.send({ to: screenshotActor, type: 'capture', args: {
+    browsingContextID: target.browsingContextID, rect: prepared.value.rect,
+    snapshotScale: 1, disableFlash: true,
+  } });
+  assert.ok(captured.value.data?.startsWith('data:image/png;base64,'), 'Firefox must produce an actual extension document screenshot.');
+  await writeFile(path.join(output, filename), Buffer.from(captured.value.data.split(',')[1], 'base64'));
+  return filename;
+}
 async function evaluateConsoleRaw(text, consoleActor = backgroundConsole) {
   const request = await rdp.send({ to: consoleActor, type: 'evaluateJSAsync', text });
   const response = await rdp.waitFor((packet) => packet.type === 'evaluationResult' && packet.resultID === request.resultID);
@@ -99,24 +109,47 @@ async function evaluateConsoleRaw(text, consoleActor = backgroundConsole) {
   return response.result;
 }
 
-async function evaluateBackground(body) {
+async function evaluateBackground(body, consoleActor = backgroundConsole) {
   // Raw RDP does not perform the DevTools frontend's top-level-await rewrite.
-  // Keep promise results in this isolated test background global and read them
+  // Keep promise results in this isolated test extension global and read them
   // through synchronous console expressions; production code is untouched.
   await evaluateConsoleRaw(`globalThis.__lctAuditResult = { done: false };
     (async () => { try {
       const value = await (async () => { ${body} })();
       globalThis.__lctAuditResult = { done: true, value };
-    } catch (error) { globalThis.__lctAuditResult = { done: true, error: String(error.stack || error) }; } })(); 'started'`);
+    } catch (error) { globalThis.__lctAuditResult = { done: true, error: String(error) + '\\n' + (error.stack || '') }; } })(); 'started'`, consoleActor);
   for (let attempt = 0; attempt < 300; attempt++) {
-    const result = JSON.parse(await evaluateConsoleRaw('JSON.stringify(globalThis.__lctAuditResult)'));
+    const result = JSON.parse(await evaluateConsoleRaw('JSON.stringify(globalThis.__lctAuditResult)', consoleActor));
     if (result.done) {
       assert.ok(!result.error, result.error);
       return result.value;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error('Asynchronous Firefox background evaluation did not settle');
+  throw new Error('Asynchronous Firefox extension evaluation did not settle');
+}
+
+async function exerciseProblemMetadata(consoleActor, data, expectedRates) {
+  const slugs = expectedRates ? Object.keys(expectedRates) : ['two-sum'];
+  const queries = [...slugs, 'not-a-listed-problem'].flatMap(slug =>
+    Object.keys(core.WINDOW_FILES).map(window => ({ slug, window })));
+  const observed = JSON.parse(await evaluateBackground(`
+    const results = [];
+    for (const query of ${JSON.stringify(queries)}) {
+      const result = await browser.runtime.sendMessage({ type: 'LCT_GET', ...query });
+      results.push({ ...query, ok: result?.ok, error: result?.error, problem: result?.problem,
+        companyScopedAcceptance: result?.companies?.some(company => Object.hasOwn(company, 'acceptanceRate')) });
+    }
+    return JSON.stringify(results);`, consoleActor));
+  for (const result of observed) {
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.deepEqual(result.problem, core.problemForSlug(data, result.slug), 'Actual popup/background messaging must preserve current problem metadata.');
+    assert.equal(result.companyScopedAcceptance, false, 'Acceptance belongs to the problem, not company interview reports.');
+    if (expectedRates && Object.hasOwn(expectedRates, result.slug)) assert.equal(result.problem.acceptanceRate, expectedRates[result.slug]);
+  }
+  return { observed, check: expectedRates ?
+    'Actual Firefox popup/background LCT_GET roundtrips preserve problem-global acceptance, including zero, 100%, decimal precision, missing and invalid values, across all five company windows.' :
+    'Fresh Firefox popup/background messages expose bundled current-problem acceptance consistently across company windows and return null for an unknown problem.' };
 }
 
 async function expectTexts(locator, expected) {
@@ -218,6 +251,7 @@ try {
   rdp = await rdpConnect();
   await rdp.waitFor(() => true);
   const actors = await rdp.send({ to: 'root', type: 'getRoot' });
+  screenshotActor = actors.screenshotActor;
   const addonInstallationStartedAt = Date.now();
   const installed = await rdp.send({ to: actors.addonsActor, type: 'installTemporaryAddon', addonPath: path.join(root, 'dist/firefox') });
   assert.ok(installed.addon);
@@ -263,7 +297,9 @@ try {
   assert.deepEqual(freshPopupObserved.names, expectedBundle.windows.all.slice(0, 5).map(({ name }) => name));
   assert.equal(freshPopupObserved.window, 'all');
   assert.match(freshPopupObserved.note, /Bundled snapshot/i);
-  report.firstInstall.bundledPopup = await exerciseBundledPopup(firefoxExplorerDriver(source => evaluateConsoleRaw(source, freshPopupTarget.target.consoleActor)), firstPage, expectedBundle);
+  report.firstInstall.problemMetadata = await exerciseProblemMetadata(freshPopupTarget.target.consoleActor, expectedBundle.data);
+  report.checks.push(report.firstInstall.problemMetadata.check);
+  report.firstInstall.bundledPopup = await exerciseBundledPopup(firefoxExplorerDriver(source => evaluateConsoleRaw(source, freshPopupTarget.target.consoleActor)), firstPage, expectedBundle, core);
   report.firstInstall.windowNote = report.firstInstall.bundledPopup.windowNote;
   report.checks.push(report.firstInstall.bundledPopup.check);
   report.firstInstall.popupLogos = await exercisePopupLogos(firefoxExplorerDriver(source => evaluateConsoleRaw(source, freshPopupTarget.target.consoleActor)), expectedBundle.windows.all.slice(0, 5).map(company => company.name));
@@ -306,6 +342,7 @@ try {
     { data: expectedBundle.data, core, output, browserName: 'firefox' });
   report.explorer.openedFrom = 'Actual packaged popup while example.com was active; explorer document inspected and operated via Mozilla RDP with GitHub hosts blocked.';
   report.checks.push(...report.explorer.checks);
+  report.acceptanceScreenshots = [await screenshotExtension(explorerTarget.target, 'firefox-acceptance-explorer.png')];
   const explorerTabs = JSON.parse(await evaluateBackground(`return JSON.stringify((await browser.tabs.query({})).filter((tab) =>
     tab.url?.startsWith(${JSON.stringify(report.addon.manifestURL.replace('manifest.json', 'explore.html'))})).map((tab) => tab.id));`));
   await evaluateBackground(`await browser.tabs.remove(${JSON.stringify(explorerTabs)}); return 'closed';`);
@@ -355,15 +392,34 @@ try {
     await page.bringToFront();
     await evaluateBackground(`await browser.tabs.create({ url: ${JSON.stringify(popupUrl)}, active: false }); return 'opened';`);
     const target = await rdp.waitFor(packet => packet.type === 'target-available-form' && packet.target?.url === popupUrl);
+    lastPopupTarget = target.target;
+    report.problemMetadata = await exerciseProblemMetadata(target.target.consoleActor, seed.lctData, {
+      'two-sum': 50, 'add-two-numbers': 45.6, 'merge-two-sorted-lists': 0,
+      'binary-tree-level-order-traversal': null, 'valid-parentheses': 100,
+      'longest-substring-without-repeating-characters': null, 'maximum-depth-of-binary-tree': 74.123,
+    });
     return firefoxExplorerDriver(source => evaluateConsoleRaw(source, target.target.consoleActor));
   };
   const popupUI = await openPopup();
+  report.checks.push(report.problemMetadata.check);
   const toolbar = await exercisePopupFeatures(popupUI, page, { data: seed.lctData, core,
     getStatus: async () => JSON.parse(await evaluateBackground('return JSON.stringify((await browser.storage.local.get("lctStatus")).lctStatus);')),
     setStorage: data => evaluateBackground(`await browser.storage.local.set(${JSON.stringify(data)}); return 'changed';`),
     removeStorage: key => evaluateBackground(`await browser.storage.local.remove(${JSON.stringify(key)}); return 'removed';`),
   });
   report.checks.push(...toolbar.checks);
+  report.acceptanceScreenshots.push(await screenshotExtension(lastPopupTarget, 'firefox-acceptance-current.png'));
+  await popupUI.click('#companies button[data-company="Amazon"]');
+  const practiceTitles = core.practiceQuestions(seed.lctData, { company: 'Amazon', window: 'all', excludeSlug: 'two-sum' }).questions.map(question => question.title);
+  let screenshotTitles;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    screenshotTitles = await popupUI.read("Array.from(document.querySelectorAll('#practice-questions .question-title'), node => node.textContent)");
+    if (JSON.stringify(screenshotTitles) === JSON.stringify(practiceTitles)) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  assert.deepEqual(screenshotTitles, practiceTitles);
+  report.acceptanceScreenshots.push(await screenshotExtension(lastPopupTarget, 'firefox-acceptance-practice.png'));
+  await popupUI.click('#back-companies');
   const navigation = await exerciseInlineNavigation(page, { data: seed.lctData, core, context,
     onSPA: async () => {
       report.inlinePopupAfterSPA = await exerciseInlinePopupButton(page, seed.lctData, 'add-two-numbers');

@@ -48,7 +48,7 @@
 
     function iso() { return new Date(now()).toISOString(); }
     function dataStatus(data = state.lctData) {
-      return { hasData: Boolean(data), lastSyncedAt: data ? data.lastSyncedAt : null,
+      return { hasData: Boolean(data), acceptanceVersion: core.hasAcceptanceData(data) ? core.ACCEPTANCE_VERSION : 0, lastSyncedAt: data ? data.lastSyncedAt : null,
         commit: data ? data.commit : null, sourceUpdatedAt: data ? data.sourceUpdatedAt : null,
         problemCount: data ? data.problemCount : 0, companyCount: data ? data.companyCount : 0 };
     }
@@ -74,17 +74,26 @@
             !(state.lctData.index || (state.lctData.schema === core.DATA_SCHEMA && state.lctData.windows && state.lctData.files)))) {
           state.lctData = null;
         }
-        // A packaged snapshot is ready before any GitHub request. Existing
-        // user caches, including legacy all-time tags, are never replaced here.
+        // A packaged snapshot is ready before any GitHub request. An older
+        // records format can be enriched offline from the exact same commit;
+        // a snapshot must never replace data from a different source revision.
         const loadSnapshot = options.loadSnapshot || options.loadBundledSnapshot;
-        if (!state.lctData && loadSnapshot) {
+        if (loadSnapshot && (!state.lctData || (state.lctData.schema === core.DATA_SCHEMA && !core.hasAcceptanceData(state.lctData)))) {
           try {
             const loaded = await loadSnapshot();
-            const data = seed.validatedSnapshot(loaded) || seed.validateSnapshot(loaded);
-            const status = Object.assign({}, dataStatus(data), { phase: 'idle', completed: Object.keys(data.files).length,
-              total: Object.keys(data.files).length, lastCheckedAt: null, dataSource: 'bundled',
-              message: 'Bundled company snapshot is ready.' });
-            await write(Object.assign({ lctData: data, lctStatus: status }, lookup.buildStorage(data, status) || {}));
+            let data = seed.validatedSnapshot(loaded) || seed.validateSnapshot(loaded);
+            if (state.lctData && state.lctData.commit === data.commit) {
+              data = core.buildData(Object.entries(data.files).map(([path, file]) => ({ path, sha: file.sha, name: path.split('/')[0],
+                window: Object.keys(core.WINDOW_FILES).find((window) => path.endsWith('/' + core.WINDOW_FILES[window])) })),
+                data.files, state.lctData.commit, state.lctData.sourceUpdatedAt, state.lctData.lastSyncedAt);
+              const status = Object.assign({}, state.lctStatus || {}, dataStatus(data));
+              await write(Object.assign({ lctData: data, lctStatus: status }, lookup.buildStorage(data, status) || {}));
+            } else if (!state.lctData) {
+              const status = Object.assign({}, dataStatus(data), { phase: 'idle', completed: Object.keys(data.files).length,
+                total: Object.keys(data.files).length, lastCheckedAt: null, dataSource: 'bundled',
+                message: 'Bundled company snapshot is ready.' });
+              await write(Object.assign({ lctData: data, lctStatus: status }, lookup.buildStorage(data, status) || {}));
+            }
           } catch (error) {
             if (error instanceof StorageError) throw error;
             if (options.onError) options.onError(error);
@@ -225,10 +234,10 @@
         throw new Error('GitHub returned invalid source commit metadata.');
       }
       await updateStatus({ lastCheckedAt: iso() });
-      if (state.lctData && state.lctData.schema === core.DATA_SCHEMA && state.lctData.commit === commit) return null;
+      if (state.lctData && state.lctData.schema === core.DATA_SCHEMA && core.hasAcceptanceData(state.lctData) && state.lctData.commit === commit) return null;
       const tree = await request(core.API_URL + '/git/trees/' + treeSha + '?recursive=1', 'json');
       const files = core.selectWindowFiles(tree);
-      const useArchive = !state.lctData || state.lctData.schema !== core.DATA_SCHEMA || state.lctStatus.dataSource === 'bundled';
+      const useArchive = !state.lctData || state.lctData.schema !== core.DATA_SCHEMA || !core.hasAcceptanceData(state.lctData) || state.lctStatus.dataSource === 'bundled';
       const stage = { version: core.DATA_VERSION, schema: core.DATA_SCHEMA, checkpointVersion: 2, commit, sourceUpdatedAt, files,
         manifestKey: MANIFEST_PREFIX + commit, completed: [], useArchive, archiveAttempted: false, failureCount: 0, retryAt: 0 };
       await saveStage(stage, { [stage.manifestKey]: files });
@@ -328,7 +337,7 @@
             const file = remaining[next++];
             try {
               const text = await request(core.rawFileURL(stage.commit, file.path), 'text');
-              await received(file, { sha: file.sha, records: core.parseCompanyRecords(text) });
+              await received(file, { sha: file.sha, records: core.parseCompanyRecords(text, { commit: stage.commit }) });
             } catch (error) { if (!failure) failure = error; }
           }
         });
@@ -388,7 +397,7 @@
     async function startAutomatic() {
       await initialize();
       const checked = Date.parse(state.lctStatus.lastCheckedAt || '');
-      if (state.lctStage || !state.lctData || state.lctData.schema !== core.DATA_SCHEMA || state.lctStatus.dataSource === 'bundled' ||
+      if (state.lctStage || !state.lctData || state.lctData.schema !== core.DATA_SCHEMA || !core.hasAcceptanceData(state.lctData) || state.lctStatus.dataSource === 'bundled' ||
           !Number.isFinite(checked) || now() - checked >= DAY) return start();
       return state.lctStatus;
     }
@@ -421,6 +430,11 @@
         await initialize();
         if (typeof slug !== 'string' || !core.SLUG_PATTERN.test(slug)) throw new Error('Invalid LeetCode problem slug.');
         return core.companiesForSlug(state.lctData, slug, selectedWindow(window));
+      },
+      async getProblem(slug) {
+        await initialize();
+        if (typeof slug !== 'string' || !core.SLUG_PATTERN.test(slug)) throw new Error('Invalid LeetCode problem slug.');
+        return core.problemForSlug(state.lctData, slug);
       },
       async windowAvailable(window) { await initialize(); return core.windowAvailable(state.lctData, selectedWindow(window)); },
       async searchProblems(searchOptions) {

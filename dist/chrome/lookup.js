@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (core) {
   'use strict';
 
-  const VERSION = 1;
+  const VERSION = 2;
   const META_KEY = 'lctLookupMeta';
   const SHARD_PREFIX = 'lctLookup:';
   const SHARD_COUNT = 64;
@@ -47,13 +47,13 @@
   }
   function provenance(meta) {
     return { hasData: true, commit: meta.commit, sourceUpdatedAt: meta.sourceUpdatedAt,
-      lastSyncedAt: meta.lastSyncedAt, companyCount: meta.companyCount, problemCount: meta.problemCount };
+      lastSyncedAt: meta.lastSyncedAt, acceptanceVersion: meta.acceptanceVersion, companyCount: meta.companyCount, problemCount: meta.problemCount };
   }
   function validMeta(meta) {
     if (!isObject(meta) || meta.version !== VERSION || typeof meta.commit !== 'string' || !core.SHA_PATTERN.test(meta.commit) ||
         !isDate(meta.sourceUpdatedAt) || !isDate(meta.lastSyncedAt) || meta.revision !== revisionFor(meta) ||
         !Array.isArray(meta.companies) || !meta.companies.length || meta.companyCount !== meta.companies.length ||
-        !isCount(meta.problemCount) || !isObject(meta.windows) || !isObject(meta.status)) return false;
+        !isCount(meta.problemCount) || ![0, core.ACCEPTANCE_VERSION].includes(meta.acceptanceVersion) || !isObject(meta.windows) || !isObject(meta.status)) return false;
     const names = new Set();
     for (const name of meta.companies) {
       if (typeof name !== 'string' || !name || name.includes('/') || name === '.' || name === '..' || names.has(name)) return false;
@@ -70,13 +70,14 @@
   function matchesData(meta, data) {
     return validMeta(meta) && data && data.version === core.DATA_VERSION && data.schema === core.DATA_SCHEMA &&
       meta.revision === revisionFor(data) && meta.sourceUpdatedAt === data.sourceUpdatedAt &&
+      meta.acceptanceVersion === (core.hasAcceptanceData(data) ? core.ACCEPTANCE_VERSION : 0) &&
       meta.companyCount === data.companyCount && meta.problemCount === data.problemCount;
   }
 
   function buildStorage(data, status) {
     if (!data || data.version !== core.DATA_VERSION || data.schema !== core.DATA_SCHEMA ||
         !Array.isArray(data.companies) || !isObject(data.files) || !isObject(data.windows)) return null;
-    const meta = { version: VERSION, revision: revisionFor(data), commit: data.commit,
+    const meta = { version: VERSION, acceptanceVersion: core.hasAcceptanceData(data) ? core.ACCEPTANCE_VERSION : 0, revision: revisionFor(data), commit: data.commit,
       sourceUpdatedAt: data.sourceUpdatedAt, lastSyncedAt: data.lastSyncedAt,
       companyCount: data.companyCount, problemCount: data.problemCount,
       companies: data.companies.map((company) => company && company.name), windows: {},
@@ -90,10 +91,15 @@
       });
       meta.windows[window] = { available: core.windowAvailable(data, window), questionCounts };
       for (let index = 0; index < SHARD_COUNT; index++) {
-        values[keyForBucket(window, index)] = { revision: meta.revision, index: Object.create(null) };
+        values[keyForBucket(window, index)] = { revision: meta.revision, index: Object.create(null), problems: Object.create(null) };
       }
     }
     if (!validMeta(meta)) return null;
+    if (core.hasAcceptanceData(data)) for (const slug of Object.keys(data.problems)) {
+      if (!core.SLUG_PATTERN.test(slug)) continue;
+      const problem = core.problemForSlug(data, slug);
+      if (problem) for (const window of WINDOWS) values[shardKey(slug, window)].problems[slug] = problem;
+    }
     const companyIds = new Map(meta.companies.map((name, index) => [name, index]));
     for (const window of WINDOWS) {
       if (!meta.windows[window].available) continue;
@@ -128,10 +134,16 @@
       Number.isInteger(tuple[2]) && tuple[2] > 0 && tuple[2] <= count;
   }
   function validShard(shard, meta, window, selectedBucket) {
-    if (!isObject(shard) || shard.revision !== meta.revision || !isObject(shard.index)) return false;
+    if (!isObject(shard) || shard.revision !== meta.revision || !isObject(shard.index) || !isObject(shard.problems)) return false;
     for (const [slug, tuples] of Object.entries(shard.index)) {
       if (!core.SLUG_PATTERN.test(slug) || bucket(slug) !== selectedBucket || !Array.isArray(tuples) ||
           !tuples.every((tuple) => validTuple(tuple, meta, window))) return false;
+    }
+    for (const [slug, problem] of Object.entries(shard.problems)) {
+      if (!core.SLUG_PATTERN.test(slug) || bucket(slug) !== selectedBucket || !isObject(problem) ||
+          typeof problem.title !== 'string' || !problem.title ||
+          (problem.difficulty !== null && !['Easy', 'Medium', 'Hard'].includes(problem.difficulty)) ||
+          (problem.acceptanceRate !== null && core.validAcceptanceRate(problem.acceptanceRate) === null)) return false;
     }
     return true;
   }
@@ -159,7 +171,8 @@
       companies.push({ name, sourceUrl: core.sourceFileURL(meta.commit, name + '/' + core.WINDOW_FILES[selected]),
         frequency, rank, problemCount: meta.windows[selected].questionCounts[id] });
     }
-    return { ok: true, companies: core.sortCompanies(companies), available, windowAvailable: available, status };
+    return { ok: true, problem: Object.prototype.hasOwnProperty.call(shard.problems, slug) ? Object.assign({}, shard.problems[slug]) : null,
+      companies: core.sortCompanies(companies), available, windowAvailable: available, status };
   }
 
   return { VERSION, META_KEY, SHARD_PREFIX, SHARD_COUNT, shardKey, buildStorage, readProblem, readStatus, matchesData };

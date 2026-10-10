@@ -1494,3 +1494,155 @@ test('a newer full cache and status repair stale compact rows before answering a
   assert.deepEqual(storage.values.lctData, newer);
   assert.equal(source.calls.length, 0);
 });
+
+
+const VERIFIED_ACCEPTANCE_COMMIT = '03850eb5d16892514491cf1381c32ec0330a2719';
+function acceptanceCSV(values) {
+  return 'Difficulty,Title,Frequency,Acceptance Rate,Link,Topics\n' + values.map((value, index) =>
+    'Easy,Problem ' + index + ',100,' + value + ',https://leetcode.com/problems/problem-' + index + '/,Array').join('\n');
+}
+function acceptanceValues(values, options) {
+  return core.parseCompanyRecords(acceptanceCSV(values), options).map((record) => record.acceptanceRate);
+}
+function oldAcceptanceData(data) {
+  const old = structuredClone(data);
+  delete old.acceptanceVersion;
+  delete old.problems;
+  for (const file of Object.values(old.files)) for (const record of file.records) delete record.acceptanceRate;
+  return old;
+}
+
+test('acceptance normalization corrects only verified source scale and otherwise infers one unit per file', () => {
+  const corrected = acceptanceValues(['0.0058009183274', '0.004786834', '0.00680278'], { commit: VERIFIED_ACCEPTANCE_COMMIT });
+  assert.deepEqual(corrected.map(core.formatAcceptanceRate), ['58.0%', '47.9%', '68.0%']);
+  assert.deepEqual(acceptanceValues(['0.0058', '0.009']), [null, null], 'unknown all-tiny values cannot assume the verified bug');
+  assert.deepEqual(acceptanceValues(['0.5', '0.005', '0', '1']), [50, 0.5, 0, 100], 'a valid low fraction keeps the column scale');
+  assert.deepEqual(acceptanceValues(['48.2', '0.5', '0', '100']), [48.2, 0.5, 0, 100], 'a valid low percentage keeps the column scale');
+  assert.deepEqual(acceptanceValues(['0.005', '0'], { acceptanceFormat: 'fraction' }), [0.5, 0]);
+  assert.deepEqual(acceptanceValues(['0.005', '0'], { acceptanceFormat: 'percent' }), [0.005, 0]);
+  assert.deepEqual(acceptanceValues(['0.005', '0'], { acceptanceFormat: 'scaled-fraction' }), [50, 0]);
+  assert.deepEqual(acceptanceValues(['48.2%', '0.5%', '100%', '0%']), [48.2, 0.5, 100, 0]);
+});
+
+test('acceptance parsing and formatting preserve unavailable data and reject malformed or out-of-range values', () => {
+  const unknowns = ['', 'NaN', 'Infinity', '-1', '100.1%', '101', '0x10', 'bad', '48%bad'];
+  assert.deepEqual(acceptanceValues(unknowns, { acceptanceFormat: 'percent' }), unknowns.map(() => null));
+  assert.deepEqual(acceptanceValues(['0.0101', '1'], { commit: VERIFIED_ACCEPTANCE_COMMIT }), [null, null], 'scaled values above100 are unavailable');
+  assert.deepEqual(acceptanceValues(['5e-3'], { acceptanceFormat: 'fraction' }), [0.5]);
+  const missing = core.parseCompanyRecords('Title,Link\nTwo Sum,https://leetcode.com/problems/two-sum/')[0];
+  assert.equal(missing.acceptanceRate, null);
+  assert.equal(Object.hasOwn(missing, 'acceptanceRate'), true);
+  for (const value of [null, undefined, NaN, Infinity, -1, 101, '58']) assert.equal(core.formatAcceptanceRate(value), null);
+  assert.equal(core.formatAcceptanceRate(0), '0.0%');
+  assert.equal(core.formatAcceptanceRate(100), '100.0%');
+  assert.equal(core.formatAcceptanceRate(48.23), '48.2%');
+});
+
+test('problem acceptance is shared across companies, practice, search, and windows', async () => {
+  const { source } = snapshotFixture();
+  source.csvByCompany.Amazon = source.csvByCompany.Amazon.replaceAll('"0.5"', '"58.1%"');
+  source.csvByCompany.Google = source.csvByCompany.Google.replaceAll('"0.5"', '"60.0%"');
+  for (const path of Object.keys(source.csvByPath)) source.csvByPath[path] = source.csvByPath[path].replaceAll('"0.5"', '"72.0%"');
+  const service = makeService(memoryStorage(), source);
+  await service.refresh();
+  await service.waitForIdle();
+  assert.deepEqual(await service.getProblem('two-sum'), { title: 'Two Sum', difficulty: 'Easy', acceptanceRate: 58.1 });
+  for (const window of Object.keys(core.WINDOW_FILES)) {
+    const result = await service.searchProblems({ query: 'two sum', window });
+    assert.equal(result.problems[0].acceptanceRate, 58.1);
+    for (const company of ['Amazon', 'Google']) {
+      const practice = await service.getPractice({ company, query: 'two sum', window });
+      assert.equal(practice.questions[0].acceptanceRate, 58.1, company + ' ' + window);
+    }
+  }
+  assert.equal(await service.getProblem('not-in-source'), null);
+  await assert.rejects(service.getProblem('__proto__'), /slug/i);
+});
+
+test('raw and archive sync carry the pinned acceptance format through parsing', async () => {
+  for (const archiveMode of [false, true]) {
+    const source = sourceFixture();
+    source.commit = VERIFIED_ACCEPTANCE_COMMIT;
+    for (const name of Object.keys(source.csvByCompany)) source.csvByCompany[name] = source.csvByCompany[name].replaceAll(',0.5,', ',0.0058,');
+    if (archiveMode) enableArchive(source);
+    const service = makeService(memoryStorage(), source, archiveMode ? { archive: require('../extension/archive.js') } : {});
+    await service.refresh();
+    await service.waitForIdle();
+    assert.equal((await service.getStatus()).phase, 'idle');
+    assert.equal(core.formatAcceptanceRate((await service.getProblem('two-sum')).acceptanceRate), '58.0%');
+  }
+});
+
+test('an old same-commit cache reparses source rows instead of forever reusing missing acceptance fields', async () => {
+  const { source, data } = snapshotFixture();
+  const old = oldAcceptanceData(data);
+  const status = { phase: 'idle', dataSource: 'live', lastCheckedAt: new Date(FIXED_NOW).toISOString() };
+  const storage = memoryStorage({ lctData: old, lctStatus: status });
+  const service = makeService(storage, source);
+  assert.equal(await service.getProblem('two-sum'), null);
+  assert.equal(core.reusableFile({ path: 'Amazon/5. All.csv', sha: BLOB_A }, old.files), null);
+  await service.startAutomatic();
+  await service.waitForIdle();
+  assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, Object.keys(data.files).length);
+  assert.equal(storage.values.lctData.acceptanceVersion, core.ACCEPTANCE_VERSION);
+  assert.equal((await service.getProblem('two-sum')).acceptanceRate, 50);
+  assert.equal((await lookup.readProblem(storage, 'two-sum', 'all')).problem.acceptanceRate, 50);
+});
+
+test('an enriched same-commit bundle migrates existing records offline with one atomic publication', async () => {
+  const { source, data } = snapshotFixture();
+  const old = oldAcceptanceData(data);
+  const status = { phase: 'idle', dataSource: 'live', lastCheckedAt: new Date(FIXED_NOW).toISOString(), commit: old.commit };
+  const storage = memoryStorage({ lctData: old, lctStatus: status });
+  const service = makeService(storage, source, { loadSnapshot: async () => data });
+  assert.equal((await service.getProblem('two-sum')).acceptanceRate, 50);
+  assert.equal(source.calls.length, 0);
+  assert.equal(storage.values.lctData.commit, old.commit);
+  assert.equal(storage.values.lctData.lastSyncedAt, old.lastSyncedAt);
+  assert.equal(storage.values.lctStatus.lastCheckedAt, status.lastCheckedAt);
+  assert.equal(storage.values.lctStatus.dataSource, 'live');
+  const publications = storage.writes.filter((value) => value.lctData);
+  assert.equal(publications.length, 1);
+  assert.ok(publications[0][lookup.META_KEY]);
+  assert.ok(publications[0][lookup.shardKey('two-sum', 'all')]);
+  assert.equal((await lookup.readProblem(storage, 'two-sum', '30d')).problem.acceptanceRate, 50);
+});
+
+test('a different-commit bundle never replaces or relabels a newer cache while migrating acceptance', async () => {
+  const { source, data } = snapshotFixture();
+  const existing = oldAcceptanceData(data);
+  existing.commit = SHA_B;
+  existing.sourceUpdatedAt = '2026-09-16T22:18:35Z';
+  existing.files['Amazon/5. All.csv'].records[0].frequency = 97;
+  const storage = memoryStorage({ lctData: existing, lctStatus: { phase: 'idle', dataSource: 'live', commit: SHA_B } });
+  const service = makeService(storage, source, { loadSnapshot: async () => data });
+  assert.equal(await service.getProblem('two-sum'), null);
+  assert.equal((await service.getCompanies('two-sum'))[0].frequency, 97);
+  assert.deepEqual(storage.values.lctData, existing);
+  assert.equal(storage.writes.filter((value) => value.lctData).length, 0);
+  assert.equal(source.calls.length, 0);
+  const compact = await lookup.readProblem(storage, 'two-sum', 'all');
+  assert.equal(compact.problem, null);
+  assert.equal(compact.status.commit, SHA_B);
+  assert.equal(compact.status.acceptanceVersion, 0);
+});
+
+test('old completed checkpoints without acceptance are downloaded again before complete publication', async () => {
+  const source = sourceFixture();
+  const files = core.selectWindowFiles({ truncated: false, tree: source.files });
+  const records = core.parseCompanyRecords(source.csvByCompany.Amazon);
+  for (const record of records) delete record.acceptanceRate;
+  const manifestKey = 'lctManifest:' + SHA_A;
+  const storage = memoryStorage({
+    [manifestKey]: files,
+    ['lctChunk:' + SHA_A + ':Amazon/5. All.csv']: { sha: BLOB_A, records },
+    lctStage: { version: core.DATA_VERSION, schema: core.DATA_SCHEMA, checkpointVersion: 2, commit: SHA_A,
+      sourceUpdatedAt: '2026-08-16T22:18:35Z', manifestKey, completed: ['Amazon/5. All.csv'], useArchive: false, failureCount: 0, retryAt: 0 }
+  });
+  const service = makeService(storage, source);
+  await service.resume();
+  await service.waitForIdle();
+  assert.equal((await service.getStatus()).phase, 'idle');
+  assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 2);
+  assert.equal((await service.getProblem('two-sum')).acceptanceRate, 50);
+});
