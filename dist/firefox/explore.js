@@ -386,7 +386,8 @@
     const bundled = status.dataSource === 'bundled' ? 'Bundled snapshot · ' : '';
     const failure = refreshError || (status.phase === 'error' ? status.message || 'Refresh failed. Your saved data is still available.' : '');
     const stale = status.lastCheckedAt && Date.now() - new Date(status.lastCheckedAt).getTime() > 48 * 60 * 60 * 1000;
-    $('dataset-state').textContent = status.phase === 'syncing' ? 'Syncing' : failure ? 'Saved data' : status.hasData ? 'Ready' : 'Not synced';
+    $('dataset-state').textContent = status.phase === 'syncing' ? 'Syncing' : failure ? 'Needs attention' : stale ? 'Saved data' : status.hasData ? 'Ready' : 'Not synced';
+    $('dataset-state').dataset.state = status.phase === 'syncing' ? 'syncing' : failure || stale ? 'warning' : status.hasData ? 'ready' : 'idle';
     $('dataset-state').toggleAttribute('data-warning', Boolean(failure || stale));
     $('dataset-summary').textContent = status.hasData ? `${count(status.companyCount)} companies · ${count(status.problemCount)} problems indexed` : '';
     $('window-note').textContent = status.sourceUpdatedAt ? `${bundled}Windows relative to source updated ${date(status.sourceUpdatedAt)}` : 'Time windows follow the dates in the source dataset.';

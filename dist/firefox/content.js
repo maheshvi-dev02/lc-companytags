@@ -31,28 +31,28 @@
     * { box-sizing:border-box; }
     [hidden] { display:none !important; }
     .company-bar { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:12px; color:var(--ink); }
-    .caption { flex:none; max-width:112px; color:var(--muted); }
+    .caption { flex:none; min-width:0; max-width:112px; color:var(--muted); }
     .company-label { display:block; font-size:12px; font-weight:600; white-space:nowrap; }
     .window-row { display:flex; align-items:center; gap:4px; }
-    .window-label { display:block; min-width:0; font-size:11px; }
-    .open-extension { display:inline-flex; align-items:center; justify-content:center; flex:0 0 28px; width:28px; height:28px; padding:1px; border:1px solid transparent; border-radius:6px; color:var(--muted); background:transparent; cursor:pointer; }
+    .window-label { display:block; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+    .open-extension { display:inline-flex; align-items:center; justify-content:center; flex:0 0 28px; width:28px; height:28px; padding:1px; border:1px solid transparent; border-radius:8px; color:var(--muted); background:transparent; cursor:pointer; }
     .open-extension:hover { color:var(--ink); background:var(--wash); border-color:var(--line); }
     .open-extension:disabled { opacity:.5; cursor:wait; }
     .open-extension svg { display:block; width:16px; height:16px; }
     .open-feedback { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .companies { display:flex; flex:1; min-width:0; gap:6px; list-style:none; margin:0; padding:5px 4px 7px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
     .companies li { display:block; flex:none; }
-    .company-chip { display:inline-flex; align-items:center; gap:6px; height:40px; padding:6px 10px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:6px; text-decoration:none; white-space:nowrap; }
+    .company-chip { display:inline-flex; align-items:center; gap:6px; height:40px; padding:6px 10px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:8px; text-decoration:none; white-space:nowrap; }
     .company-chip:hover { border-color:var(--muted); }
     a:focus-visible,.companies:focus-visible,.open-extension:focus-visible { outline:2px solid var(--muted); outline-offset:2px; }
     .company-name { font-size:13px; font-weight:500; }
-    .frequency-score { flex:none; padding-left:2px; color:var(--ink); font:600 13px/1.4 Consolas,monospace; font-variant-numeric:tabular-nums; }
+    .frequency-score { flex:none; padding-left:2px; color:var(--ink); font-size:14px; font-weight:600; line-height:1.4; font-variant-numeric:tabular-nums; }
     .company-logo { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; flex:0 0 24px; overflow:hidden; border:1px solid #d4d4d4; border-radius:5px; background:#fff; color:#4b4b4b; }
     .company-logo-fallback { display:block; color:#4b4b4b; font:600 11px/1 Consolas,monospace; letter-spacing:-.25px; }
     .company-logo img { display:none; width:100%; height:100%; padding:2px; object-fit:contain; }
     .company-logo[data-loaded] img { display:block; }
     .company-logo[data-loaded] .company-logo-fallback { display:none; }
-    .status-message { flex:1; min-width:0; margin:0; color:var(--muted); font-size:11px; }
+    .status-message { flex:1; min-width:0; margin:0; color:var(--muted); font-size:12px; }
     @media(max-width:480px) { .company-bar { gap:8px; } .caption { max-width:100px; } }
   `;
 
@@ -196,7 +196,7 @@
     const provenance = `${status.dataSource === 'bundled' ? 'Bundled snapshot. ' : ''}${sourceDate ? `Source updated ${sourceDate}. ` : ''}${status.phase === 'syncing' ? 'Updating in the background. ' : ''}${status.phase === 'error' ? 'Refresh failed; saved data is shown. ' : ''}Open Company Lens in the browser toolbar for filters, practice and refresh.`;
     view.label.textContent = `Companies${available ? ` · ${companies.length}` : ''}`;
     view.windowLabel.textContent = popupFeedback ? 'Use toolbar' : windowLabel;
-    view.windowLabel.title = popupFeedback;
+    view.windowLabel.title = popupFeedback || windowLabel;
     view.openExtensionButton.disabled = popupOpening;
     view.openExtensionButton.setAttribute('aria-busy', String(popupOpening));
     if (view.openFeedback.textContent !== popupFeedback) view.openFeedback.textContent = popupFeedback;
