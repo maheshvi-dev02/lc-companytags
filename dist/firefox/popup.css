@@ -98,7 +98,7 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .acceptance-help { display:block; margin:6px 0 0; padding:7px 9px; color:var(--muted); background:var(--wash); border:1px solid var(--line); border-radius:var(--control-radius); font-size:var(--font-caption); line-height:1.5; font-weight:400; overflow-wrap:anywhere; }
 
 /* The popup sort menu follows the same rounded, neutral theme as the explorer. */
-.company-tools { display:flex; align-items:center; justify-content:flex-start; gap:8px; flex-wrap:wrap; margin:12px 0 8px; }
+.company-tools { margin:12px 0 8px; }
 .company-tools .frequency-heading { margin:0; }
 .company-sort-trigger { display:inline-flex; align-items:center; justify-content:center; width:var(--utility-target); height:var(--utility-target); flex:0 0 var(--utility-target); min-height:var(--utility-target); padding:5px; color:var(--ink); background:var(--wash); border-radius:8px; }
 .company-sort-trigger:hover,.company-sort-trigger[aria-expanded="true"] { border-color:var(--muted); }
