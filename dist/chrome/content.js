@@ -38,7 +38,7 @@
     .open-extension { display:inline-flex; align-items:center; justify-content:center; flex:0 0 28px; width:28px; height:28px; padding:1px; border:1px solid transparent; border-radius:6px; color:var(--muted); background:transparent; cursor:pointer; }
     .open-extension:hover { color:var(--ink); background:var(--wash); border-color:var(--line); }
     .open-extension:disabled { opacity:.5; cursor:wait; }
-    .open-extension svg { display:block; width:24px; height:24px; }
+    .open-extension svg { display:block; width:16px; height:16px; }
     .open-feedback { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .companies { display:flex; flex:1; min-width:0; gap:6px; list-style:none; margin:0; padding:5px 4px 7px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
     .companies li { display:block; flex:none; }

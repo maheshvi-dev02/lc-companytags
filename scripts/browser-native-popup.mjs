@@ -94,7 +94,7 @@ export async function exerciseNativePopup(context, page, { core, data, extension
         documentWidth: document.documentElement.scrollWidth, color: getComputedStyle(node).color,
         companyCount: root.querySelectorAll('.company-chip').length };
     });
-    assert.equal(layout.svg.width, 24); assert.equal(layout.svg.height, 24);
+    assert.equal(layout.svg.width, 16); assert.equal(layout.svg.height, 16);
     assert.equal(layout.button.width, 28); assert.equal(layout.button.height, 28);
     assert.ok(layout.button.right <= layout.caption.right + 1 && layout.button.bottom <= layout.caption.bottom + 1);
     assert.ok(layout.documentWidth <= width && layout.host.right <= width);
@@ -150,7 +150,7 @@ export async function exerciseNativePopup(context, page, { core, data, extension
     }
   } finally { await browserSession.detach(); }
   return { layouts, activations, checks: [
-    'A 24px outline open-window icon remains accessible in the caption at light/dark desktop and 375px widths without altering company chips.',
+    'A 16px outline open-window icon remains accessible in the caption at light/dark desktop and 375px widths without altering company chips.',
     'Real pointer, Enter and Space activations each open a native Chrome toolbar popup showing the current problem and local company logos; the inline list remains intact.',
   ] };
 }
