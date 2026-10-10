@@ -129,6 +129,71 @@ async function expectTexts(locator, expected) {
   assert.deepEqual(observed, expected);
 }
 
+async function exerciseInlinePopupButton(problemPage, data, slug = 'two-sum') {
+  const host = problemPage.locator('#company-lens-root');
+  const button = host.getByRole('button', { name: 'Open extension', exact: true });
+  const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
+  const expectedNames = core.companiesForSlug(data, slug, 'all').slice(0, 5).map(company => company.name);
+  const browserVersion = Number.parseInt(report.browser.version, 10);
+  const geometry = await button.boundingBox();
+  assert.ok(geometry.width <= 32 && geometry.height <= 32, 'The inline opener stays a compact icon button.');
+  assert.equal(await button.getAttribute('title'), 'Open extension');
+  assert.equal(await button.locator('svg').count(), 1);
+  const chip = await host.locator('.companies a').first().elementHandle();
+  const names = await host.locator('.company-name').allTextContents();
+  const originalWindowLabel = await host.locator('.window-label').innerText();
+  const originalTabs = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.tabs.query({})).map(tab => tab.id));'));
+  const outcomes = [];
+  for (const activation of ['mouse', 'keyboard']) {
+    await problemPage.bringToFront();
+    rdp.discard(packet => packet.type === 'target-available-form' && packet.target?.url === popupUrl);
+    if (activation === 'keyboard') { await button.focus(); await button.press('Enter'); }
+    else await button.click();
+    if (browserVersion < 149) {
+      // Firefox 140–148 does not preserve a webpage gesture through a content-
+      // script message. Exercise the real API rejection without replacing APIs.
+      await host.locator('.window-label').filter({ hasText: 'Use toolbar' }).waitFor();
+      assert.match(await host.locator('.open-feedback[role=status]').textContent(), /Could not open the extension\. Use the browser toolbar\./);
+      outcomes.push(`${activation}: native Firefox ${report.browser.version} restriction gives the toolbar fallback`);
+    } else {
+      const popup = await rdp.waitFor(packet => packet.type === 'target-available-form' &&
+        packet.target?.url === popupUrl, 10000);
+      // RDP's isPopup flag describes window.open targets, not extension action
+      // popups. The real extension view type is the native-popup oracle.
+      const popupViews = JSON.parse(await evaluateBackground('return JSON.stringify(browser.extension.getViews({ type: "popup" }).map(view => view.location.href));'));
+      assert.ok(popupViews.includes(popupUrl), 'The inline button must open an actual extension action popup.');
+      const ui = firefoxExplorerDriver(source => evaluateConsoleRaw(source, popup.target.consoleActor));
+      let observed;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        observed = await ui.read(`({ title: document.querySelector('#problem-title')?.textContent,
+          names: Array.from(document.querySelectorAll('#companies .company-name'), node => node.textContent) })`);
+        if (observed.title === core.formatProblemTitle(slug) && JSON.stringify(observed.names) === JSON.stringify(expectedNames)) break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.equal(observed.title, core.formatProblemTitle(slug));
+      assert.deepEqual(observed.names, expectedNames);
+      outcomes.push(`${activation}: actual native action popup displays ${observed.title} and its current company list`);
+      await evaluateBackground("browser.extension.getViews({ type: 'popup' }).forEach(view => view.close()); return 'closed';");
+    }
+    await problemPage.waitForFunction(() => {
+      const button = document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.open-extension');
+      return button && !button.disabled && button.getAttribute('aria-busy') !== 'true';
+    });
+    assert.equal(await chip.evaluate(node => node.isConnected), true, 'Opening controls must retain the company chips.');
+    assert.deepEqual(await host.locator('.company-name').allTextContents(), names);
+    assert.deepEqual(JSON.parse(await evaluateBackground('return JSON.stringify((await browser.tabs.query({})).map(tab => tab.id));')), originalTabs,
+      'The opener must use the toolbar popup rather than creating a tab.');
+  }
+  await problemPage.screenshot({ path: path.join(output, `firefox-inline-opener-${slug}.png`), fullPage: true, animations: 'disabled' });
+  if (browserVersion < 149) {
+    await problemPage.waitForFunction(label => document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.window-label')?.textContent === label,
+      originalWindowLabel, { timeout: 10000 });
+  }
+  return { slug, browserVersion: report.browser.version, nativePopupSupported: browserVersion >= 149, geometry, outcomes,
+    check: browserVersion >= 149 ? 'Mouse and native Enter activation open the existing toolbar popup for the current problem without changing the inline chips or creating tabs.' :
+      'Mouse and native Enter activation handle the actual Firefox 140–148 popup gesture restriction with accessible toolbar guidance, preserving compact chips and creating no tabs.' };
+}
+
 try {
   const expectedBundle = await bundledExpectations(path.join(root, 'dist/firefox'), core);
   const startupStartedAt = Date.now();
@@ -166,6 +231,7 @@ try {
     packet.target?.url?.includes('_generated_background_page.html'));
   backgroundConsole = background.target.consoleActor;
   report.background = { url: background.target.url, actor: background.target.actor, consoleActor: backgroundConsole };
+  report.browser = JSON.parse(await evaluateBackground('return JSON.stringify(await browser.runtime.getBrowserInfo());'));
   const firstPage = await context.newPage();
   const navigationStartedAt = Date.now();
   await firstPage.goto('https://leetcode.com/problems/two-sum/description/');
@@ -282,6 +348,8 @@ try {
   await page.goto('https://leetcode.com/problems/two-sum/description/');
   report.inline = await exerciseInlineLayout(page, { core, data: seed.lctData, output, browserName: 'firefox' });
   report.checks.push(...report.inline.checks);
+  report.inlinePopup = await exerciseInlinePopupButton(page, seed.lctData);
+  report.checks.push(report.inlinePopup.check);
   const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
   const openPopup = async () => {
     await page.bringToFront();
@@ -297,7 +365,10 @@ try {
   });
   report.checks.push(...toolbar.checks);
   const navigation = await exerciseInlineNavigation(page, { data: seed.lctData, core, context,
-    onSPA: async () => exercisePopupContext(await openPopup(), { data: seed.lctData, core, slug: 'add-two-numbers' }),
+    onSPA: async () => {
+      report.inlinePopupAfterSPA = await exerciseInlinePopupButton(page, seed.lctData, 'add-two-numbers');
+      return exercisePopupContext(await openPopup(), { data: seed.lctData, core, slug: 'add-two-numbers' });
+    },
   });
   report.checks.push(...navigation.checks);
   report.popupVerification = 'Actual packaged popup DOM, inspected and operated via Mozilla RDP console; Playwright does not expose this extension-process tab.';

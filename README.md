@@ -6,7 +6,7 @@ A Chrome and Firefox extension that shows which companies are associated with th
 
 The `dist` folders are ready to load. Node is only needed to rebuild the source.
 
-### Chrome (120+)
+### Chrome (127+)
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode**.
@@ -25,6 +25,8 @@ Firefox removes temporary extensions when it restarts. For permanent installatio
 ## Use
 
 A compact **Company Lens** bar with a complete rounded border appears below the problem title and tags, before the description. Each company chip shows its logo, name and source frequency score. All companies are ordered by descending score and scroll horizontally in one row; the bar stays in the page layout without covering your code or description. Tab through company links or scroll sideways to reach more companies. Company links open the source dataset. Names and frequency scores use larger text for easier reading.
+
+Click the small **open-window icon** beside the time-window caption in the company bar to open the existing toolbar popup from the problem page. It supports mouse and keyboard activation and follows the page’s light/dark theme. The popup opens beside the browser toolbar. This shortcut requires Chrome 127+ or Firefox 149+; older supported Firefox versions show a brief instruction to use the toolbar icon if the browser blocks it.
 
 Click the **Company Lens toolbar icon** for detailed information. The popup offers the time-window filter, ranks, company search, practice questions, sync progress, **Refresh**, and the switch to show or hide the inline bar. Its company list previews five results; **Show all** expands the list and **Show fewer** restores the preview. Pin the extension icon in your browser toolbar for easy access. The popup and explorer use a neutral light/dark palette. Orange LeetCode icon links open the corresponding problem or problem list, with tooltips and accessible labels.
 

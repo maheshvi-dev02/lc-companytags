@@ -104,7 +104,7 @@ for (const browser of ['chrome','firefox']) {
   for (const size of [16,32,48,128]) await copyFile(path.join(root,'extension','icons',`${size}.png`),path.join(out,'icons',`${size}.png`));
   const manifest = structuredClone(common);
   if (browser === 'chrome') {
-    manifest.minimum_chrome_version = '120';
+    manifest.minimum_chrome_version = '127';
     manifest.background = {service_worker:'background.js'};
   } else {
     manifest.background = {scripts:['core.js','lookup.js','archive.js','seed.js','sync.js','background.js']};

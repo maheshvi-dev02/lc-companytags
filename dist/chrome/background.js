@@ -45,8 +45,32 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!sender || sender.id !== api.runtime.id) return false;
     if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
-      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER'].includes(message.type)) return false;
+      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP'].includes(message.type)) return false;
+    if (message.type === 'LCT_OPEN_POPUP') {
+      // Use browser-supplied sender details, never a window or origin from the
+      // message. Only our content script on an authorized LeetCode page may
+      // open the native popup in that page's browser window.
+      let page;
+      try { page = new URL(sender.url); } catch { return false; }
+      if (!['https://leetcode.com', 'https://www.leetcode.com', 'https://leetcode.cn',
+        'https://www.leetcode.cn'].includes(page.origin) || page.username || page.password ||
+        (sender.origin !== undefined && sender.origin !== page.origin) ||
+        !Number.isInteger(sender.tab?.windowId) || sender.tab.windowId < 0) return false;
+    }
     (async () => {
+      if (message.type === 'LCT_OPEN_POPUP') {
+        if (typeof api.action?.openPopup !== 'function') {
+          throw new Error('This browser cannot open the toolbar popup from the page. Click Company Lens in the browser toolbar.');
+        }
+        // Invoke before any cache, network, or asynchronous preparation. Older
+        // Firefox versions may reject this call when messaging loses a gesture.
+        try { await api.action.openPopup({ windowId: sender.tab.windowId }); }
+        catch (error) {
+          const detail = error?.message ? ' (' + error.message + ')' : '';
+          throw new Error('Could not open the toolbar popup' + detail + '. Click Company Lens in the browser toolbar.');
+        }
+        return { ok: true };
+      }
       if (message.type === 'LCT_OPEN_EXPLORER') {
         const mode = message.mode === undefined ? 'problems' : message.mode;
         const query = message.query === undefined ? '' : message.query;

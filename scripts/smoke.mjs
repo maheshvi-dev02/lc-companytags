@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exercisePanelLogos, exercisePopupLogos } from './browser-logos.mjs';
 import { chromiumExplorerDriver, exerciseExplorer } from './browser-explorer.mjs';
+import { exerciseNativePopup } from './browser-native-popup.mjs';
 import { bundledExpectations, exerciseBundledPanel, exerciseBundledPopup, problemFixture, exerciseInlineLayout, exerciseInlineNavigation, exercisePopupFeatures, exercisePopupContext, archiveFixture, browserArchiveCheck, assertArchiveResult } from './browser-first-install.mjs';
 
 // Optional browser verification: uses an existing Playwright installation, never
@@ -134,6 +135,8 @@ async function exercise(context, extensionUrl, browserName) {
   const host = page.locator('#company-lens-root');
   const inline = await exerciseInlineLayout(page, { core, data: fixtureData, output, browserName });
   results.push(...inline.checks);
+  const nativePopup = await exerciseNativePopup(context, page, { core, data: fixtureData, extensionUrl, output, browserName });
+  results.push(...nativePopup.checks);
   const popup = await context.newPage();
   await page.bringToFront(); await popup.goto(`${extensionUrl}/popup.html`);
   const ui = chromiumExplorerDriver(popup);
@@ -148,7 +151,7 @@ async function exercise(context, extensionUrl, browserName) {
     onSPA: async () => { await page.bringToFront(); await popup.reload(); return exercisePopupContext(ui, { data: fixtureData, core, slug: 'add-two-numbers' }); },
   });
   results.push(...navigation.checks);
-  return { results, errors, page, popup, host, inline };
+  return { results, errors, page, popup, host, inline, nativePopup };
 }
 
 async function chromiumRun() {
@@ -223,7 +226,7 @@ async function chromiumRun() {
     await context.close();
     context = await playwright.chromium.launchPersistentContext(profile, deterministicOptions);
     await prepare(context);
-    const { results, errors, popup } = await exercise(context, extensionUrl, 'chromium');
+    const { results, errors, popup, nativePopup } = await exercise(context, extensionUrl, 'chromium');
     results.unshift(firstInstall.check, firstInstall.popup, firstInstall.bundledPopup.check, firstInstall.logos.check, firstInstall.popupLogos.check, ...explorer.checks,
       'Native browser deflate-raw decoder extracts every real source archive CSV with CRC and Git blob validation.',
       'GitHub API, raw-file and codeload hosts are blocked in the browser resolver, including extension service-worker requests.');
@@ -286,7 +289,7 @@ async function chromiumRun() {
       await livePage.screenshot({ path: path.join(output, 'chromium-live-data.png'), fullPage: true, animations: 'disabled' });
       results.push('Actual extension background fetched current GitHub metadata using declared permissions and displayed live-source Two Sum tags.');
     }
-    return { status: 'passed', mode: 'actual unpacked extension', firstInstall, archive, explorer, results, live };
+    return { status: 'passed', mode: 'actual unpacked extension', firstInstall, archive, explorer, nativePopup, results, live };
   } finally { await context.close(); }
 }
 
