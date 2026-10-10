@@ -7,6 +7,7 @@ button,a,input { -webkit-tap-highlight-color:transparent; }
 a { color:var(--accent); text-underline-offset:3px; }
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 [hidden] { display:none !important; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
 .header { display:flex; align-items:center; gap:10px; padding:20px 19px 18px; border-bottom:1px solid var(--line); }
 .mark { display:block; flex:none; width:32px; height:32px; object-fit:contain; }
 h1 { font-size:20px; letter-spacing:-.45px; line-height:1.25; margin:0; font-weight:700; }
@@ -107,10 +108,9 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 /* The popup sort menu follows the same rounded, neutral theme as the explorer. */
 .company-tools { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin:12px 0 7px; }
 .company-tools .frequency-heading { margin:0; }
-.company-sort-trigger { display:flex; align-items:center; justify-content:space-between; gap:10px; width:180px; min-height:34px; padding:6px 9px; color:var(--ink); background:var(--wash); border-radius:8px; font-size:13px; font-weight:400; text-align:left; }
+.company-sort-trigger { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; flex:0 0 34px; min-height:34px; padding:6px; color:var(--ink); background:var(--wash); border-radius:8px; }
 .company-sort-trigger:hover,.company-sort-trigger[aria-expanded="true"] { border-color:var(--muted); }
-.company-sort-trigger .chevron { flex:none; }
-#company-sort-value { min-width:0; white-space:nowrap; }
+.sort-icon { display:block; width:20px; height:20px; flex:none; }
 .company-sort-menu { position:fixed; z-index:1000; overflow:auto; padding:4px; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px #00000016; overscroll-behavior:contain; scrollbar-width:thin; }
 .company-sort-option { position:relative; padding:8px 30px 8px 10px; min-height:36px; border-radius:6px; font-size:13px; line-height:20px; cursor:pointer; user-select:none; }
 .company-sort-option:hover,.company-sort-option[data-active] { background:var(--wash); }

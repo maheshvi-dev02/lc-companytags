@@ -138,8 +138,8 @@
     }
     const selected = options[select.selectedIndex];
     control.value.textContent = selected?.textContent || 'Choose an option';
-    control.button.title = control.value.textContent;
     const name = select.getAttribute('aria-label') || 'Choose an option';
+    control.button.title = control.button.hasAttribute('data-sort-icon') ? `${name}: ${control.value.textContent}` : control.value.textContent;
     control.button.setAttribute('aria-label', name);
     control.menu.setAttribute('aria-label', name);
     control.button.disabled = select.disabled || !options.some(option => !option.disabled);
@@ -243,7 +243,19 @@
       const value = node('span', 'select-value');
       const chevron = node('span', 'select-chevron');
       chevron.setAttribute('aria-hidden', 'true');
-      button.append(value, chevron);
+      if (id === 'sort-select' || id === 'detail-sort-select') {
+        button.dataset.sortIcon = '';
+        value.classList.add('sr-only');
+        value.id = `${id}-value`;
+        button.setAttribute('aria-describedby', value.id);
+        const ns = 'http://www.w3.org/2000/svg';
+        const icon = document.createElementNS(ns, 'svg');
+        for (const [name, attribute] of Object.entries({ class: 'sort-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' })) icon.setAttribute(name, attribute);
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', 'M4 5h16l-6 7v6l-4 2v-8L4 5Z');
+        icon.append(path);
+        button.append(icon, value);
+      } else button.append(value, chevron);
       wrapper.append(button);
       select.before(wrapper);
       const menu = node('div', 'select-menu');

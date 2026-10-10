@@ -52,6 +52,7 @@
   }
   function syncCompanySort() {
     $('company-sort-value').textContent = companySortOptions.find(([key]) => key === companySort)[1];
+    $('company-sort-trigger').title = `Sort companies: ${$('company-sort-value').textContent}`;
     Array.from($('company-sort-menu').children).forEach(option => {
       option.setAttribute('aria-selected', String(option.dataset.value === companySort));
     });
