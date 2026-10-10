@@ -263,6 +263,116 @@ export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum',
   ] };
 }
 
+export async function exercisePopupCompanySort(ui, { data, core, slug = 'two-sum' }) {
+  const trigger = '#company-sort-trigger', menu = '#company-sort-menu';
+  const options = ['frequency-desc', 'frequency-asc', 'name-asc', 'name-desc'];
+  const expected = (sort, expanded = false, query = '') => core.sortCompanies(core.companiesForSlug(data, slug, 'all'), sort)
+    .filter(company => company.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    .map(company => company.name).slice(0, expanded || query ? undefined : 5);
+  const state = () => ui.read(`(() => {
+    const button = document.querySelector('#company-sort-trigger'), menu = document.querySelector('#company-sort-menu');
+    return { tag: button.tagName, type: button.type, role: button.getAttribute('role'),
+      expanded: button.getAttribute('aria-expanded'), controls: button.getAttribute('aria-controls'),
+      visible: Boolean(menu.getClientRects().length), menuRole: menu.getAttribute('role'),
+      label: document.querySelector('#company-sort-value').textContent,
+      selected: Array.from(menu.querySelectorAll('[aria-selected="true"]'), node => node.dataset.value),
+      options: Array.from(menu.querySelectorAll('[role="option"]'), node => node.dataset.value),
+      radius: getComputedStyle(menu).borderRadius };
+  })()`);
+  const closed = async () => {
+    await expectUI(ui, 'document.querySelector("#company-sort-trigger").getAttribute("aria-expanded")', 'false');
+    await expectUI(ui, 'Boolean(document.querySelector("#company-sort-menu").getClientRects().length)', false);
+  };
+  const assertOrder = async (sort, expanded = false, query = '') => {
+    await expectUI(ui, uiTexts('#companies .company-name'), expected(sort, expanded, query));
+    const selected = await state();
+    assert.deepEqual(selected.selected, [sort]);
+    assert.equal(selected.label, await ui.read(`document.querySelector('#company-sort-menu [role="option"][data-value="${sort}"]').textContent`));
+    let storedSort;
+    for (let attempt = 0; attempt < 120; attempt++) {
+      await ui.mutate("globalThis.__lctPopupStoredSort = null; (globalThis.browser || globalThis.chrome).storage.local.get('lctPopupCompanySort').then(value => { globalThis.__lctPopupStoredSort = { value: value.lctPopupCompanySort }; });");
+      await expectUI(ui, 'globalThis.__lctPopupStoredSort !== null', true);
+      storedSort = await ui.read('globalThis.__lctPopupStoredSort.value');
+      if (storedSort === sort) break;
+      await delay(50);
+    }
+    assert.equal(storedSort, sort, 'The popup sort must persist to extension storage.');
+    await ui.mutate('delete globalThis.__lctPopupStoredSort;');
+  };
+  const choose = async sort => {
+    await ui.click(trigger);
+    await expectUI(ui, 'document.querySelector("#company-sort-trigger").getAttribute("aria-expanded")', 'true');
+    await ui.click(`#company-sort-menu [role="option"][data-value="${sort}"]`);
+    await closed();
+  };
+  const initial = await state();
+  assert.equal(initial.tag, 'BUTTON'); assert.equal(initial.type, 'button'); assert.equal(initial.role, 'combobox');
+  assert.equal(initial.controls, 'company-sort-menu'); assert.equal(initial.menuRole, 'listbox');
+  assert.deepEqual(initial.options, options); assert.deepEqual(initial.selected, ['frequency-desc']);
+  assert.equal(initial.expanded, 'false'); assert.equal(initial.visible, false);
+  await choose('name-asc'); await assertOrder('name-asc');
+  await ui.click('#show-companies');
+  await choose('name-desc'); await assertOrder('name-desc', true);
+  assert.equal(await ui.read('document.querySelector("#show-companies").getAttribute("aria-expanded")'), 'true');
+  const query = 'a';
+  await ui.fill('#search', query);
+  await choose('frequency-asc'); await assertOrder('frequency-asc', true, query);
+  assert.equal(await ui.read('document.querySelector("#search").value'), query);
+  assert.equal(await ui.read('document.querySelector("#show-companies").getAttribute("aria-expanded")'), 'true');
+  assert.equal(await ui.read('document.querySelector("#window-select").value'), 'all');
+  await ui.fill('#search', '');
+  await ui.press(trigger, 'Enter'); await expectUI(ui, 'Boolean(document.querySelector("#company-sort-menu").getClientRects().length)', true);
+  const opened = await state(); assert.ok(parseFloat(opened.radius) >= 6, 'Popup company menu must retain rounded corners.');
+  await ui.press(trigger, 'Home'); await ui.press(trigger, 'Enter'); await closed(); await assertOrder('frequency-desc', true);
+  await ui.press(trigger, 'Enter'); await ui.press(trigger, 'End'); await ui.press(trigger, 'Enter');
+  await closed(); await assertOrder('name-desc', true);
+  await ui.press(trigger, 'Enter'); await ui.press(trigger, 'Home'); await ui.press(trigger, 'Escape');
+  await closed(); await assertOrder('name-desc', true);
+  await choose('frequency-desc');
+  await ui.click('#show-companies'); await assertOrder('frequency-desc');
+  return { keyboard: ui.keyboard, options, check: 'Popup company sorting supports all four orders by pointer and keyboard, persists selection, and preserves search, expanded state and time window without changing inline chips.' };
+}
+
+export async function exercisePopupStatusDots(ui, { getStatus, setStorage }) {
+  const original = await getStatus();
+  const fresh = { ...original, phase: 'idle', hasData: true, lastCheckedAt: new Date().toISOString() };
+  const examples = [
+    ['Ready', 'ready', fresh],
+    ['Syncing', 'syncing', { ...fresh, phase: 'syncing', completed: 3, total: 35 }],
+    ['Needs attention', 'warning', { ...fresh, phase: 'error', message: 'Controlled status warning.' }],
+    ['Saved data', 'warning', { ...fresh, lastCheckedAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString() }],
+    ['Not synced', 'idle', { ...fresh, hasData: false, lastCheckedAt: null, lastSyncedAt: null }],
+  ];
+  const results = [];
+  try {
+    for (const [text, state, status] of examples) {
+      await setStorage({ lctStatus: status });
+      await expectUI(ui, 'document.querySelector("#dataset-state").textContent', text);
+      await expectUI(ui, 'document.querySelector("#dataset-state").dataset.state', state);
+      const style = await ui.read(`(() => {
+        const node = document.querySelector('#dataset-state'), css = getComputedStyle(node), dot = getComputedStyle(node, '::before');
+        return { tag: node.tagName, role: node.getAttribute('role'), tabIndex: node.tabIndex,
+          inButton: Boolean(node.closest('button,a')), border: [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth],
+          background: css.backgroundColor, dotContent: dot.content, dotWidth: dot.width, dotHeight: dot.height,
+          dotRadius: dot.borderRadius, dotColor: dot.backgroundColor };
+      })()`);
+      assert.equal(style.tag, 'SPAN'); assert.equal(style.tabIndex, -1); assert.equal(style.inButton, false);
+      assert.ok(!['button', 'link', 'combobox', 'menuitem'].includes(style.role));
+      assert.ok(style.border.every(width => parseFloat(width) === 0), 'Dataset state should not look like a bordered badge.');
+      assert.ok(['rgba(0, 0, 0, 0)', 'transparent'].includes(style.background), 'Dataset state should not have a badge background.');
+      assert.ok(!['none', 'normal'].includes(style.dotContent));
+      const width = parseFloat(style.dotWidth), height = parseFloat(style.dotHeight);
+      assert.ok(width > 0 && width <= 10); assert.equal(width, height);
+      assert.ok(style.dotRadius === '50%' || parseFloat(style.dotRadius) >= width / 2, 'Status dot must be circular.');
+      assert.ok(!['rgba(0, 0, 0, 0)', 'transparent'].includes(style.dotColor));
+      results.push({ text, state, dotColor: style.dotColor });
+    }
+  } finally {
+    await setStorage({ lctStatus: original });
+  }
+  return { states: results, check: 'Dataset status remains readable, non-interactive text with a small circular dot and no pill border or background across ready, syncing, warning, saved-data and idle states.' };
+}
+
 export async function exercisePopupFeatures(ui, page, { data, core, getStatus, setStorage, removeStorage, slug = 'two-sum', output, browserName }) {
   const checks = [];
   const companies = window => core.companiesForSlug(data, slug, window);
@@ -271,6 +381,9 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
   await expectUI(ui, uiTexts('.company-name'), top('all'));
   const acceptance = await exerciseAcceptanceControl(ui, { selector: '#problem-acceptance .acceptance-rate',
     label: acceptanceLabel(core, core.problemForSlug(data, slug).acceptanceRate), core });
+  const companySort = await exercisePopupCompanySort(ui, { data, core, slug });
+  checks.push(companySort.check);
+  await assertChips(page, core, data, slug);
   await expectUI(ui, uiTexts('.frequency-score'), companies('all').slice(0, 5).map(company => company.frequency == null ? '—' : String(company.frequency)));
   await ui.click('#show-companies');
   await expectUI(ui, uiTexts('.company-name'), names('all'));
@@ -342,12 +455,14 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
   await retained.dispose(); await ui.mutate('delete globalThis.__lctProgressNodes;');
   await ui.click('#back-companies');
   checks.push('Sync progress, unrelated storage checkpoints and same-problem query/hash changes preserve chip nodes, keyboard focus and horizontal scroll; popup company/practice nodes remain connected.');
+  const statusDots = await exercisePopupStatusDots(ui, { getStatus, setStorage });
+  checks.push(statusDots.check);
   await ui.mutate(`const node = document.querySelector('#enabled'); node.checked = false; node.dispatchEvent(new Event('change', { bubbles: true }));`);
   await host.waitFor({ state: 'detached' });
   await ui.mutate(`const node = document.querySelector('#enabled'); node.checked = true; node.dispatchEvent(new Event('change', { bubbles: true }));`);
   await assertChips(page, core, data, slug);
   checks.push('Toolbar enable/disable removes and restores the inline company bar on the active problem page.');
-  return { checks, acceptance, practiceAcceptance: practiceLabels };
+  return { checks, acceptance, practiceAcceptance: practiceLabels, companySort, statusDots };
 }
 
 export async function exercisePopupContext(ui, { data, core, slug }) {

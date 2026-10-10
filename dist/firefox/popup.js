@@ -30,6 +30,149 @@
   const frequencyHelp = 'Scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.';
   const selectedWindow = () => Object.hasOwn(windowLabels, settings.window) ? settings.window : 'all';
 
+  const companySortOptions = [
+    ['frequency-desc', 'Highest frequency'], ['frequency-asc', 'Lowest frequency'],
+    ['name-asc', 'Company name A–Z'], ['name-desc', 'Company name Z–A']
+  ];
+  let companySort = 'frequency-desc';
+  let companySortSave = Promise.resolve();
+  let sortMenuOpen = false;
+  let sortActiveIndex = 0;
+  let sortTypeahead = '';
+  let sortTypedAt = 0;
+  const validCompanySort = value => companySortOptions.some(([key]) => key === value) ? value : 'frequency-desc';
+
+  function closeCompanySort(returnFocus = false) {
+    sortMenuOpen = false;
+    $('company-sort-menu').hidden = true;
+    $('company-sort-trigger').setAttribute('aria-expanded', 'false');
+    $('company-sort-trigger').removeAttribute('aria-activedescendant');
+    sortTypeahead = '';
+    if (returnFocus) $('company-sort-trigger').focus();
+  }
+  function syncCompanySort() {
+    $('company-sort-value').textContent = companySortOptions.find(([key]) => key === companySort)[1];
+    Array.from($('company-sort-menu').children).forEach(option => {
+      option.setAttribute('aria-selected', String(option.dataset.value === companySort));
+    });
+  }
+  function setSortActive(index) {
+    const options = Array.from($('company-sort-menu').children);
+    sortActiveIndex = Math.max(0, Math.min(options.length - 1, index));
+    options.forEach((option, i) => option.toggleAttribute('data-active', i === sortActiveIndex));
+    const active = options[sortActiveIndex];
+    $('company-sort-trigger').setAttribute('aria-activedescendant', active.id);
+    const menu = $('company-sort-menu');
+    if (active.offsetTop < menu.scrollTop) menu.scrollTop = active.offsetTop;
+    else if (active.offsetTop + active.offsetHeight > menu.scrollTop + menu.clientHeight) {
+      menu.scrollTop = active.offsetTop + active.offsetHeight - menu.clientHeight;
+    }
+  }
+  function openCompanySort(edge) {
+    const trigger = $('company-sort-trigger');
+    if (trigger.hidden) return;
+    const menu = $('company-sort-menu');
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 190), document.documentElement.clientWidth - 16);
+    const below = window.innerHeight - rect.bottom - 14;
+    const above = rect.top - 14;
+    const upward = below < 160 && above > below;
+    menu.style.width = `${width}px`;
+    menu.style.maxHeight = `${Math.max(0, Math.min(220, upward ? above : below))}px`;
+    menu.hidden = false;
+    menu.style.left = `${Math.max(8, Math.min(rect.left, document.documentElement.clientWidth - width - 8))}px`;
+    menu.style.top = `${upward ? Math.max(8, rect.top - 6 - menu.getBoundingClientRect().height) : rect.bottom + 6}px`;
+    sortMenuOpen = true;
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.focus();
+    setSortActive(edge === 'first' ? 0 : edge === 'last' ? companySortOptions.length - 1 : companySortOptions.findIndex(([key]) => key === companySort));
+  }
+  function changeCompanySort(value, save = false) {
+    const next = validCompanySort(value);
+    if (next === companySort) return;
+    companySort = next;
+    renderCompanies();
+    $('companies').scrollTop = 0;
+    if (save) {
+      companySortSave = companySortSave.then(() => api.storage.local.set({ lctPopupCompanySort: next })).catch(() => {
+        error = 'Could not save your sort preference. The current view still works.';
+        renderStatus();
+      });
+    }
+  }
+  function pickCompanySort(option) {
+    if (!option) return;
+    closeCompanySort(true);
+    changeCompanySort(option.dataset.value, true);
+  }
+  function setupCompanySort() {
+    const menu = document.createElement('div');
+    menu.id = 'company-sort-menu';
+    menu.className = 'company-sort-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', 'Sort companies');
+    menu.hidden = true;
+    menu.append(...companySortOptions.map(([value, label], index) => {
+      const option = document.createElement('div');
+      option.id = `company-sort-option-${index}`;
+      option.className = 'company-sort-option';
+      option.setAttribute('role', 'option');
+      option.dataset.value = value;
+      option.textContent = label;
+      return option;
+    }));
+    document.body.append(menu);
+    syncCompanySort();
+    const trigger = $('company-sort-trigger');
+    trigger.addEventListener('click', () => sortMenuOpen ? closeCompanySort() : openCompanySort());
+    trigger.addEventListener('keydown', event => {
+      if (event.key === 'Tab') { closeCompanySort(); return; }
+      if (event.key === 'Escape') { if (sortMenuOpen) { event.preventDefault(); closeCompanySort(true); } return; }
+      if (event.altKey && event.key === 'ArrowUp') { event.preventDefault(); closeCompanySort(true); return; }
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault();
+        if (event.key === 'Enter' || event.key === ' ') {
+          if (sortMenuOpen) pickCompanySort(menu.children[sortActiveIndex]);
+          else openCompanySort();
+        } else if (!sortMenuOpen) openCompanySort(event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : undefined);
+        else setSortActive(event.key === 'Home' ? 0 : event.key === 'End' ? companySortOptions.length - 1 : sortActiveIndex + (event.key === 'ArrowDown' ? 1 : -1));
+        return;
+      }
+      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        if (!sortMenuOpen) openCompanySort();
+        const now = Date.now();
+        sortTypeahead = (now - sortTypedAt < 700 ? sortTypeahead : '') + event.key.toLocaleLowerCase();
+        sortTypedAt = now;
+        const repeated = Array.from(sortTypeahead).every(letter => letter === sortTypeahead[0]);
+        const prefix = repeated ? sortTypeahead[0] : sortTypeahead;
+        const start = repeated ? sortActiveIndex + 1 : sortActiveIndex;
+        for (let step = 0; step < companySortOptions.length; step++) {
+          const index = (start + step) % companySortOptions.length;
+          if (companySortOptions[index][1].toLocaleLowerCase().startsWith(prefix)) { setSortActive(index); break; }
+        }
+      }
+    });
+    menu.addEventListener('click', event => {
+      const option = event.target.closest('[role="option"]');
+      if (option?.parentNode === menu) pickCompanySort(option);
+    });
+    menu.addEventListener('pointermove', event => {
+      const option = event.target.closest('[role="option"]');
+      if (option?.parentNode === menu) setSortActive(Array.from(menu.children).indexOf(option));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (sortMenuOpen && !trigger.contains(event.target) && !menu.contains(event.target)) closeCompanySort();
+    });
+    document.addEventListener('focusin', event => {
+      if (sortMenuOpen && event.target !== trigger && !menu.contains(event.target)) closeCompanySort();
+    });
+    window.addEventListener('resize', () => closeCompanySort());
+    window.addEventListener('scroll', event => {
+      if (sortMenuOpen && !menu.contains(event.target)) closeCompanySort();
+    }, true);
+  }
+
   let acceptanceHelpId = 0;
   function closeAcceptanceHelp(except = null) {
     document.querySelectorAll('.acceptance-rate[aria-expanded="true"]').forEach(button => {
@@ -87,13 +230,18 @@
 
   function renderCompanies() {
     const query = $('search').value.trim().toLocaleLowerCase();
-    const ordered = core.sortCompanies(companies);
+    const ordered = core.sortCompanies(companies, companySort);
     const filtered = ordered.filter(company => company.name.toLocaleLowerCase().includes(query));
     const shown = query || companiesExpanded ? filtered : filtered.slice(0, previewCount);
     $('companies').toggleAttribute('data-scrollable', shown.length > previewCount);
     const hasFrequency = companies.some(company => Number.isFinite(company.frequency) && company.frequency >= 0);
     $('frequency-heading').hidden = companies.length === 0;
-    $('frequency-heading').textContent = hasFrequency ? 'Frequency score · high to low' : 'Frequency unavailable · A–Z';
+    $('company-tools').hidden = companies.length === 0;
+    $('company-sort-trigger').hidden = companies.length < 2;
+    if (companies.length < 2) closeCompanySort();
+    syncCompanySort();
+    $('companies').setAttribute('aria-label', `Companies listed for this problem, sorted by ${companySortOptions.find(([key]) => key === companySort)[1].toLocaleLowerCase()}`);
+    $('frequency-heading').textContent = hasFrequency ? 'Frequency score' : 'Frequency unavailable';
     $('frequency-heading').title = hasFrequency ? frequencyHelp : `Refresh to check for frequency scores. ${frequencyHelp}`;
     $('frequency-heading').setAttribute('aria-label', `${$('frequency-heading').textContent}. ${$('frequency-heading').title}`);
     $('show-companies').hidden = Boolean(query) || companies.length <= previewCount;
@@ -163,6 +311,7 @@
     const failure = error || (status.phase === 'error' ? status.message || 'Refresh failed. Check your connection and try again.' : '');
     const stale = status.lastCheckedAt && Date.now() - new Date(status.lastCheckedAt).getTime() > 48 * 60 * 60 * 1000;
     $('dataset-state').textContent = status.phase === 'syncing' ? 'Syncing' : failure ? 'Needs attention' : stale ? 'Saved data' : status.hasData ? 'Ready' : 'Not synced';
+    $('dataset-state').dataset.state = status.phase === 'syncing' ? 'syncing' : failure || stale ? 'warning' : status.hasData ? 'ready' : 'idle';
     $('dataset-state').toggleAttribute('data-warning', Boolean(failure || stale));
     $('dataset-summary').textContent = status.hasData ? `${Number(status.companyCount || 0).toLocaleString()} companies · ${Number(status.problemCount || 0).toLocaleString()} problems indexed` : 'Live data from liquidslr’s public GitHub repository.';
     $('status').toggleAttribute('data-warning', Boolean(failure || stale));
@@ -208,6 +357,7 @@
   }
 
   function resetWindow() {
+    closeCompanySort();
     requestId++;
     companies = [];
     problem = null;
@@ -221,6 +371,7 @@
   }
 
   function openPractice(company) {
+    closeCompanySort();
     practiceCompany = company;
     $('difficulty-select').value = '';
     $('topic-input').value = '';
@@ -389,6 +540,8 @@
     }
   });
   api.storage.onChanged.addListener((changes, area) => {
+    // The open popup owns its selected order. Read the saved preference on the
+    // next open; delayed echoes from our queued writes must not undo a newer choice.
     if (area !== 'local' || (!changes.lctSettings && !changes.lctStatus && !changes.lctData)) return;
     if (changes.lctSettings) {
       const previousWindow = selectedWindow();
@@ -422,9 +575,10 @@
 
   async function start() {
     try {
-      const stored = await api.storage.local.get(['lctSettings', 'lctStatus']);
+      const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctPopupCompanySort']);
       settings = { ...settings, ...stored.lctSettings };
       status = stored.lctStatus || {};
+      companySort = validCompanySort(stored.lctPopupCompanySort);
     } catch (_) { /* The background request will report a usable error if needed. */ }
     try {
       const tabs = await api.tabs.query({ active: true, currentWindow: true });
@@ -438,5 +592,6 @@
     render();
     await load();
   }
+  setupCompanySort();
   void start();
 })();

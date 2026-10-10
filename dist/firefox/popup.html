@@ -28,7 +28,10 @@
       <p id="problem-acceptance" class="problem-acceptance" hidden></p>
       <p id="problem-summary" class="muted">Company tags appear as you browse problem pages.</p>
       <label id="search-wrap" class="search" hidden><input type="search" id="search" placeholder="Filter this problem’s companies" aria-label="Filter company names" autocomplete="off"></label>
-      <p id="frequency-heading" class="frequency-heading" tabindex="0" hidden></p>
+      <div id="company-tools" class="company-tools" hidden>
+        <p id="frequency-heading" class="frequency-heading" tabindex="0" hidden></p>
+        <button id="company-sort-trigger" class="company-sort-trigger" type="button" role="combobox" aria-label="Sort companies" aria-haspopup="listbox" aria-expanded="false" aria-controls="company-sort-menu" hidden><span id="company-sort-value">Highest frequency</span><span class="chevron" aria-hidden="true"></span></button>
+      </div>
       <ul id="companies" class="companies" aria-label="Companies listed for this problem"></ul>
       <button id="show-companies" class="show-companies" type="button" aria-controls="companies" aria-expanded="false" hidden><span id="show-companies-label"></span><span class="chevron" aria-hidden="true"></span></button>
       <p id="empty" class="muted" hidden></p>
