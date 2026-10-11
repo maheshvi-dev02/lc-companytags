@@ -18,8 +18,19 @@
   let sortSave = Promise.resolve();
   const params = new URLSearchParams(location.search);
   const requestedSlug = params.get('slug');
-  let pendingProblemSlug = typeof requestedSlug === 'string' && requestedSlug.length <= 200 && requestedSlug === requestedSlug.trim() && core.SLUG_PATTERN.test(requestedSlug) ? requestedSlug : null;
-  let mode = pendingProblemSlug ? 'problems' : params.get('mode') === 'companies' ? 'companies' : 'problems';
+  const requestedCompany = params.get('company');
+  const companyRoute = params.get('mode') === 'companies' && !params.has('slug') &&
+    typeof requestedCompany === 'string' && Boolean(requestedCompany.trim()) && requestedCompany === requestedCompany.trim() && requestedCompany.length <= 200 &&
+    (!params.has('window') || Object.hasOwn(core.WINDOW_FILES, params.get('window'))) &&
+    (!params.has('difficulty') || ['', 'Easy', 'Medium', 'Hard'].includes(params.get('difficulty'))) &&
+    (!params.has('topic') || params.get('topic').length <= 200) &&
+    (!params.has('sort') || core.SORT_OPTIONS.practiceQuestions.includes(params.get('sort')));
+  const problemRoute = !params.has('company') && typeof requestedSlug === 'string' && requestedSlug.length <= 200 && requestedSlug === requestedSlug.trim() && core.SLUG_PATTERN.test(requestedSlug);
+  let pendingDetail = companyRoute ? { kind: 'company', name: requestedCompany, title: requestedCompany,
+    window: params.get('window'), sort: params.get('sort'),
+    filters: { difficulty: params.get('difficulty') || '', topic: params.get('topic') || '', query: '' }
+  } : problemRoute ? { kind: 'problem', slug: requestedSlug, title: core.formatProblemTitle(requestedSlug) } : null;
+  let mode = problemRoute ? 'problems' : params.get('mode') === 'companies' ? 'companies' : 'problems';
   const queries = { problems: '', companies: '' };
   queries[mode] = (params.get('query') || '').slice(0, 200);
   let settings = { ...defaults };
@@ -137,7 +148,9 @@
     });
   }
   function changeSort(key, value) {
-    if (!sortOptions[key].some(([allowed]) => allowed === value) || sorts[key] === value) return;
+    const frame = activeDetail();
+    const current = frame && detailSortKey(frame) === key ? frame.sort : sorts[key];
+    if (!sortOptions[key].some(([allowed]) => allowed === value) || current === value) return;
     sorts[key] = value;
     invalidate();
     for (const frame of stack) if (detailSortKey(frame) === key) { frame.sort = value; frame.version = null; frame.hasMore = false; }
@@ -434,9 +447,9 @@
   }
 
   function openDetail(value) {
-    pendingProblemSlug = null;
+    pendingDetail = null;
     invalidate();
-    stack.push({ ...value, sort: sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'], rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null, filters: { difficulty: '', topic: '', query: '' } });
+    stack.push({ ...value, sort: value.sort || sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'], rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null, filters: { difficulty: '', topic: '', query: '', ...value.filters } });
     renderShell(); renderDetailShell();
     $('detail-back').focus();
     void loadDetail();
@@ -446,7 +459,7 @@
     (button || (activeDetail() ? $('detail-back') : $('global-search'))).focus();
   }
   function back() {
-    pendingProblemSlug = null;
+    pendingDetail = null;
     const previous = stack.pop();
     invalidate(); renderShell();
     const frame = activeDetail();
@@ -461,7 +474,7 @@
     }
   }
   function switchMode(next) {
-    pendingProblemSlug = null;
+    pendingDetail = null;
     invalidate(); mode = next; stack.length = 0;
     list = { rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', version: null };
     renderShell(); $('global-search').focus(); void loadList();
@@ -482,7 +495,7 @@
     switchMode(next); $(`mode-${next}`).focus();
   });
   $('global-search').addEventListener('input', () => {
-    pendingProblemSlug = null;
+    pendingDetail = null;
     queries[mode] = $('global-search').value.slice(0, 200);
     invalidate();
     list.version = null; list.hasMore = false; list.loading = true;
@@ -543,12 +556,13 @@
       settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
       sorts = validatedSorts(stored.lctExplorerSorts);
     } catch (_) { /* The cache request below reports a usable connection error. */ }
-    renderShell(); renderStatus();
     // Consume the initial route once. User navigation can cancel it while the
     // preferences load; automatic storage updates cannot reopen it later.
-    const initialSlug = pendingProblemSlug;
-    pendingProblemSlug = null;
-    if (initialSlug) openDetail({ kind: 'problem', slug: initialSlug, title: core.formatProblemTitle(initialSlug) });
+    const initialDetail = pendingDetail;
+    pendingDetail = null;
+    if (initialDetail?.window) settings.window = initialDetail.window;
+    renderShell(); renderStatus();
+    if (initialDetail) openDetail(initialDetail);
     else if (activeDetail()) { renderDetailShell(); void loadDetail(); }
     else await loadList();
   }

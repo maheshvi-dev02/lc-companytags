@@ -77,8 +77,22 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         if (!['problems', 'companies'].includes(mode) || typeof query !== 'string' || query.length > 200) throw new Error('Invalid explorer selection.');
         const slug = message.slug;
         if (slug !== undefined && (mode !== 'problems' || typeof slug !== 'string' || slug.length > 200 || slug !== slug.trim() || !LCTCore.SLUG_PATTERN.test(slug))) throw new Error('Invalid explorer problem.');
+        const company = message.company;
+        if (company !== undefined && (mode !== 'companies' || slug !== undefined || typeof company !== 'string' || !company.trim() || company !== company.trim() || company.length > 200)) throw new Error('Invalid explorer company.');
+        const contextKeys = ['window', 'difficulty', 'topic', 'sort'];
+        if (company === undefined && contextKeys.some(key => message[key] !== undefined)) throw new Error('Invalid explorer practice context.');
+        if (company !== undefined && (
+          (message.window !== undefined && (typeof message.window !== 'string' || !Object.hasOwn(LCTCore.WINDOW_FILES, message.window))) ||
+          (message.difficulty !== undefined && !['', 'Easy', 'Medium', 'Hard'].includes(message.difficulty)) ||
+          (message.topic !== undefined && (typeof message.topic !== 'string' || message.topic.length > 200)) ||
+          (message.sort !== undefined && !LCTCore.SORT_OPTIONS.practiceQuestions.includes(message.sort))
+        )) throw new Error('Invalid explorer practice context.');
         const params = new URLSearchParams({ mode, query });
         if (slug !== undefined) params.set('slug', slug);
+        if (company !== undefined) {
+          params.set('company', company);
+          for (const key of contextKeys) if (message[key] !== undefined) params.set(key, message[key]);
+        }
         const tab = { url: api.runtime.getURL('explore.html') + '?' + params.toString(), active: true };
         // Keep the full page in the browser window that requested it. Never use
         // a caller-supplied window ID.

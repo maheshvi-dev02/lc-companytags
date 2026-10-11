@@ -39,7 +39,11 @@
       <a id="open-problems" class="open-problems leetcode-link" href="https://leetcode.com/problemset/" target="_blank" rel="noopener noreferrer" aria-label="Browse LeetCode problems" title="Browse LeetCode problems"><img class="leetcode-icon" src="icons/leetcode.svg" alt="" aria-hidden="true" width="20" height="20"></a>
       </div>
       <section id="practice-view" aria-label="Company practice questions" hidden>
-        <button id="back-companies" class="back-companies" type="button">← Back to companies</button>
+        <div class="practice-header">
+          <button id="back-companies" class="back-companies" type="button">← Back to companies</button>
+          <button id="expand-practice" class="expand-practice" type="button" title="Open company practice full page" aria-label="Open company practice full page" aria-busy="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path><path d="M12 12 21 3M15 3h6v6"></path></svg></button>
+        </div>
+        <p id="practice-open-status" class="practice-open-status" role="status" aria-live="polite" hidden></p>
         <p class="eyebrow">Company practice</p>
         <div id="practice-heading" class="company-heading"><h2 id="practice-title"></h2></div>
         <div class="practice-filters">

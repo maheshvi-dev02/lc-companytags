@@ -237,3 +237,61 @@ test('Explorer tab creation failures return an error without falling back to the
     noDataWork({ ...fixture.calls, tabs: 0 });
   }
 });
+
+
+test('company practice expansion preserves encoded filters and sort in a local active Explorer tab', async () => {
+  for (const chrome of [false, true]) {
+    const fixture = harness({ chrome, createTab: () => Promise.resolve({ id: 21 }) });
+    const options = { mode: 'companies', company: 'A&B / Labs #1', window: '3m', difficulty: 'Medium', topic: 'Array & String', sort: 'name-desc' };
+    const route = fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', ...options, windowId: 999 }, sender());
+    assert.deepEqual(await route.response, { ok: true });
+    const [tab] = fixture.calls.createdTabs, url = new URL(tab.url);
+    assert.equal(url.origin, 'null'); // Node treats the extension scheme as an opaque origin.
+    assert.equal(url.protocol, 'chrome-extension:');
+    assert.equal(url.host, EXTENSION_ID);
+    assert.equal(url.pathname, '/explore.html');
+    assert.equal(url.hash, '');
+    assert.equal(url.searchParams.get('query'), '');
+    assert.equal(url.searchParams.has('slug'), false);
+    for (const [key, value] of Object.entries(options)) assert.equal(url.searchParams.get(key), value);
+    assert.equal(tab.active, true);
+    assert.equal(tab.windowId, 7);
+    assert.deepEqual(fixture.calls.openPopup, []);
+    noDataWork({ ...fixture.calls, tabs: 0 });
+  }
+});
+
+test('company deep links support stored preferences when optional context is omitted', async () => {
+  const fixture = harness({ createTab: () => Promise.resolve({ id: 21 }) });
+  const route = fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: 'Uber' }, sender());
+  assert.deepEqual(await route.response, { ok: true });
+  const url = new URL(fixture.calls.createdTabs[0].url);
+  assert.equal(url.searchParams.get('company'), 'Uber');
+  for (const key of ['window', 'difficulty', 'topic', 'sort']) assert.equal(url.searchParams.has(key), false);
+  noDataWork({ ...fixture.calls, tabs: 0 });
+});
+
+test('invalid or ambiguous company practice routes cannot create a tab or touch data', async () => {
+  const base = { type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: 'Uber' };
+  const invalid = [
+    ...['', ' ', ' Uber', 'Uber ', 'a'.repeat(201), null, 2, []].map(company => ({ ...base, company })),
+    { ...base, mode: 'problems' }, { ...base, slug: 'two-sum' },
+    ...['recent', '__proto__', null, 3, {}].map(window => ({ ...base, window })),
+    ...['medium', 'Impossible', null, 3, {}].map(difficulty => ({ ...base, difficulty })),
+    ...['a'.repeat(201), null, 3, {}].map(topic => ({ ...base, topic })),
+    ...['questions-desc', 'relevance', null, 3, {}].map(sort => ({ ...base, sort })),
+    ...['window', 'difficulty', 'topic', 'sort'].map(key => ({ type: 'LCT_OPEN_EXPLORER', [key]: '' }))
+  ];
+  const fixture = harness({ createTab: () => Promise.resolve({ id: 21 }) });
+  for (const message of invalid) {
+    const route = fixture.dispatch(message, sender());
+    assert.equal(route.accepted, true);
+    const response = await route.response;
+    assert.equal(response.ok, false);
+    assert.match(response.error, /Invalid explorer/);
+    assert.equal(route.replies.length, 1);
+  }
+  assert.deepEqual(fixture.calls.createdTabs, []);
+  assert.deepEqual(fixture.calls.openPopup, []);
+  noDataWork(fixture.calls);
+});

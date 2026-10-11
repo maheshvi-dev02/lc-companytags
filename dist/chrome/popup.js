@@ -29,6 +29,9 @@
   let practiceNeedsRetry = false;
   let practiceError = '';
   let practiceRequestId = 0;
+  let practiceOpening = false;
+  let practiceOpenError = '';
+  let practiceOpenContext = '';
   let topicTimer;
   const previewCount = 5;
   const frequencyHelp = 'Scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.';
@@ -406,6 +409,7 @@
   }
 
   function openPractice(company) {
+    practiceOpenError = '';
     closeCompanySort();
     selectMenus.close();
     practiceRequestId++;
@@ -519,7 +523,41 @@
     list.scrollTop = append ? scroll : 0;
   }
 
+  function renderPracticeOpenState() {
+    if (practiceOpenContext !== practiceContext()) practiceOpenError = '';
+    const button = $('expand-practice');
+    button.disabled = practiceOpening || !practiceCompany;
+    button.setAttribute('aria-busy', String(practiceOpening));
+    $('practice-open-status').textContent = practiceOpenError;
+    $('practice-open-status').hidden = !practiceOpenError;
+  }
+
+  async function expandPractice() {
+    if (!practiceCompany || practiceOpening) return;
+    const context = practiceContext();
+    const request = { type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: practiceCompany,
+      window: selectedWindow(), difficulty: $('difficulty-select').value,
+      topic: $('topic-input').value.trim(), sort: practiceSort };
+    selectMenus.close();
+    closeCompanySort();
+    practiceOpening = true;
+    practiceOpenError = '';
+    practiceOpenContext = context;
+    renderPracticeOpenState();
+    try {
+      const result = await api.runtime.sendMessage(request);
+      if (!result?.ok) throw new Error('Explorer unavailable');
+    } catch (_) {
+      // An old request must not add feedback to a different company's filters.
+      if (practiceCompany && context === practiceContext()) practiceOpenError = 'Could not open Company Lens. Try again.';
+    } finally {
+      practiceOpening = false;
+      renderPracticeOpenState();
+    }
+  }
+
   function renderPractice() {
+    renderPracticeOpenState();
     if (!practiceCompany) return;
     syncPracticeSort();
     selectMenus.sync($('difficulty-select'));
@@ -654,6 +692,7 @@
       renderStatus();
     } finally { button.disabled = false; }
   });
+  $('expand-practice').addEventListener('click', () => void expandPractice());
   $('search').addEventListener('input', renderCompanies);
   $('window-select').addEventListener('change', () => {
     settings.window = $('window-select').value;
