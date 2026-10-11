@@ -21,9 +21,9 @@
   let disposed = false;
   let scheduled = false;
   let companyLoadQueued = false;
-  let popupOpening = false;
-  let popupFeedback = '';
-  let popupFeedbackTimer;
+  let explorerOpening = false;
+  let explorerFeedback = '';
+  let explorerFeedbackTimer;
   const selectedWindow = () => Object.hasOwn(labels, settings.window) ? settings.window : 'all';
   const css = `
     :host { all:initial; display:block; width:100%; min-width:0; margin:10px 0 14px; color-scheme:light; font:12px/1.4 "Segoe UI",sans-serif; --ink:#262626; --muted:#737373; --line:#e5e5e5; --wash:#fafafa; }
@@ -123,7 +123,7 @@
   }
   function unmount() {
     if (host) host.remove();
-    clearTimeout(popupFeedbackTimer); popupFeedback = '';
+    clearTimeout(explorerFeedbackTimer); explorerFeedback = '';
     host = null; view = null; renderedKey = null;
   }
   function mount(placement) {
@@ -137,8 +137,8 @@
     const windowLabel = element('span', 'window-label');
     const openExtensionButton = element('button', 'open-extension');
     openExtensionButton.type = 'button';
-    openExtensionButton.title = 'Open extension';
-    openExtensionButton.setAttribute('aria-label', 'Open extension');
+    openExtensionButton.title = 'Open Company Lens full page';
+    openExtensionButton.setAttribute('aria-label', 'Open Company Lens full page');
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     icon.setAttribute('viewBox', '0 0 24 24');
     icon.setAttribute('width', '24'); icon.setAttribute('height', '24');
@@ -173,42 +173,45 @@
     updateTheme(); renderCompanies();
   }
   async function openExtension() {
-    if (popupOpening || !view) return;
+    if (explorerOpening || !view) return;
+    const currentSlug = core.getProblemSlug(location.href);
+    if (!currentSlug || currentSlug !== slug) return;
     const origin = view;
-    clearTimeout(popupFeedbackTimer); popupFeedback = '';
-    popupOpening = true; renderStatus();
+    clearTimeout(explorerFeedbackTimer); explorerFeedback = '';
+    explorerOpening = true; renderStatus();
     try {
-      const result = await api.runtime.sendMessage({ type:'LCT_OPEN_POPUP' });
-      if (!result?.ok) throw new Error('Popup unavailable');
+      const result = await api.runtime.sendMessage({ type:'LCT_OPEN_EXPLORER', mode:'problems', slug:currentSlug });
+      if (!result?.ok) throw new Error('Explorer unavailable');
     } catch (_) {
       if (view === origin && !disposed) {
-        popupFeedback = 'Could not open the extension. Use the browser toolbar.';
-        popupFeedbackTimer = setTimeout(() => { popupFeedback = ''; renderStatus(); }, 6000);
+        explorerFeedback = 'Could not open Company Lens. Try again.';
+        explorerFeedbackTimer = setTimeout(() => { explorerFeedback = ''; renderStatus(); }, 6000);
       }
     } finally {
-      popupOpening = false; renderStatus();
+      explorerOpening = false; renderStatus();
     }
   }
   function renderStatus() {
     if (!view) return;
     const windowLabel = labels[selectedWindow()];
     const sourceDate = date(status.sourceUpdatedAt);
-    const provenance = `${status.dataSource === 'bundled' ? 'Bundled snapshot. ' : ''}${sourceDate ? `Source updated ${sourceDate}. ` : ''}${status.phase === 'syncing' ? 'Updating in the background. ' : ''}${status.phase === 'error' ? 'Refresh failed; saved data is shown. ' : ''}Open Company Lens in the browser toolbar for filters, practice and refresh.`;
+    const provenance = `${status.dataSource === 'bundled' ? 'Bundled snapshot. ' : ''}${sourceDate ? `Source updated ${sourceDate}. ` : ''}${status.phase === 'syncing' ? 'Updating in the background. ' : ''}${status.phase === 'error' ? 'Refresh failed; saved data is shown. ' : ''}Open Company Lens full page for filters, practice and refresh.`;
     view.label.textContent = `Companies${available ? ` · ${companies.length}` : ''}`;
-    view.windowLabel.textContent = popupFeedback ? 'Use toolbar' : windowLabel;
-    view.windowLabel.title = popupFeedback || windowLabel;
-    view.openExtensionButton.disabled = popupOpening;
-    view.openExtensionButton.setAttribute('aria-busy', String(popupOpening));
-    if (view.openFeedback.textContent !== popupFeedback) view.openFeedback.textContent = popupFeedback;
+    view.windowLabel.textContent = windowLabel;
+    view.windowLabel.title = windowLabel;
+    view.openExtensionButton.title = explorerFeedback || 'Open Company Lens full page';
+    view.openExtensionButton.disabled = explorerOpening;
+    view.openExtensionButton.setAttribute('aria-busy', String(explorerOpening));
+    if (view.openFeedback.textContent !== explorerFeedback) view.openFeedback.textContent = explorerFeedback;
     view.caption.title = provenance;
     view.bar.setAttribute('aria-label', `Company Lens company reports for ${core.formatProblemTitle(slug)}. ${windowLabel}. ${provenance}`);
     view.bar.dataset.phase = status.phase || 'idle';
     view.list.hidden = companies.length === 0;
     view.message.hidden = companies.length > 0;
     if (loading) view.message.textContent = 'Loading company tags…';
-    else if (error || (!status.hasData && status.phase === 'error')) view.message.textContent = 'Company data unavailable. Open the extension popup to refresh.';
-    else if (!available) view.message.textContent = status.phase === 'syncing' ? 'Company tags are updating…' : 'This window is unavailable. Open the extension popup to refresh.';
-    else view.message.textContent = 'No company reports in this window. More options in the extension popup.';
+    else if (error || (!status.hasData && status.phase === 'error')) view.message.textContent = 'Company data unavailable. Open Company Lens full page to refresh.';
+    else if (!available) view.message.textContent = status.phase === 'syncing' ? 'Company tags are updating…' : 'This window is unavailable. Open Company Lens full page to refresh.';
+    else view.message.textContent = 'No company reports in this window. More options in Company Lens full page.';
   }
   function renderCompanies() {
     if (!view) return;

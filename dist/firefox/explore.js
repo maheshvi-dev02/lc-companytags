@@ -17,7 +17,9 @@
   let sorts = { ...sortDefaults };
   let sortSave = Promise.resolve();
   const params = new URLSearchParams(location.search);
-  let mode = params.get('mode') === 'companies' ? 'companies' : 'problems';
+  const requestedSlug = params.get('slug');
+  let pendingProblemSlug = typeof requestedSlug === 'string' && requestedSlug.length <= 200 && requestedSlug === requestedSlug.trim() && core.SLUG_PATTERN.test(requestedSlug) ? requestedSlug : null;
+  let mode = pendingProblemSlug ? 'problems' : params.get('mode') === 'companies' ? 'companies' : 'problems';
   const queries = { problems: '', companies: '' };
   queries[mode] = (params.get('query') || '').slice(0, 200);
   let settings = { ...defaults };
@@ -432,6 +434,7 @@
   }
 
   function openDetail(value) {
+    pendingProblemSlug = null;
     invalidate();
     stack.push({ ...value, sort: sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'], rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null, filters: { difficulty: '', topic: '', query: '' } });
     renderShell(); renderDetailShell();
@@ -443,6 +446,7 @@
     (button || (activeDetail() ? $('detail-back') : $('global-search'))).focus();
   }
   function back() {
+    pendingProblemSlug = null;
     const previous = stack.pop();
     invalidate(); renderShell();
     const frame = activeDetail();
@@ -457,6 +461,7 @@
     }
   }
   function switchMode(next) {
+    pendingProblemSlug = null;
     invalidate(); mode = next; stack.length = 0;
     list = { rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', version: null };
     renderShell(); $('global-search').focus(); void loadList();
@@ -477,6 +482,7 @@
     switchMode(next); $(`mode-${next}`).focus();
   });
   $('global-search').addEventListener('input', () => {
+    pendingProblemSlug = null;
     queries[mode] = $('global-search').value.slice(0, 200);
     invalidate();
     list.version = null; list.hasMore = false; list.loading = true;
@@ -537,7 +543,14 @@
       settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
       sorts = validatedSorts(stored.lctExplorerSorts);
     } catch (_) { /* The cache request below reports a usable connection error. */ }
-    renderShell(); renderStatus(); await loadList();
+    renderShell(); renderStatus();
+    // Consume the initial route once. User navigation can cancel it while the
+    // preferences load; automatic storage updates cannot reopen it later.
+    const initialSlug = pendingProblemSlug;
+    pendingProblemSlug = null;
+    if (initialSlug) openDetail({ kind: 'problem', slug: initialSlug, title: core.formatProblemTitle(initialSlug) });
+    else if (activeDetail()) { renderDetailShell(); void loadDetail(); }
+    else await loadList();
   }
   enhanceSelects();
   void start();

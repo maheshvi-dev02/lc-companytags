@@ -162,69 +162,102 @@ async function expectTexts(locator, expected) {
   assert.deepEqual(observed, expected);
 }
 
-async function exerciseInlinePopupButton(problemPage, data, slug = 'two-sum') {
+async function exerciseInlineExplorerButton(problemPage, data, slug = 'two-sum') {
   const host = problemPage.locator('#company-lens-root');
-  const button = host.getByRole('button', { name: 'Open extension', exact: true });
-  const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
-  const expectedNames = core.companiesForSlug(data, slug, 'all').slice(0, 5).map(company => company.name);
-  const browserVersion = Number.parseInt(report.browser.version, 10);
+  const button = host.getByRole('button', { name: 'Open Company Lens full page', exact: true });
+  const explorerBase = report.addon.manifestURL.replace('manifest.json', 'explore.html');
+  const stored = await evaluateBackground(`return await browser.storage.local.get(['lctSettings', 'lctExplorerSorts']);`);
+  const window = Object.hasOwn(core.WINDOW_FILES, stored.lctSettings?.window) ? stored.lctSettings.window : 'all';
+  const companySort = stored.lctExplorerSorts?.problemCompanies || 'frequency-desc';
+  const expected = core.sortCompanies(core.companiesForSlug(data, slug, window), companySort);
+  const expectedTitle = core.problemForSlug(data, slug)?.title || core.formatProblemTitle(slug);
   const geometry = await button.boundingBox();
   assert.ok(geometry.width <= 32 && geometry.height <= 32, 'The inline opener stays a compact icon button.');
-  assert.equal(await button.getAttribute('title'), 'Open extension');
+  assert.equal(await button.getAttribute('title'), 'Open Company Lens full page');
   assert.equal(await button.locator('svg').count(), 1);
   const chip = await host.locator('.companies a').first().elementHandle();
   const names = await host.locator('.company-name').allTextContents();
   const originalWindowLabel = await host.locator('.window-label').innerText();
-  const originalTabs = JSON.parse(await evaluateBackground('return JSON.stringify((await browser.tabs.query({})).map(tab => tab.id));'));
   const outcomes = [];
   for (const activation of ['mouse', 'keyboard']) {
     await problemPage.bringToFront();
-    rdp.discard(packet => packet.type === 'target-available-form' && packet.target?.url === popupUrl);
+    const originalTabs = await evaluateBackground(`return (await browser.tabs.query({})).map(tab => ({id:tab.id,url:tab.url,windowId:tab.windowId,active:tab.active}));`);
+    const sourceTab = originalTabs.find(tab => tab.active && core.getProblemSlug(tab.url) === slug);
+    assert.ok(sourceTab, 'The original LeetCode problem tab must be active before opening controls.');
+    const popupViews = await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`);
+    rdp.discard(packet => packet.type === 'target-available-form' && packet.target?.url?.startsWith(explorerBase));
     if (activation === 'keyboard') { await button.focus(); await button.press('Enter'); }
     else await button.click();
-    if (browserVersion < 149) {
-      // Firefox 140–148 does not preserve a webpage gesture through a content-
-      // script message. Exercise the real API rejection without replacing APIs.
-      await host.locator('.window-label').filter({ hasText: 'Use toolbar' }).waitFor();
-      assert.match(await host.locator('.open-feedback[role=status]').textContent(), /Could not open the extension\. Use the browser toolbar\./);
-      outcomes.push(`${activation}: native Firefox ${report.browser.version} restriction gives the toolbar fallback`);
-    } else {
-      const popup = await rdp.waitFor(packet => packet.type === 'target-available-form' &&
-        packet.target?.url === popupUrl, 10000);
-      // RDP's isPopup flag describes window.open targets, not extension action
-      // popups. The real extension view type is the native-popup oracle.
-      const popupViews = JSON.parse(await evaluateBackground('return JSON.stringify(browser.extension.getViews({ type: "popup" }).map(view => view.location.href));'));
-      assert.ok(popupViews.includes(popupUrl), 'The inline button must open an actual extension action popup.');
-      const ui = firefoxExplorerDriver(source => evaluateConsoleRaw(source, popup.target.consoleActor));
-      let observed;
-      for (let attempt = 0; attempt < 100; attempt++) {
-        observed = await ui.read(`({ title: document.querySelector('#problem-title')?.textContent,
-          names: Array.from(document.querySelectorAll('#companies .company-name'), node => node.textContent) })`);
-        if (observed.title === core.formatProblemTitle(slug) && JSON.stringify(observed.names) === JSON.stringify(expectedNames)) break;
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      assert.equal(observed.title, core.formatProblemTitle(slug));
-      assert.deepEqual(observed.names, expectedNames);
-      outcomes.push(`${activation}: actual native action popup displays ${observed.title} and its current company list`);
-      await evaluateBackground("browser.extension.getViews({ type: 'popup' }).forEach(view => view.close()); return 'closed';");
+    let added = [];
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const tabs = await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>({id:tab.id,url:tab.url,windowId:tab.windowId,active:tab.active}));`);
+      added = tabs.filter(tab => !originalTabs.some(previous => previous.id === tab.id));
+      if (added.length && added[0].url?.startsWith(explorerBase)) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
+    assert.equal(added.length, 1, 'Each inline activation must create exactly one full-page Explorer tab.');
+    const explorerTab = added[0], url = new URL(explorerTab.url);
+    assert.equal(url.protocol + '//' + url.host + url.pathname, explorerBase);
+    assert.equal(url.searchParams.get('mode'), 'problems');
+    assert.equal(url.searchParams.get('query'), '');
+    assert.equal(url.searchParams.get('slug'), slug);
+    assert.equal(explorerTab.active, true, 'The full-page Explorer must become the active tab.');
+    assert.equal(explorerTab.windowId, sourceTab.windowId, 'The Explorer opens in the original problem tab browser window.');
+    const target = (await rdp.waitFor(packet => packet.type === 'target-available-form' && packet.target?.url === explorerTab.url, 10000)).target;
+    const ui = firefoxExplorerDriver(source => evaluateConsoleRaw(source, target.consoleActor));
+    let observed;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      observed = await ui.read(`({title:document.querySelector('#detail-title')?.textContent,window:document.querySelector('#window-select')?.value,
+        detail:!!document.querySelector('#detail-view')?.getClientRects().length,busy:document.querySelector('#detail-results')?.getAttribute('aria-busy'),
+        companies:Array.from(document.querySelectorAll('#detail-results .company-row'),row=>({name:row.dataset.company,rank:row.querySelector('.company-rank')?.textContent,score:row.querySelector('.frequency-score')?.textContent}))})`);
+      if (observed.detail && observed.busy === 'false' && observed.title === expectedTitle && JSON.stringify(observed.companies.map(company => company.name)) === JSON.stringify(expected.map(company => company.name))) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(observed.detail, true); assert.equal(observed.busy, 'false'); assert.equal(observed.title, expectedTitle); assert.equal(observed.window, window);
+    assert.deepEqual(observed.companies.map(company => company.name), expected.map(company => company.name));
+    for (let index = 0; index < expected.length; index++) {
+      const company = expected[index], row = observed.companies[index];
+      assert.equal(row.rank, company.rank == null ? 'Rank unavailable' : `Company rank #${company.rank}`);
+      assert.equal(row.score, Number.isFinite(company.frequency) && company.frequency >= 0 ? String(company.frequency) : '—');
+    }
+    assert.deepEqual(await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`), popupViews, 'The inline opener must not invoke the toolbar-popup route.');
+    outcomes.push(`${activation}: active Explorer tab shows ${expectedTitle}, ${window}, and all ${expected.length} correct company names/ranks/scores`);
+    const prepared = await rdp.send({ to: target.screenshotContentActor, type: 'prepareCapture', args: { selector: 'body' } });
+    const rect = prepared.value.rect; rect.height = Math.min(rect.height, 1000);
+    const captured = await rdp.send({ to: screenshotActor, type: 'capture', args: { browsingContextID: target.browsingContextID, rect, snapshotScale: 1, disableFlash: true } });
+    assert.ok(captured.value.data?.startsWith('data:image/png;base64,'), 'Firefox produces a real full-page Explorer screenshot.');
+    await writeFile(path.join(output, `firefox-inline-explorer-${slug}-${activation}.png`), Buffer.from(captured.value.data.split(',')[1], 'base64'));
+    await ui.click('#detail-back');
+    for (let attempt = 0; attempt < 100; attempt++) {
+      observed = await ui.read(`({search:!!document.querySelector('#search-view').getClientRects().length,detail:!!document.querySelector('#detail-view').getClientRects().length,mode:document.querySelector('#mode-problems').getAttribute('aria-selected')})`);
+      if (observed.search && !observed.detail && observed.mode === 'true') break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.deepEqual(observed, { search: true, detail: false, mode: 'true' }, 'Back returns to the global Problems search.');
+    await ui.fill('#global-search', slug);
+    const matching = core.searchProblems(data, { window, query: slug, sort: stored.lctExplorerSorts?.problems || 'relevance', limit: 50 }).problems.map(problem => problem.slug);
+    for (let attempt = 0; attempt < 100; attempt++) {
+      observed = await ui.read(`({busy:document.querySelector('#results').getAttribute('aria-busy'),slugs:Array.from(document.querySelectorAll('#results [data-action="problem"]'),node=>node.dataset.slug)})`);
+      if (observed.busy === 'false' && JSON.stringify(observed.slugs) === JSON.stringify(matching)) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(observed.busy, 'false');
+    assert.deepEqual(observed.slugs, matching, 'Global search remains usable after opening and leaving a direct problem detail.');
+    await evaluateBackground(`await browser.tabs.remove(${explorerTab.id}); return 'closed';`);
+    await problemPage.bringToFront();
     await problemPage.waitForFunction(() => {
       const button = document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.open-extension');
       return button && !button.disabled && button.getAttribute('aria-busy') !== 'true';
     });
-    assert.equal(await chip.evaluate(node => node.isConnected), true, 'Opening controls must retain the company chips.');
+    assert.equal(await chip.evaluate(node => node.isConnected), true, 'Opening the full-page Explorer must retain the original company chip nodes.');
     assert.deepEqual(await host.locator('.company-name').allTextContents(), names);
-    assert.deepEqual(JSON.parse(await evaluateBackground('return JSON.stringify((await browser.tabs.query({})).map(tab => tab.id));')), originalTabs,
-      'The opener must use the toolbar popup rather than creating a tab.');
+    assert.equal(await host.locator('.window-label').innerText(), originalWindowLabel);
+    assert.equal(await host.locator('.open-feedback[role=status]').textContent(), '');
+    assert.deepEqual(await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>tab.id).sort((a,b)=>a-b);`), originalTabs.map(tab => tab.id).sort((a,b)=>a-b), 'Closing the newly created Explorer leaves every original tab intact.');
   }
   await problemPage.screenshot({ path: path.join(output, `firefox-inline-opener-${slug}.png`), fullPage: true, animations: 'disabled' });
-  if (browserVersion < 149) {
-    await problemPage.waitForFunction(label => document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.window-label')?.textContent === label,
-      originalWindowLabel, { timeout: 10000 });
-  }
-  return { slug, browserVersion: report.browser.version, nativePopupSupported: browserVersion >= 149, geometry, outcomes,
-    check: browserVersion >= 149 ? 'Mouse and native Enter activation open the existing toolbar popup for the current problem without changing the inline chips or creating tabs.' :
-      'Mouse and native Enter activation handle the actual Firefox 140–148 popup gesture restriction with accessible toolbar guidance, preserving compact chips and creating no tabs.' };
+  return { slug, window, browserVersion: report.browser.version, geometry, outcomes,
+    check: 'Trusted mouse and native Enter activation open an active full-page Explorer tab for the current problem and saved window, preserve the inline bar, and keep Back/global search working without invoking the toolbar popup.' };
 }
 
 try {
@@ -385,8 +418,8 @@ try {
   await page.goto('https://leetcode.com/problems/two-sum/description/');
   report.inline = await exerciseInlineLayout(page, { core, data: seed.lctData, output, browserName: 'firefox' });
   report.checks.push(...report.inline.checks);
-  report.inlinePopup = await exerciseInlinePopupButton(page, seed.lctData);
-  report.checks.push(report.inlinePopup.check);
+  report.inlineExplorer = await exerciseInlineExplorerButton(page, seed.lctData);
+  report.checks.push(report.inlineExplorer.check);
   const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
   const openPopup = async () => {
     await page.bringToFront();
@@ -410,7 +443,7 @@ try {
   report.checks.push(...toolbar.checks);
   report.acceptanceScreenshots.push(await screenshotExtension(lastPopupTarget, 'firefox-acceptance-current.png'));
   await popupUI.click('#companies button[data-company="Amazon"]');
-  const practiceTitles = core.practiceQuestions(seed.lctData, { company: 'Amazon', window: 'all', excludeSlug: 'two-sum' }).questions.map(question => question.title);
+  const practiceTitles = core.practiceQuestions(seed.lctData, { company: 'Amazon', window: 'all' }).questions.map(question => question.title);
   let screenshotTitles;
   for (let attempt = 0; attempt < 100; attempt++) {
     screenshotTitles = await popupUI.read("Array.from(document.querySelectorAll('#practice-questions .question-title'), node => node.textContent)");
@@ -422,7 +455,7 @@ try {
   await popupUI.click('#back-companies');
   const navigation = await exerciseInlineNavigation(page, { data: seed.lctData, core, context,
     onSPA: async () => {
-      report.inlinePopupAfterSPA = await exerciseInlinePopupButton(page, seed.lctData, 'add-two-numbers');
+      report.inlineExplorerAfterSPA = await exerciseInlineExplorerButton(page, seed.lctData, 'add-two-numbers');
       return exercisePopupContext(await openPopup(), { data: seed.lctData, core, slug: 'add-two-numbers' });
     },
   });

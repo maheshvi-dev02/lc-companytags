@@ -75,8 +75,15 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         const mode = message.mode === undefined ? 'problems' : message.mode;
         const query = message.query === undefined ? '' : message.query;
         if (!['problems', 'companies'].includes(mode) || typeof query !== 'string' || query.length > 200) throw new Error('Invalid explorer selection.');
+        const slug = message.slug;
+        if (slug !== undefined && (mode !== 'problems' || typeof slug !== 'string' || slug.length > 200 || slug !== slug.trim() || !LCTCore.SLUG_PATTERN.test(slug))) throw new Error('Invalid explorer problem.');
         const params = new URLSearchParams({ mode, query });
-        await api.tabs.create({ url: api.runtime.getURL('explore.html') + '?' + params.toString() });
+        if (slug !== undefined) params.set('slug', slug);
+        const tab = { url: api.runtime.getURL('explore.html') + '?' + params.toString(), active: true };
+        // Keep the full page in the browser window that requested it. Never use
+        // a caller-supplied window ID.
+        if (Number.isInteger(sender.tab?.windowId) && sender.tab.windowId >= 0) tab.windowId = sender.tab.windowId;
+        await api.tabs.create(tab);
         return { ok: true };
       }
       if (message.type === 'LCT_REFRESH') return { ok: true, status: await service.refresh() };

@@ -336,7 +336,7 @@ async function assertChips(page, core, data, slug, window = 'all') {
 export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum', output, browserName }) {
   const host = page.locator('#company-lens-root');
   const expected = await assertChips(page, core, data, slug);
-  assert.equal(await host.getByRole('button', { name: 'Open extension', exact: true }).count(), 1, 'The inline caption must expose one accessible popup shortcut.');
+  assert.equal(await host.getByRole('button', { name: 'Open Company Lens full page', exact: true }).count(), 1, 'The inline caption must expose one accessible full-page Explorer shortcut.');
   assert.equal(await host.locator('button.open-extension').count(), 1);
   assert.equal(await host.locator('.acceptance-rate,.acceptance-help').count(), 0, 'Acceptance metadata must not add controls or text to the compact inline bar.');
   assert.equal(await host.locator('button:not(.open-extension),input,select,.card,.collapsed-bubble').count(), 0, 'The inline bar must have no unrelated or floating-panel controls.');

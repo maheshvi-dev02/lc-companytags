@@ -7,8 +7,8 @@ const vm = require('node:vm');
 const source = readFileSync(path.join(__dirname, '../extension/background.js'), 'utf8');
 const EXTENSION_ID = 'company-lens-test';
 
-function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, chrome = false } = {}) {
-  const calls = { openPopup: [], initialize: 0, automatic: 0, lookup: 0, storage: 0, fetch: 0, tabs: 0 };
+function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, chrome = false, createTab } = {}) {
+  const calls = { createdTabs: [], openPopup: [], initialize: 0, automatic: 0, lookup: 0, storage: 0, fetch: 0, tabs: 0 };
   let listener;
   const fail = (name) => () => { calls[name] += 1; throw new Error('Unexpected ' + name + ' work.'); };
   const api = {
@@ -21,7 +21,7 @@ function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, 
     // when initialization has not begun and no cache/network work can finish.
     alarms: { get: () => new Promise(() => {}), create() {}, clear() {}, onAlarm: { addListener() {} } },
     storage: { local: { get: fail('storage') } },
-    tabs: { create: fail('tabs') }
+    tabs: { create: createTab ? (options) => { calls.tabs++; calls.createdTabs.push(structuredClone(options)); return createTab(options); } : fail('tabs') }
   };
   if (actionAvailable) api.action = {
     openPopup: typeof openPopup === 'function' ? (options) => {
@@ -35,6 +35,7 @@ function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, 
       initialize: fail('initialize'), startAutomatic: fail('automatic'),
       getStatus: fail('initialize'), refresh: fail('initialize'), resume: fail('initialize')
     }) },
+    LCTCore: require('../extension/core.js'),
     LCTLookup: { readStatus: fail('lookup'), readProblem: fail('lookup') },
     LCTSeed: { loadBundledSnapshot: fail('storage') },
     fetch: fail('fetch'), URL, URLSearchParams, console: { error() {} }
@@ -160,4 +161,79 @@ test('unknown messages and unauthorized extension senders remain ignored', () =>
   assert.equal(fixture.dispatch({ type: 'LCT_OPEN_EXPLORER' }, { ...sender(), id: 'another-extension' }).accepted, false);
   assert.deepEqual(fixture.calls.openPopup, []);
   noDataWork(fixture.calls);
+});
+
+
+test('problem Explorer opens an active tab in the sender window before startup/data work finishes', async () => {
+  let finish;
+  const fixture = harness({ actionAvailable: false, createTab: () => new Promise(resolve => { finish = resolve; }) });
+  const route = fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'problems', slug: 'two-sum', windowId: 999 }, sender());
+  assert.equal(route.accepted, true);
+  assert.deepEqual(fixture.calls.createdTabs, [{
+    url: 'chrome-extension://company-lens-test/explore.html?mode=problems&query=&slug=two-sum',
+    active: true, windowId: 7
+  }], 'Use only browser-supplied window details and a local extension URL.');
+  assert.deepEqual(route.replies, [], 'Success must wait for tab creation.');
+  assert.deepEqual(fixture.calls.openPopup, []);
+  noDataWork({ ...fixture.calls, tabs: 0 });
+  finish({ id: 21 });
+  assert.deepEqual(await route.response, { ok: true });
+  assert.equal(route.replies.length, 1);
+  noDataWork({ ...fixture.calls, tabs: 0 });
+});
+
+test('ordinary Explorer search routes retain encoded mode/query without a problem deep link', async () => {
+  for (const chrome of [false, true]) {
+    const fixture = harness({ chrome, createTab: () => Promise.resolve({ id: 21 }) });
+    const trusted = { id: EXTENSION_ID, url: 'chrome-extension://company-lens-test/popup.html' };
+    const route = fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'companies', query: 'Acko & Co', windowId: 999 }, trusted);
+    assert.deepEqual(await route.response, { ok: true });
+    const [options] = fixture.calls.createdTabs;
+    const url = new URL(options.url);
+    assert.equal(url.pathname, '/explore.html');
+    assert.equal(url.searchParams.get('mode'), 'companies');
+    assert.equal(url.searchParams.get('query'), 'Acko & Co');
+    assert.equal(url.searchParams.has('slug'), false);
+    assert.equal(options.active, true);
+    assert.equal(Object.hasOwn(options, 'windowId'), false);
+    assert.deepEqual(fixture.calls.openPopup, []);
+    noDataWork({ ...fixture.calls, tabs: 0 });
+  }
+});
+
+test('invalid problem deep links cannot create a tab or trigger data work', async () => {
+  const invalid = [
+    ...['', '../two-sum', 'two-sum?mode=companies', 'Two-Sum', 'a'.repeat(201), null, 2, []].map(slug => ({ type: 'LCT_OPEN_EXPLORER', slug })),
+    { type: 'LCT_OPEN_EXPLORER', mode: 'companies', slug: 'two-sum' },
+    { type: 'LCT_OPEN_EXPLORER', mode: 'invalid', slug: 'two-sum' },
+    { type: 'LCT_OPEN_EXPLORER', query: {}, slug: 'two-sum' }
+  ];
+  const fixture = harness({ createTab: () => Promise.resolve({ id: 21 }) });
+  for (const message of invalid) {
+    const route = fixture.dispatch(message, sender());
+    assert.equal(route.accepted, true);
+    const response = await route.response;
+    assert.equal(response.ok, false);
+    assert.match(response.error, /Invalid explorer/);
+  }
+  assert.deepEqual(fixture.calls.createdTabs, []);
+  assert.deepEqual(fixture.calls.openPopup, []);
+  noDataWork(fixture.calls);
+});
+
+test('Explorer tab creation failures return an error without falling back to the native popup', async () => {
+  for (const createTab of [
+    () => Promise.reject(new Error('Tab creation failed')),
+    () => { throw new Error('Tab creation failed'); }
+  ]) {
+    const fixture = harness({ createTab });
+    const route = fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', slug: 'two-sum' }, sender());
+    const response = await route.response;
+    assert.equal(response.ok, false);
+    assert.equal(response.error, 'Tab creation failed');
+    assert.equal(route.replies.length, 1);
+    assert.deepEqual(fixture.calls.openPopup, []);
+    assert.equal(fixture.calls.tabs, 1);
+    noDataWork({ ...fixture.calls, tabs: 0 });
+  }
 });
