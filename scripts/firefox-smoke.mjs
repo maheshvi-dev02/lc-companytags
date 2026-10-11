@@ -162,32 +162,34 @@ async function expectTexts(locator, expected) {
   assert.deepEqual(observed, expected);
 }
 
-async function exerciseInlineExplorerButton(problemPage, data, slug = 'two-sum') {
+async function exerciseInlineCompanyButton(problemPage, data, slug = 'two-sum', company = 'Google') {
   const host = problemPage.locator('#company-lens-root');
-  const button = host.getByRole('button', { name: 'Open Company Lens full page', exact: true });
+  const button = host.getByRole('button', { name: `${company}, open company questions`, exact: true });
   const explorerBase = report.addon.manifestURL.replace('manifest.json', 'explore.html');
   const stored = await evaluateBackground(`return await browser.storage.local.get(['lctSettings', 'lctExplorerSorts']);`);
   const window = Object.hasOwn(core.WINDOW_FILES, stored.lctSettings?.window) ? stored.lctSettings.window : 'all';
-  const companySort = stored.lctExplorerSorts?.problemCompanies || 'frequency-desc';
-  const expected = core.sortCompanies(core.companiesForSlug(data, slug, window), companySort);
-  const expectedTitle = core.problemForSlug(data, slug)?.title || core.formatProblemTitle(slug);
-  const geometry = await button.boundingBox();
-  assert.ok(geometry.width <= 32 && geometry.height <= 32, 'The inline opener stays a compact icon button.');
-  assert.equal(await button.getAttribute('title'), 'Open Company Lens full page');
-  assert.equal(await button.locator('svg').count(), 1);
-  const chip = await host.locator('.companies a').first().elementHandle();
+  const expected = core.practiceQuestions(data, { company, window, sort: 'frequency-desc', limit: 100 });
+  assert.ok(core.companiesForSlug(data, slug, window).some(item => item.name === company), 'The chosen chip belongs to this problem and window.');
+  assert.equal(await button.getAttribute('type'), 'button');
+  assert.equal(await button.getAttribute('data-window'), window);
+  const chip = await button.elementHandle();
   const names = await host.locator('.company-name').allTextContents();
   const originalWindowLabel = await host.locator('.window-label').innerText();
   const outcomes = [];
-  for (const activation of ['mouse', 'keyboard']) {
+  for (const activation of ['logo', 'keyboard']) {
     await problemPage.bringToFront();
     const originalTabs = await evaluateBackground(`return (await browser.tabs.query({})).map(tab => ({id:tab.id,url:tab.url,windowId:tab.windowId,active:tab.active}));`);
     const sourceTab = originalTabs.find(tab => tab.active && core.getProblemSlug(tab.url) === slug);
-    assert.ok(sourceTab, 'The original LeetCode problem tab must be active before opening controls.');
+    assert.ok(sourceTab, 'The original LeetCode problem tab must be active.');
     const popupViews = await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`);
     rdp.discard(packet => packet.type === 'target-available-form' && packet.target?.url?.startsWith(explorerBase));
     if (activation === 'keyboard') { await button.focus(); await button.press('Enter'); }
-    else await button.click();
+    else {
+      const logo = button.locator('.company-logo-image');
+      await logo.waitFor({ state: 'visible' });
+      assert.equal(await logo.evaluate(node => node.complete && node.naturalWidth > 0), true, 'The actual company logo is loaded.');
+      await logo.click();
+    }
     let added = [];
     for (let attempt = 0; attempt < 100; attempt++) {
       const tabs = await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>({id:tab.id,url:tab.url,windowId:tab.windowId,active:tab.active}));`);
@@ -195,69 +197,148 @@ async function exerciseInlineExplorerButton(problemPage, data, slug = 'two-sum')
       if (added.length && added[0].url?.startsWith(explorerBase)) break;
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    assert.equal(added.length, 1, 'Each inline activation must create exactly one full-page Explorer tab.');
+    assert.equal(added.length, 1, 'Each company activation creates exactly one Explorer tab, with no GitHub tab.');
     const explorerTab = added[0], url = new URL(explorerTab.url);
     assert.equal(url.protocol + '//' + url.host + url.pathname, explorerBase);
-    assert.equal(url.searchParams.get('mode'), 'problems');
+    assert.equal(url.searchParams.get('mode'), 'companies');
     assert.equal(url.searchParams.get('query'), '');
-    assert.equal(url.searchParams.get('slug'), slug);
-    assert.equal(explorerTab.active, true, 'The full-page Explorer must become the active tab.');
-    assert.equal(explorerTab.windowId, sourceTab.windowId, 'The Explorer opens in the original problem tab browser window.');
+    assert.equal(url.searchParams.get('company'), company);
+    assert.equal(url.searchParams.get('window'), window);
+    assert.equal(url.searchParams.get('sort'), 'frequency-desc');
+    assert.equal(url.searchParams.has('slug'), false);
+    assert.equal(explorerTab.active, true, 'The company Explorer becomes the active tab.');
+    assert.equal(explorerTab.windowId, sourceTab.windowId, 'Company questions open in the original browser window.');
     const target = (await rdp.waitFor(packet => packet.type === 'target-available-form' && packet.target?.url === explorerTab.url, 10000)).target;
     const ui = firefoxExplorerDriver(source => evaluateConsoleRaw(source, target.consoleActor));
+    const state = () => ui.read(`({title:document.querySelector('#detail-title')?.textContent,window:document.querySelector('#window-select')?.value,
+      sort:document.querySelector('#detail-sort-select')?.value,difficulty:document.querySelector('#difficulty-select')?.value,topic:document.querySelector('#topic-select')?.value,
+      detail:!!document.querySelector('#detail-view')?.getClientRects().length,busy:document.querySelector('#detail-results')?.getAttribute('aria-busy'),
+      summary:document.querySelector('#detail-summary')?.textContent,more:!document.querySelector('#detail-load-more')?.hidden,
+      rows:Array.from(document.querySelectorAll('#detail-results .question-row'),row=>({slug:row.dataset.slug,title:row.querySelector('.question-title')?.textContent,meta:row.querySelector('.question-meta')?.textContent}))})`);
+    async function expectRows(count) {
+      const expectedRows = expected.questions.slice(0, count);
+      let observed;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        observed = await state();
+        if (observed.detail && observed.busy === 'false' && observed.title === company && JSON.stringify(observed.rows.map(row => row.slug)) === JSON.stringify(expectedRows.map(row => row.slug))) break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.equal(observed.detail, true); assert.equal(observed.busy, 'false'); assert.equal(observed.title, company);
+      assert.equal(observed.window, window); assert.equal(observed.sort, 'frequency-desc');
+      assert.equal(observed.difficulty, ''); assert.equal(observed.topic, '');
+      assert.deepEqual(observed.rows.map(row => row.slug), expectedRows.map(row => row.slug));
+      assert.equal(new Set(observed.rows.map(row => row.slug)).size, expectedRows.length);
+      assert.equal(observed.summary, `${expectedRows.length.toLocaleString()} of ${expected.total.toLocaleString()} questions`);
+      assert.equal(observed.more, expectedRows.length < expected.total);
+      for (let index = 0; index < expectedRows.length; index++) {
+        const question = expectedRows[index], row = observed.rows[index];
+        assert.equal(row.title, question.title);
+        assert.ok(row.meta.includes(`score ${question.frequency ?? 'unavailable'} · ${question.rank == null ? 'rank unavailable' : `company rank #${question.rank}`}`));
+      }
+      return observed;
+    }
+    const initial = await expectRows(50);
+    if (initial.more) { await ui.click('#detail-load-more'); await expectRows(100); }
+    assert.deepEqual(await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`), popupViews, 'Company activation opens no native toolbar popup.');
+    outcomes.push({activation,url:explorerTab.url,active:explorerTab.active,company,window,total:expected.total,initial:initial.rows.length,loaded:Math.min(expected.questions.length,100)});
+    const prepared = await rdp.send({to:target.screenshotContentActor,type:'prepareCapture',args:{selector:'body'}});
+    const rect = prepared.value.rect; rect.height = Math.min(rect.height,1000);
+    const captured = await rdp.send({to:screenshotActor,type:'capture',args:{browsingContextID:target.browsingContextID,rect,snapshotScale:1,disableFlash:true}});
+    assert.ok(captured.value.data?.startsWith('data:image/png;base64,'));
+    await writeFile(path.join(output,`firefox-company-${company.toLowerCase()}-${slug}-${activation}.png`),Buffer.from(captured.value.data.split(',')[1],'base64'));
+    await ui.click('#detail-back');
     let observed;
     for (let attempt = 0; attempt < 100; attempt++) {
-      observed = await ui.read(`({title:document.querySelector('#detail-title')?.textContent,window:document.querySelector('#window-select')?.value,
-        detail:!!document.querySelector('#detail-view')?.getClientRects().length,busy:document.querySelector('#detail-results')?.getAttribute('aria-busy'),
-        companies:Array.from(document.querySelectorAll('#detail-results .company-row'),row=>({name:row.dataset.company,rank:row.querySelector('.company-rank')?.textContent,score:row.querySelector('.frequency-score')?.textContent}))})`);
-      if (observed.detail && observed.busy === 'false' && observed.title === expectedTitle && JSON.stringify(observed.companies.map(company => company.name)) === JSON.stringify(expected.map(company => company.name))) break;
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    assert.equal(observed.detail, true); assert.equal(observed.busy, 'false'); assert.equal(observed.title, expectedTitle); assert.equal(observed.window, window);
-    assert.deepEqual(observed.companies.map(company => company.name), expected.map(company => company.name));
-    for (let index = 0; index < expected.length; index++) {
-      const company = expected[index], row = observed.companies[index];
-      assert.equal(row.rank, company.rank == null ? 'Rank unavailable' : `Company rank #${company.rank}`);
-      assert.equal(row.score, Number.isFinite(company.frequency) && company.frequency >= 0 ? String(company.frequency) : '—');
-    }
-    assert.deepEqual(await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`), popupViews, 'The inline opener must not invoke the toolbar-popup route.');
-    outcomes.push(`${activation}: active Explorer tab shows ${expectedTitle}, ${window}, and all ${expected.length} correct company names/ranks/scores`);
-    const prepared = await rdp.send({ to: target.screenshotContentActor, type: 'prepareCapture', args: { selector: 'body' } });
-    const rect = prepared.value.rect; rect.height = Math.min(rect.height, 1000);
-    const captured = await rdp.send({ to: screenshotActor, type: 'capture', args: { browsingContextID: target.browsingContextID, rect, snapshotScale: 1, disableFlash: true } });
-    assert.ok(captured.value.data?.startsWith('data:image/png;base64,'), 'Firefox produces a real full-page Explorer screenshot.');
-    await writeFile(path.join(output, `firefox-inline-explorer-${slug}-${activation}.png`), Buffer.from(captured.value.data.split(',')[1], 'base64'));
-    await ui.click('#detail-back');
-    for (let attempt = 0; attempt < 100; attempt++) {
-      observed = await ui.read(`({search:!!document.querySelector('#search-view').getClientRects().length,detail:!!document.querySelector('#detail-view').getClientRects().length,mode:document.querySelector('#mode-problems').getAttribute('aria-selected')})`);
+      observed = await ui.read(`({search:!!document.querySelector('#search-view').getClientRects().length,detail:!!document.querySelector('#detail-view').getClientRects().length,mode:document.querySelector('#mode-companies').getAttribute('aria-selected')})`);
       if (observed.search && !observed.detail && observed.mode === 'true') break;
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    assert.deepEqual(observed, { search: true, detail: false, mode: 'true' }, 'Back returns to the global Problems search.');
-    await ui.fill('#global-search', slug);
-    const matching = core.searchProblems(data, { window, query: slug, sort: stored.lctExplorerSorts?.problems || 'relevance', limit: 50 }).problems.map(problem => problem.slug);
+    assert.deepEqual(observed,{search:true,detail:false,mode:'true'},'Back returns to global Companies.');
+    await ui.fill('#global-search',company);
+    const matching = core.searchCompanies(data,{window,query:company,sort:stored.lctExplorerSorts?.companies || 'name-asc',limit:50}).companies.map(item=>item.name);
     for (let attempt = 0; attempt < 100; attempt++) {
-      observed = await ui.read(`({busy:document.querySelector('#results').getAttribute('aria-busy'),slugs:Array.from(document.querySelectorAll('#results [data-action="problem"]'),node=>node.dataset.slug)})`);
-      if (observed.busy === 'false' && JSON.stringify(observed.slugs) === JSON.stringify(matching)) break;
+      observed = await ui.read(`({busy:document.querySelector('#results').getAttribute('aria-busy'),names:Array.from(document.querySelectorAll('#results .company-row'),row=>row.dataset.company)})`);
+      if (observed.busy === 'false' && JSON.stringify(observed.names) === JSON.stringify(matching)) break;
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    assert.equal(observed.busy, 'false');
-    assert.deepEqual(observed.slugs, matching, 'Global search remains usable after opening and leaving a direct problem detail.');
+    assert.equal(observed.busy,'false'); assert.deepEqual(observed.names,matching,'Global company search remains usable.');
     await evaluateBackground(`await browser.tabs.remove(${explorerTab.id}); return 'closed';`);
     await problemPage.bringToFront();
-    await problemPage.waitForFunction(() => {
-      const button = document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.open-extension');
+    await problemPage.waitForFunction(company=>{
+      const button=document.querySelector('#company-lens-root')?.shadowRoot.querySelector(`.company-chip[data-company="${company}"]`);
       return button && !button.disabled && button.getAttribute('aria-busy') !== 'true';
-    });
-    assert.equal(await chip.evaluate(node => node.isConnected), true, 'Opening the full-page Explorer must retain the original company chip nodes.');
-    assert.deepEqual(await host.locator('.company-name').allTextContents(), names);
-    assert.equal(await host.locator('.window-label').innerText(), originalWindowLabel);
-    assert.equal(await host.locator('.open-feedback[role=status]').textContent(), '');
-    assert.deepEqual(await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>tab.id).sort((a,b)=>a-b);`), originalTabs.map(tab => tab.id).sort((a,b)=>a-b), 'Closing the newly created Explorer leaves every original tab intact.');
+    },company);
+    assert.equal(await chip.evaluate(node=>node.isConnected),true,'Company navigation retains the original chip.');
+    assert.deepEqual(await host.locator('.company-name').allTextContents(),names);
+    assert.equal(await host.locator('.window-label').innerText(),originalWindowLabel);
+    assert.equal(await host.locator('.company-feedback[role=status]').textContent(),'');
+    assert.deepEqual(await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>tab.id).sort((a,b)=>a-b);`),originalTabs.map(tab=>tab.id).sort((a,b)=>a-b));
   }
-  await problemPage.screenshot({ path: path.join(output, `firefox-inline-opener-${slug}.png`), fullPage: true, animations: 'disabled' });
-  return { slug, window, browserVersion: report.browser.version, geometry, outcomes,
-    check: 'Trusted mouse and native Enter activation open an active full-page Explorer tab for the current problem and saved window, preserve the inline bar, and keep Back/global search working without invoking the toolbar popup.' };
+  await problemPage.screenshot({path:path.join(output,`firefox-company-bar-${slug}.png`),fullPage:true,animations:'disabled'});
+  return {slug,company,window,browserVersion:report.browser.version,outcomes,
+    check:'Trusted company-logo clicks and native Enter open the correct active company Explorer for the current window, with exact source rows and one Load more, Back/search intact, no GitHub/native popup and preserved bar.'};
+}
+
+async function exerciseInlinePopupButton(problemPage, data, slug = 'two-sum') {
+  const host = problemPage.locator('#company-lens-root');
+  const button = host.getByRole('button',{name:'Open Company Lens popup',exact:true});
+  const popupUrl = report.addon.manifestURL.replace('manifest.json','popup.html');
+  const stored = await evaluateBackground(`return await browser.storage.local.get('lctSettings');`);
+  const window = Object.hasOwn(core.WINDOW_FILES,stored.lctSettings?.window) ? stored.lctSettings.window : 'all';
+  const expectedNames = core.companiesForSlug(data,slug,window).slice(0,5).map(company=>company.name);
+  const expectedTitle = core.problemForSlug(data,slug)?.title || core.formatProblemTitle(slug);
+  const browserVersion = Number.parseInt(report.browser.version,10);
+  const geometry = await button.boundingBox();
+  assert.ok(geometry.width <= 32 && geometry.height <= 32,'The toolbar-popup icon stays compact.');
+  assert.equal(await button.getAttribute('title'),'Open Company Lens popup');
+  assert.equal(await button.locator('svg').count(),1);
+  const chip = await host.locator('.company-chip').first().elementHandle();
+  const names = await host.locator('.company-name').allTextContents();
+  const originalWindowLabel = await host.locator('.window-label').innerText();
+  const outcomes = [];
+  for (const activation of ['mouse','keyboard']) {
+    await problemPage.bringToFront();
+    const originalTabs = await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>tab.id).sort((a,b)=>a-b);`);
+    rdp.discard(packet=>packet.type==='target-available-form' && packet.target?.url===popupUrl);
+    if (activation==='keyboard') { await button.focus(); await button.press('Enter'); } else await button.click();
+    if (browserVersion < 149) {
+      // Keep the actual API intact: these Firefox versions lose the webpage
+      // gesture through a content-script message and reject action.openPopup.
+      await problemPage.waitForFunction(()=>document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.popup-feedback[role=status]')?.textContent ===
+        'Could not open the popup. Click Company Lens in the browser toolbar.');
+      assert.equal(await host.locator('.popup-feedback[role=status]').textContent(),'Could not open the popup. Click Company Lens in the browser toolbar.');
+      assert.deepEqual(await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`),[]);
+      outcomes.push(`${activation}: actual Firefox ${report.browser.version} gesture rejection gives accessible browser-toolbar guidance`);
+    } else {
+      const popup = await rdp.waitFor(packet=>packet.type==='target-available-form' && packet.target?.url===popupUrl,10000);
+      const popupViews = await evaluateBackground(`return browser.extension.getViews({type:'popup'}).map(view=>view.location.href);`);
+      assert.ok(popupViews.includes(popupUrl),'The small icon opens an actual native action popup.');
+      const ui = firefoxExplorerDriver(source=>evaluateConsoleRaw(source,popup.target.consoleActor));
+      let observed;
+      for (let attempt=0;attempt<100;attempt++) {
+        observed=await ui.read(`({title:document.querySelector('#problem-title')?.textContent,names:Array.from(document.querySelectorAll('#companies .company-name'),node=>node.textContent)})`);
+        if (observed.title===expectedTitle && JSON.stringify(observed.names)===JSON.stringify(expectedNames)) break;
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      assert.equal(observed.title,expectedTitle); assert.deepEqual(observed.names,expectedNames);
+      outcomes.push(`${activation}: real native action popup shows ${observed.title} and current companies`);
+      await evaluateBackground(`browser.extension.getViews({type:'popup'}).forEach(view=>view.close()); return 'closed';`);
+    }
+    await problemPage.waitForFunction(()=>{
+      const button=document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.open-extension');
+      return button && !button.disabled && button.getAttribute('aria-busy')!=='true';
+    });
+    assert.equal(await chip.evaluate(node=>node.isConnected),true);
+    assert.deepEqual(await host.locator('.company-name').allTextContents(),names);
+    assert.equal(await host.locator('.window-label').innerText(),originalWindowLabel,'Native-popup feedback never replaces the selected-window caption.');
+    assert.equal(await host.locator('.company-feedback[role=status]').textContent(),'','Popup errors remain independent of company navigation.');
+    assert.deepEqual(await evaluateBackground(`return (await browser.tabs.query({})).map(tab=>tab.id).sort((a,b)=>a-b);`),originalTabs,'The small popup icon creates no Explorer or GitHub tabs.');
+  }
+  await problemPage.screenshot({path:path.join(output,`firefox-inline-popup-${slug}.png`),fullPage:true,animations:'disabled'});
+  if (browserVersion < 149) await problemPage.waitForFunction(()=>document.querySelector('#company-lens-root')?.shadowRoot.querySelector('.popup-feedback[role=status]')?.textContent==='',null,{timeout:10000});
+  return {slug,window,browserVersion:report.browser.version,nativePopupSupported:browserVersion>=149,geometry,outcomes,
+    check:browserVersion>=149 ? 'The small icon opens the actual native toolbar popup through mouse and Enter, preserves the bar and creates no tabs.' :
+      'The small icon handles actual Firefox 140–148 popup gesture rejection with accessible toolbar guidance, retains the selected-window caption and chips, and creates no tabs.'};
 }
 
 try {
@@ -418,8 +499,10 @@ try {
   await page.goto('https://leetcode.com/problems/two-sum/description/');
   report.inline = await exerciseInlineLayout(page, { core, data: seed.lctData, output, browserName: 'firefox' });
   report.checks.push(...report.inline.checks);
-  report.inlineExplorer = await exerciseInlineExplorerButton(page, seed.lctData);
-  report.checks.push(report.inlineExplorer.check);
+  report.inlineCompanyExplorer = await exerciseInlineCompanyButton(page, seed.lctData);
+  report.checks.push(report.inlineCompanyExplorer.check);
+  report.inlinePopup = await exerciseInlinePopupButton(page, seed.lctData);
+  report.checks.push(report.inlinePopup.check);
   const popupUrl = report.addon.manifestURL.replace('manifest.json', 'popup.html');
   const openPopup = async () => {
     await page.bringToFront();
@@ -455,7 +538,8 @@ try {
   await popupUI.click('#back-companies');
   const navigation = await exerciseInlineNavigation(page, { data: seed.lctData, core, context,
     onSPA: async () => {
-      report.inlineExplorerAfterSPA = await exerciseInlineExplorerButton(page, seed.lctData, 'add-two-numbers');
+      report.inlineCompanyExplorerAfterSPA = await exerciseInlineCompanyButton(page, seed.lctData, 'add-two-numbers');
+      report.inlinePopupAfterSPA = await exerciseInlinePopupButton(page, seed.lctData, 'add-two-numbers');
       return exercisePopupContext(await openPopup(), { data: seed.lctData, core, slug: 'add-two-numbers' });
     },
   });

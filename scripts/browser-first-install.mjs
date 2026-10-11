@@ -312,7 +312,7 @@ export async function inlineGeometry(page) {
       titleBeforeHost: Boolean(title.compareDocumentPosition(host) & Node.DOCUMENT_POSITION_FOLLOWING),
       hostBeforeDescription: Boolean(host.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING),
       list: { ...rect(list), scrollLeft: list.scrollLeft, scrollWidth: list.scrollWidth, clientWidth: list.clientWidth,
-        overflowX: getComputedStyle(list).overflowX }, lastChip: rect(list.querySelector('li:last-child a')) };
+        overflowX: getComputedStyle(list).overflowX }, lastChip: rect(list.querySelector('li:last-child .company-chip')) };
   });
 }
 
@@ -322,10 +322,11 @@ async function assertChips(page, core, data, slug, window = 'all') {
   await expectTexts(host.locator('.company-name'), expected.map(company => company.name));
   await expectTexts(host.locator('.frequency-score'), expected.map(company => company.frequency == null ? '—' : String(company.frequency)));
   for (const company of expected) {
-    const chip = host.getByRole('link', { name: `${company.name}, view source`, exact: true });
-    assert.equal(await chip.getAttribute('href'), company.sourceUrl);
-    assert.equal(await chip.getAttribute('target'), '_blank');
-    assert.match(await chip.getAttribute('rel'), /noopener/);
+    const chip = host.getByRole('button', { name: `${company.name}, open company questions`, exact: true });
+    assert.equal(await chip.getAttribute('type'), 'button');
+    assert.equal(await chip.getAttribute('href'), null);
+    assert.equal(await chip.getAttribute('data-company'), company.name);
+    assert.equal(await chip.getAttribute('data-window'), window);
     const explanation = await chip.evaluate(node => (node.title || '') + ' ' + (node.getRootNode().getElementById(node.getAttribute('aria-describedby'))?.textContent || ''));
     assert.match(explanation, /not interview counts/i);
     if (company.rank != null) assert.ok(explanation.includes(`#${company.rank}`), `${company.name} rank must remain available in its tooltip/description.`);
@@ -336,10 +337,10 @@ async function assertChips(page, core, data, slug, window = 'all') {
 export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum', output, browserName }) {
   const host = page.locator('#company-lens-root');
   const expected = await assertChips(page, core, data, slug);
-  assert.equal(await host.getByRole('button', { name: 'Open Company Lens full page', exact: true }).count(), 1, 'The inline caption must expose one accessible full-page Explorer shortcut.');
+  assert.equal(await host.getByRole('button', { name: 'Open Company Lens popup', exact: true }).count(), 1, 'The inline caption must expose one accessible toolbar-popup shortcut.');
   assert.equal(await host.locator('button.open-extension').count(), 1);
   assert.equal(await host.locator('.acceptance-rate,.acceptance-help').count(), 0, 'Acceptance metadata must not add controls or text to the compact inline bar.');
-  assert.equal(await host.locator('button:not(.open-extension),input,select,.card,.collapsed-bubble').count(), 0, 'The inline bar must have no unrelated or floating-panel controls.');
+  assert.equal(await host.locator('button:not(.open-extension):not(.company-chip),input,select,.card,.collapsed-bubble').count(), 0, 'The inline bar must have no unrelated or floating-panel controls.');
   const geometry = await inlineGeometry(page);
   assert.ok(['static', 'relative'].includes(geometry.position), 'Company bar must participate in the normal page flow.');
   assert.equal(geometry.titleBeforeHost, true); assert.equal(geometry.hostBeforeDescription, true);
@@ -348,9 +349,9 @@ export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum',
   assert.ok(geometry.documentWidth <= geometry.viewport.width, 'The inline bar must not widen the document.');
   assert.ok(['auto', 'scroll'].includes(geometry.list.overflowX));
   assert.ok(geometry.list.scrollWidth > geometry.list.clientWidth, 'All company chips must share one horizontal scrolling row.');
-  const first = host.locator('.companies a').first();
+  const first = host.locator('.companies .company-chip').first();
   await first.focus(); await first.press('Tab');
-  assert.equal(await host.locator('.companies a').nth(1).evaluate(node => node.getRootNode().activeElement === node), true);
+  assert.equal(await host.locator('.companies .company-chip').nth(1).evaluate(node => node.getRootNode().activeElement === node), true);
   await host.locator('.companies').focus();
   await host.locator('.companies').press('End');
   const scrolled = await inlineGeometry(page);
@@ -380,7 +381,7 @@ export async function exerciseInlineLayout(page, { core, data, slug = 'two-sum',
   else await page.setViewportSize(previous);
   await host.locator('.companies').evaluate(list => { list.scrollLeft = 0; });
   return { geometry, narrow, count: expected.length, checks: [
-    'All companies appear in source-frequency order with zero/unknown scores, pinned source links and accessible frequency/rank explanations.',
+    'All company buttons appear in source-frequency order with zero/unknown scores, captured company/window targets and accessible frequency/rank explanations.',
     'Company bar sits below the title/tags and before the description in normal flow; keyboard Tab reaches its chips and no floating controls remain.',
     'Horizontal scrolling reaches the last chip without widening the page at desktop or actual 375px viewport widths.',
   ] };
@@ -524,7 +525,7 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
     await expectUI(ui, uiTexts('#problem-acceptance .acceptance-rate'), [acceptance.label]);
     await assertChips(page, core, data, slug, window);
   }
-  checks.push('All five toolbar time windows rerank every inline company chip and update its source file and rank.');
+  checks.push('All five toolbar time windows rerank every inline company chip and update its captured window and rank.');
   const practice = options => core.practiceQuestions(data, { company: 'Amazon', window: 'all', ...options });
   await ui.click('#companies button[data-company="Amazon"]');
   await expectUI(ui, uiTexts('#practice-questions .question-title'), practice().questions.map(question => question.title));
@@ -561,8 +562,8 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
   checks.push('Toolbar practice retains source frequency/rank, includes and marks the current question, and supports difficulty/topic filters, no-match states and direct LeetCode links.');
   await ui.mutate(`globalThis.__lctProgressNodes = { company: document.querySelector('#companies a'), question: document.querySelector('#practice-questions a') };`);
   const host = page.locator('#company-lens-root');
-  const retained = await host.locator('.companies a').last().elementHandle();
-  await host.locator('.companies a').last().focus();
+  const retained = await host.locator('.companies .company-chip').last().elementHandle();
+  await host.locator('.companies .company-chip').last().focus();
   const scrollBefore = await host.locator('.companies').evaluate(list => list.scrollLeft);
   const status = await getStatus();
   await setStorage({ lctStatus: { ...status, phase: 'syncing', completed: 3, total: 35 }, lctStage: { auditCheckpoint: true }, lctAuditChunk: { progress: 3 } });

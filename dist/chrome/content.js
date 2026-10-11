@@ -21,9 +21,15 @@
   let disposed = false;
   let scheduled = false;
   let companyLoadQueued = false;
-  let explorerOpening = false;
-  let explorerFeedback = '';
-  let explorerFeedbackTimer;
+  let popupOpening = false;
+  let popupFeedback = '';
+  let popupFeedbackTimer;
+  const companyOpenings = new Set();
+  let companyFeedback = '';
+  let companyFeedbackName = '';
+  let companyFeedbackTimer;
+  let openContextId = 0;
+  const companyOpenKey = (name, currentSlug, window) => JSON.stringify([name, currentSlug, window]);
   const selectedWindow = () => Object.hasOwn(labels, settings.window) ? settings.window : 'all';
   const css = `
     :host { all:initial; display:block; width:100%; min-width:0; margin:10px 0 14px; color-scheme:light; font:12px/1.4 "Segoe UI",sans-serif; --ink:#262626; --muted:#737373; --line:#e5e5e5; --wash:#fafafa; }
@@ -42,9 +48,10 @@
     .open-feedback { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .companies { display:flex; flex:1; min-width:0; gap:6px; list-style:none; margin:0; padding:5px 4px 7px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
     .companies li { display:block; flex:none; }
-    .company-chip { display:inline-flex; align-items:center; gap:6px; height:40px; padding:6px 10px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:8px; text-decoration:none; white-space:nowrap; }
+    .company-chip { display:inline-flex; align-items:center; gap:6px; height:40px; padding:6px 10px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:8px; text-decoration:none; white-space:nowrap; font:inherit; text-align:left; cursor:pointer; }
     .company-chip:hover { border-color:var(--muted); }
-    a:focus-visible,.companies:focus-visible,.open-extension:focus-visible { outline:2px solid var(--muted); outline-offset:2px; }
+    .company-chip:disabled { opacity:.5; cursor:wait; }
+    .company-chip:focus-visible,.companies:focus-visible,.open-extension:focus-visible { outline:2px solid var(--muted); outline-offset:2px; }
     .company-name { font-size:13px; font-weight:500; }
     .frequency-score { flex:none; padding-left:2px; color:var(--ink); font-size:14px; font-weight:600; line-height:1.4; font-variant-numeric:tabular-nums; }
     .company-logo { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; flex:0 0 24px; overflow:hidden; border:1px solid #d4d4d4; border-radius:5px; background:#fff; color:#4b4b4b; }
@@ -61,13 +68,6 @@
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
-  }
-  function sourceURL(value) {
-    try {
-      const url = new URL(value);
-      if (url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname.startsWith('/liquidslr/leetcode-company-wise-problems/')) return url.href;
-    } catch (_) { /* Use the known public dataset. */ }
-    return core.SOURCE_URL;
   }
   function date(value) {
     const parsed = new Date(value);
@@ -123,7 +123,7 @@
   }
   function unmount() {
     if (host) host.remove();
-    clearTimeout(explorerFeedbackTimer); explorerFeedback = '';
+    clearOpenFeedback();
     host = null; view = null; renderedKey = null;
   }
   function mount(placement) {
@@ -137,8 +137,8 @@
     const windowLabel = element('span', 'window-label');
     const openExtensionButton = element('button', 'open-extension');
     openExtensionButton.type = 'button';
-    openExtensionButton.title = 'Open Company Lens full page';
-    openExtensionButton.setAttribute('aria-label', 'Open Company Lens full page');
+    openExtensionButton.title = 'Open Company Lens popup';
+    openExtensionButton.setAttribute('aria-label', 'Open Company Lens popup');
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     icon.setAttribute('viewBox', '0 0 24 24');
     icon.setAttribute('width', '24'); icon.setAttribute('height', '24');
@@ -150,17 +150,19 @@
     const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     arrow.setAttribute('d', 'M12 12 21 3M15 3h6v6');
     icon.append(outline, arrow); openExtensionButton.append(icon);
-    const openFeedback = element('span', 'open-feedback');
+    const openFeedback = element('span', 'open-feedback popup-feedback');
     openFeedback.setAttribute('role', 'status'); openFeedback.setAttribute('aria-live', 'polite');
+    const companyOpenFeedback = element('span', 'open-feedback company-feedback');
+    companyOpenFeedback.setAttribute('role', 'status'); companyOpenFeedback.setAttribute('aria-live', 'polite');
     windowRow.append(windowLabel, openExtensionButton);
-    caption.append(label, windowRow, openFeedback);
+    caption.append(label, windowRow, openFeedback, companyOpenFeedback);
     const list = element('ul', 'companies');
     list.id = 'company-lens-companies'; list.tabIndex = 0;
     list.setAttribute('aria-label', 'Companies ordered by frequency. Scroll horizontally for more.');
     const message = element('p', 'status-message'); message.setAttribute('role', 'status');
     bar.append(caption, list, message);
     shadow.append(element('style', '', css), bar);
-    view = { bar, caption, label, windowLabel, openExtensionButton, openFeedback, list, message };
+    view = { bar, caption, label, windowLabel, openExtensionButton, openFeedback, companyOpenFeedback, list, message };
     placement.parent.insertBefore(host, placement.statement);
     openExtensionButton.addEventListener('click', openExtension);
     list.addEventListener('keydown', event => {
@@ -172,67 +174,113 @@
     });
     updateTheme(); renderCompanies();
   }
+  function clearOpenFeedback() {
+    openContextId++;
+    clearTimeout(popupFeedbackTimer); popupFeedback = '';
+    clearTimeout(companyFeedbackTimer); companyFeedback = ''; companyFeedbackName = '';
+  }
+  function openContextCurrent(origin, currentSlug, window, context) {
+    return context === openContextId && view === origin && !disposed && settings.enabled && currentSlug === slug &&
+      window === selectedWindow() && core.getProblemSlug(location.href) === currentSlug;
+  }
   async function openExtension() {
-    if (explorerOpening || !view) return;
+    if (popupOpening || !view) return;
     const currentSlug = core.getProblemSlug(location.href);
     if (!currentSlug || currentSlug !== slug) return;
     const origin = view;
-    clearTimeout(explorerFeedbackTimer); explorerFeedback = '';
-    explorerOpening = true; renderStatus();
+    const window = selectedWindow();
+    const context = openContextId;
+    clearTimeout(popupFeedbackTimer); popupFeedback = '';
+    popupOpening = true; renderStatus();
     try {
-      const result = await api.runtime.sendMessage({ type:'LCT_OPEN_EXPLORER', mode:'problems', slug:currentSlug });
-      if (!result?.ok) throw new Error('Explorer unavailable');
+      const result = await api.runtime.sendMessage({ type:'LCT_OPEN_POPUP' });
+      if (!result?.ok) throw new Error('Popup unavailable');
     } catch (_) {
-      if (view === origin && !disposed) {
-        explorerFeedback = 'Could not open Company Lens. Try again.';
-        explorerFeedbackTimer = setTimeout(() => { explorerFeedback = ''; renderStatus(); }, 6000);
+      if (openContextCurrent(origin, currentSlug, window, context)) {
+        popupFeedback = 'Could not open the popup. Click Company Lens in the browser toolbar.';
+        popupFeedbackTimer = setTimeout(() => { popupFeedback = ''; renderStatus(); }, 6000);
       }
     } finally {
-      explorerOpening = false; renderStatus();
+      popupOpening = false; renderStatus();
+    }
+  }
+  async function openCompany(name, currentSlug, window) {
+    const context = openContextId;
+    if (!view || !openContextCurrent(view, currentSlug, window, context)) return;
+    const key = companyOpenKey(name, currentSlug, window);
+    if (companyOpenings.has(key)) return;
+    const origin = view;
+    clearTimeout(companyFeedbackTimer); companyFeedback = ''; companyFeedbackName = '';
+    companyOpenings.add(key); renderStatus();
+    try {
+      const result = await api.runtime.sendMessage({ type:'LCT_OPEN_EXPLORER', mode:'companies',
+        company:name, window, sort:'frequency-desc' });
+      if (!result?.ok) throw new Error('Company questions unavailable');
+    } catch (_) {
+      if (openContextCurrent(origin, currentSlug, window, context)) {
+        companyFeedback = `Could not open ${name} questions. Try again.`;
+        companyFeedbackName = name;
+        companyFeedbackTimer = setTimeout(() => { companyFeedback = ''; companyFeedbackName = ''; renderStatus(); }, 6000);
+      }
+    } finally {
+      companyOpenings.delete(key); renderStatus();
     }
   }
   function renderStatus() {
     if (!view) return;
     const windowLabel = labels[selectedWindow()];
     const sourceDate = date(status.sourceUpdatedAt);
-    const provenance = `${status.dataSource === 'bundled' ? 'Bundled snapshot. ' : ''}${sourceDate ? `Source updated ${sourceDate}. ` : ''}${status.phase === 'syncing' ? 'Updating in the background. ' : ''}${status.phase === 'error' ? 'Refresh failed; saved data is shown. ' : ''}Open Company Lens full page for filters, practice and refresh.`;
+    const provenance = `${status.dataSource === 'bundled' ? 'Bundled snapshot. ' : ''}${sourceDate ? `Source updated ${sourceDate}. ` : ''}${status.phase === 'syncing' ? 'Updating in the background. ' : ''}${status.phase === 'error' ? 'Refresh failed; saved data is shown. ' : ''}Click a company for its questions. Open the Company Lens popup for filters and refresh.`;
     view.label.textContent = `Companies${available ? ` · ${companies.length}` : ''}`;
     view.windowLabel.textContent = windowLabel;
     view.windowLabel.title = windowLabel;
-    view.openExtensionButton.title = explorerFeedback || 'Open Company Lens full page';
-    view.openExtensionButton.disabled = explorerOpening;
-    view.openExtensionButton.setAttribute('aria-busy', String(explorerOpening));
-    if (view.openFeedback.textContent !== explorerFeedback) view.openFeedback.textContent = explorerFeedback;
+    view.openExtensionButton.title = popupFeedback || 'Open Company Lens popup';
+    view.openExtensionButton.disabled = popupOpening;
+    view.openExtensionButton.setAttribute('aria-busy', String(popupOpening));
+    if (view.openFeedback.textContent !== popupFeedback) view.openFeedback.textContent = popupFeedback;
+    if (view.companyOpenFeedback.textContent !== companyFeedback) view.companyOpenFeedback.textContent = companyFeedback;
+    for (const chip of view.list.querySelectorAll('.company-chip')) {
+      const pending = companyOpenings.has(companyOpenKey(chip.dataset.company, slug, selectedWindow()));
+      chip.disabled = pending;
+      chip.setAttribute('aria-busy', String(pending));
+      chip.title = chip.dataset.description + (companyFeedbackName === chip.dataset.company && companyFeedback ? ` ${companyFeedback}` : '');
+    }
     view.caption.title = provenance;
     view.bar.setAttribute('aria-label', `Company Lens company reports for ${core.formatProblemTitle(slug)}. ${windowLabel}. ${provenance}`);
     view.bar.dataset.phase = status.phase || 'idle';
     view.list.hidden = companies.length === 0;
     view.message.hidden = companies.length > 0;
     if (loading) view.message.textContent = 'Loading company tags…';
-    else if (error || (!status.hasData && status.phase === 'error')) view.message.textContent = 'Company data unavailable. Open Company Lens full page to refresh.';
-    else if (!available) view.message.textContent = status.phase === 'syncing' ? 'Company tags are updating…' : 'This window is unavailable. Open Company Lens full page to refresh.';
-    else view.message.textContent = 'No company reports in this window. More options in Company Lens full page.';
+    else if (error || (!status.hasData && status.phase === 'error')) view.message.textContent = 'Company data unavailable. Open the Company Lens popup to refresh.';
+    else if (!available) view.message.textContent = status.phase === 'syncing' ? 'Company tags are updating…' : 'This window is unavailable. Open the Company Lens popup to refresh.';
+    else view.message.textContent = 'No company reports in this window. More options in the Company Lens popup.';
   }
   function renderCompanies() {
     if (!view) return;
     const ordered = core.sortCompanies(companies);
     const key = JSON.stringify([slug, selectedWindow(), ordered.map(company => [company.name, company.frequency, company.rank, company.sourceUrl])]);
     if (key !== renderedKey) {
-      const windowLabel = labels[selectedWindow()].toLowerCase();
+      const currentSlug = slug;
+      const window = selectedWindow();
+      const windowLabel = labels[window].toLowerCase();
       view.list.replaceChildren(...ordered.map((company, index) => {
         const item = element('li');
-        const link = element('a', 'company-chip');
+        const chip = element('button', 'company-chip');
+        chip.type = 'button';
+        chip.dataset.company = company.name;
+        chip.dataset.window = window;
         const score = Number.isFinite(company.frequency) && company.frequency >= 0 ? String(company.frequency) : 'unavailable';
         const rank = Number.isInteger(company.rank) && company.rank > 0 ? `Company rank #${company.rank}. ` : '';
         const help = element('span', 'chip-description', `Frequency score ${score} for ${windowLabel}. ${rank}Scores are not interview counts and may not be directly comparable between companies.`);
         help.id = `company-lens-score-${index}`; help.hidden = true;
         const frequency = element('span', 'frequency-score', score === 'unavailable' ? '—' : score);
         frequency.setAttribute('aria-hidden', 'true');
-        link.append(logos.createBadge(company.name), element('span', 'company-name', company.name), frequency, help);
-        link.href = sourceURL(company.sourceUrl); link.target = '_blank'; link.rel = 'noopener noreferrer';
-        link.setAttribute('aria-label', `${company.name}, view source`);
-        link.setAttribute('aria-describedby', help.id); link.title = `${company.name}. ${help.textContent}`;
-        item.append(link); return item;
+        chip.append(logos.createBadge(company.name), element('span', 'company-name', company.name), frequency, help);
+        chip.setAttribute('aria-label', `${company.name}, open company questions`);
+        chip.setAttribute('aria-describedby', help.id);
+        chip.dataset.description = `${company.name}, open company questions. ${help.textContent}`;
+        chip.addEventListener('click', () => void openCompany(company.name, currentSlug, window));
+        item.append(chip); return item;
       }));
       renderedKey = key;
     }
@@ -328,7 +376,7 @@
       const previousWindow = selectedWindow(); const previousEnabled = settings.enabled;
       settings = { ...defaults, ...changes.lctSettings.newValue };
       if (!settings.enabled) { requestId++; unmount(); }
-      if (previousWindow !== selectedWindow()) { requestId++; companies = []; available = false; error = ''; renderCompanies(); }
+      if (previousWindow !== selectedWindow()) { clearOpenFeedback(); requestId++; companies = []; available = false; error = ''; renderCompanies(); }
       reload ||= settings.enabled && (previousEnabled !== settings.enabled || previousWindow !== selectedWindow());
       scheduleCheck();
     }

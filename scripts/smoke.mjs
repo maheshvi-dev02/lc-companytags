@@ -289,7 +289,7 @@ async function chromiumRun() {
         phases: [refreshResult.status.phase, observed.status.phase] };
       const livePage = await context.newPage();
       await livePage.goto('https://leetcode.com/problems/two-sum/description/');
-      await livePage.locator('#company-lens-root .companies a').first().waitFor();
+      await livePage.locator('#company-lens-root .company-chip').first().waitFor();
       await livePage.evaluate(() => document.documentElement.classList.add('dark'));
       await livePage.locator('#company-lens-root[data-dark]').waitFor();
       await livePage.screenshot({ path: path.join(output, 'chromium-live-data.png'), fullPage: true, animations: 'disabled' });
