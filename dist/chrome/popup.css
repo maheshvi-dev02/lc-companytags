@@ -114,3 +114,11 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .practice-pagination button { flex:1 1 auto; padding:7px 9px; font-size:var(--font-caption); background:var(--wash); }
 .practice-questions:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .current-problem { display:inline-block; margin-left:7px; color:var(--muted); font-size:var(--font-caption); font-weight:400; }
+
+/* Popup filters use the same controller/menu as the explorer at popup dimensions. */
+.window-filter .select-control { width:180px; }
+.window-filter .select-trigger,.practice-filters .select-trigger { min-height:32px; padding:6px 8px; font-size:var(--font-label); }
+.practice-filters .select-control { width:176px; }
+.practice-tools { margin:0 0 8px; }
+.practice-tools .practice-summary { margin:0; }
+.practice-tools .sort-filter { display:flex; flex:none; }

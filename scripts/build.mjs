@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'lookup.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'ui.css', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const files = ['core.js', 'lookup.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'select-controls.js', 'ui.css', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
 const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
 const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
 assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');

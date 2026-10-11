@@ -178,6 +178,33 @@
     }, true);
   }
 
+  const selectMenus = globalThis.LCTSelectControls.create();
+  const practiceSortOptions = [
+    ['frequency-desc', 'Highest frequency'], ['frequency-asc', 'Lowest frequency'],
+    ['name-asc', 'Title A–Z'], ['name-desc', 'Title Z–A'],
+    ['difficulty-asc', 'Easy → hard'], ['difficulty-desc', 'Hard → easy'],
+    ['companies-desc', 'Most companies'], ['companies-asc', 'Fewest companies']
+  ];
+  let practiceSort = 'frequency-desc';
+  let practiceSortSave = Promise.resolve();
+  const validPracticeSort = value => practiceSortOptions.some(([key]) => key === value) ? value : 'frequency-desc';
+  const practiceOrderLabel = () => practiceSortOptions.find(([key]) => key === practiceSort)[1];
+  function syncPracticeSort() {
+    $('practice-sort-select').value = practiceSort;
+    selectMenus.sync($('practice-sort-select'));
+  }
+  function changePracticeSort() {
+    const next = validPracticeSort($('practice-sort-select').value);
+    if (next === practiceSort) return;
+    practiceSort = next;
+    syncPracticeSort();
+    void loadPractice();
+    practiceSortSave = practiceSortSave.then(() => api.storage.local.set({ lctPopupPracticeSort: next })).catch(() => {
+      practiceError = 'Could not save your sort preference. The current view still works.';
+      renderPracticeSummary();
+    });
+  }
+
   let acceptanceHelpId = 0;
   function closeAcceptanceHelp(except = null) {
     document.querySelectorAll('.acceptance-rate[aria-expanded="true"]').forEach(button => {
@@ -344,6 +371,7 @@
     renderProblemAcceptance();
     $('problem-summary').textContent = slug ? `${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${windowLabels[selectedWindow()].toLowerCase()}` : 'Company tags appear as you browse problem pages.';
     $('window-select').value = selectedWindow();
+    selectMenus.sync($('window-select'));
     $('company-view').hidden = Boolean(practiceCompany);
     $('practice-view').hidden = !practiceCompany;
     $('open-problems').hidden = Boolean(slug);
@@ -363,6 +391,7 @@
 
   function resetWindow() {
     closeCompanySort();
+    selectMenus.close();
     requestId++;
     companies = [];
     problem = null;
@@ -378,12 +407,14 @@
 
   function openPractice(company) {
     closeCompanySort();
+    selectMenus.close();
     practiceRequestId++;
     practiceLoading = false;
     practiceLoadingAll = false;
     clearPracticeQuestions();
     practiceCompany = company;
     $('difficulty-select').value = '';
+    selectMenus.sync($('difficulty-select'));
     $('topic-input').value = '';
     render();
     $('back-companies').focus();
@@ -391,7 +422,7 @@
   }
 
   function practiceContext() {
-    return JSON.stringify([practiceCompany, selectedWindow(), $('difficulty-select').value, $('topic-input').value.trim(), slug]);
+    return JSON.stringify([practiceCompany, selectedWindow(), $('difficulty-select').value, $('topic-input').value.trim(), practiceSort, slug]);
   }
 
   function clearPracticeQuestions() {
@@ -415,7 +446,8 @@
     else if (!practiceAvailable) summary.textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
     else if (!practiceTotal) summary.textContent = 'No questions match these filters in this time window.';
     else {
-      const order = practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0) ? 'highest frequency first' : 'frequency unavailable';
+      const order = practiceSort === 'frequency-desc' && !practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0)
+        ? 'frequency unavailable' : practiceOrderLabel().toLocaleLowerCase();
       summary.textContent = `${count} · ${order}`;
     }
     const more = $('practice-load-more'), all = $('practice-show-all'), retry = $('practice-retry');
@@ -426,6 +458,7 @@
     more.disabled = all.disabled = retry.disabled = practiceLoading;
     more.textContent = practiceLoading && !practiceLoadingAll ? 'Loading…' : 'Load more';
     all.textContent = practiceLoadingAll ? 'Loading all…' : `Show all ${practiceTotal} questions`;
+    $('practice-questions').setAttribute('aria-label', practiceCompany + ' questions sorted by ' + practiceOrderLabel().toLocaleLowerCase());
     $('practice-questions').setAttribute('aria-busy', String(practiceLoading));
     $('practice-pagination').setAttribute('aria-busy', String(practiceLoading));
     if (focusedControl && !practiceHasMore && !practiceNeedsRetry && practiceQuestions.length) {
@@ -463,6 +496,15 @@
       meta.className = 'question-meta';
       const acceptance = acceptanceInfo(question.acceptanceRate);
       meta.append(document.createTextNode(`${question.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · score ${score} · ${rank}`));
+      if (practiceSort === 'companies-desc' || practiceSort === 'companies-asc') {
+        const count = Number.isInteger(question.companyCount) && question.companyCount >= 0
+          ? question.companyCount + ' ' + (question.companyCount === 1 ? 'company' : 'companies') : 'Company count unavailable';
+        const companies = document.createElement('span');
+        companies.className = 'question-company-count';
+        companies.textContent = count;
+        companies.title = 'Number of companies listing this problem in the selected time window.';
+        meta.append(document.createTextNode(' · '), companies);
+      }
       item.append(link, meta, acceptance.help);
       if (Array.isArray(question.topics) && question.topics.length) {
         const topics = document.createElement('span');
@@ -479,6 +521,8 @@
 
   function renderPractice() {
     if (!practiceCompany) return;
+    syncPracticeSort();
+    selectMenus.sync($('difficulty-select'));
     $('practice-title').textContent = practiceCompany;
     $('practice-heading').replaceChildren(logos.createBadge(practiceCompany), $('practice-title'));
     renderPracticeSummary();
@@ -506,9 +550,10 @@
   async function loadPractice({ append = false, all = false } = {}) {
     if (!practiceCompany || (append && (practiceLoading || !practiceHasMore))) return;
     clearTimeout(topicTimer);
+    selectMenus.close();
     const id = ++practiceRequestId;
     const context = practiceContext();
-    const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow() };
+    const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), sort: practiceSort };
     if ($('difficulty-select').value) request.difficulty = $('difficulty-select').value;
     if ($('topic-input').value.trim()) request.topic = $('topic-input').value.trim();
     const current = () => id === practiceRequestId && Boolean(practiceCompany) && context === practiceContext();
@@ -616,6 +661,7 @@
     api.storage.local.set({ lctSettings: settings }).catch(() => { error = 'Could not save your time window preference.'; render(); });
   });
   $('back-companies').addEventListener('click', () => {
+    selectMenus.close();
     const previousCompany = practiceCompany;
     practiceCompany = null;
     practiceRequestId++;
@@ -624,9 +670,10 @@
     clearTimeout(topicTimer);
     render();
     const returnButton = Array.from($('companies').querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
-    (returnButton || $('window-select')).focus();
+    (returnButton || $('window-select-trigger')).focus();
   });
   $('difficulty-select').addEventListener('change', () => void loadPractice());
+  $('practice-sort-select').addEventListener('change', changePracticeSort);
   $('practice-load-more').addEventListener('click', () => void loadPractice({ append: true }));
   $('practice-show-all').addEventListener('click', () => void loadPractice({ append: true, all: true }));
   $('practice-retry').addEventListener('click', () => void loadPractice());
@@ -702,10 +749,11 @@
 
   async function start() {
     try {
-      const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctPopupCompanySort']);
+      const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctPopupCompanySort', 'lctPopupPracticeSort']);
       settings = { ...settings, ...stored.lctSettings };
       status = stored.lctStatus || {};
       companySort = validCompanySort(stored.lctPopupCompanySort);
+      practiceSort = validPracticeSort(stored.lctPopupPracticeSort);
     } catch (_) { /* The background request will report a usable error if needed. */ }
     try {
       const tabs = await api.tabs.query({ active: true, currentWindow: true });
@@ -720,5 +768,7 @@
     await load();
   }
   setupCompanySort();
+  selectMenus.enhance(['window-select', 'difficulty-select', 'practice-sort-select'], { iconIds: ['practice-sort-select'] });
+  syncPracticeSort();
   void start();
 })();

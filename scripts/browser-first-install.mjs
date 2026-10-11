@@ -133,9 +133,10 @@ export async function exerciseBundledPopup(ui, page, expected, core) {
   await ui.fill('#search', 'Walmart Labs');
   await ui.click('#companies button[data-company="Walmart Labs"]');
   const pagination = await exercisePracticePagination(ui, { data: expected.data, core, company: 'Walmart Labs', slug: 'two-sum' });
+  const practiceSorting = await exercisePracticeSorting(ui, { data: expected.data, core, company: 'Walmart Labs', slug: 'two-sum' });
   await ui.click('#back-companies');
   await ui.fill('#search', '');
-  return { windowNote: note, acceptance, pagination,
+  return { windowNote: note, acceptance, pagination, practiceSorting,
     check: 'Offline toolbar popup exposes all five bundled windows, source date, frequency/rank scores and saved acceptance rates with accessible global-submission explanations; changing windows preserves the current problem acceptance rate.' };
 }
 
@@ -191,6 +192,69 @@ export async function exercisePracticePagination(ui, { data, core, company, slug
   await ui.mutate('delete globalThis.__practiceFirstRow;');
   return { company, total, pages: [20, 40, total], currentProblemIncluded: full.some(question => question.slug === slug),
     check: 'Practice Load more and Show all reach the complete source-ordered company list beyond the 100-row page cap, preserve existing rows and original ranks, mark the current problem, and reset after difficulty/topic filtering.' };
+}
+
+export async function exercisePracticeSorting(ui, { data, core, company, slug, window = 'all' }) {
+  const sorts = ['frequency-desc', 'frequency-asc', 'name-asc', 'name-desc', 'difficulty-asc', 'difficulty-desc', 'companies-desc', 'companies-asc'];
+  const questions = options => {
+    const rows = [];
+    let total;
+    do {
+      const page = core.practiceQuestions(data, { company, window, ...options, offset: rows.length, limit: 100 });
+      total = page.total;
+      rows.push(...page.questions);
+      if (!page.questions.length) break;
+    } while (rows.length < total);
+    assert.equal(rows.length, total);
+    return rows;
+  };
+  const assertRows = async expected => {
+    await expectUI(ui, `Array.from(document.querySelectorAll('#practice-questions li'), node => node.dataset.slug)`, expected.map(question => question.slug));
+    const rows = await ui.read(`Array.from(document.querySelectorAll('#practice-questions li'), node => ({ slug:node.dataset.slug, title:node.querySelector('.question-title').textContent, meta:node.querySelector('.question-meta').textContent, acceptance:node.querySelector('.acceptance-rate').textContent, topics:node.querySelector('.question-topics')?.textContent || '', current:Boolean(node.querySelector('.current-problem')) }))`);
+    assert.equal(new Set(rows.map(row => row.slug)).size, rows.length);
+    expected.forEach((question, index) => {
+      assert.equal(rows[index].title, question.title);
+      assert.ok(rows[index].meta.includes(question.difficulty || 'Difficulty unavailable'));
+      assert.equal(rows[index].acceptance, acceptanceLabel(core, question.acceptanceRate));
+      assert.equal(rows[index].topics, (question.topics || []).slice(0, 3).join(' · '));
+      assert.ok(rows[index].meta.includes(`score ${Number.isFinite(question.frequency) ? question.frequency : 'unavailable'}`));
+      assert.ok(rows[index].meta.includes(Number.isInteger(question.rank) ? `company rank #${question.rank}` : 'rank unavailable'));
+      assert.equal(rows[index].current, question.slug === slug);
+    });
+  };
+  for (const sort of sorts) {
+    await ui.select('#practice-sort-select', sort);
+    const full = questions({ sort });
+    await assertRows(full.slice(0, 20));
+    const label = await ui.read('document.querySelector("#practice-sort-select-value").textContent');
+    assert.ok((await ui.read('document.querySelector("#practice-sort-select-trigger").title')).includes(label));
+    assert.ok((await ui.read('document.querySelector("#practice-questions").getAttribute("aria-label")')).toLocaleLowerCase().includes(label.toLocaleLowerCase()));
+    assert.ok((await ui.read('document.querySelector("#practice-summary").textContent')).toLocaleLowerCase().includes(label.toLocaleLowerCase()));
+    await ui.click('#practice-show-all');
+    await assertRows(full);
+    if (sort === 'companies-desc' || sort === 'companies-asc') {
+      const metadata = await ui.read(`Array.from(document.querySelectorAll('#practice-questions .question-meta'), node => node.textContent)`);
+      full.forEach((question, index) => {
+        const label = Number.isInteger(question.companyCount) ? `${question.companyCount} ${question.companyCount === 1 ? 'company' : 'companies'}` : 'Company count unavailable';
+        assert.ok(metadata[index].includes(label), 'Company-count sorting must display its criterion alongside the original metadata.');
+      });
+      assert.equal(await ui.read(`Array.from(document.querySelectorAll('#practice-questions .question-company-count')).filter(node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden').length`), full.length, 'Company counts must be visibly rendered for every result in a company-count sort.');
+    }
+    assert.equal(await ui.read('Boolean(document.querySelector("#practice-pagination").getClientRects().length)'), false);
+  }
+  await ui.select('#practice-sort-select', 'frequency-asc');
+  await ui.select('#difficulty-select', 'Medium');
+  await ui.fill('#topic-input', 'Hash Table');
+  const filtered = questions({ sort: 'frequency-asc', difficulty: 'Medium', topic: 'Hash Table' });
+  await assertRows(filtered.slice(0, 20));
+  if (filtered.length > 20) await ui.click('#practice-show-all');
+  await assertRows(filtered);
+  await ui.fill('#topic-input', '');
+  await ui.select('#difficulty-select', '');
+  await ui.select('#practice-sort-select', 'frequency-desc');
+  await assertRows(questions({ sort: 'frequency-desc' }).slice(0, 20));
+  return { company, sorts, filteredTotal: filtered.length,
+    check: 'All eight practice orders sort the full company dataset before paging; Show all retains exact membership, source ranks, ties and the current marker, and combines with difficulty/topic filters.' };
 }
 
 export async function archiveFixture(root, core) {
