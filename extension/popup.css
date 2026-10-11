@@ -108,3 +108,9 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .company-sort-option[data-active] { box-shadow:inset 0 0 0 1px var(--line); }
 .company-sort-option[aria-selected="true"] { font-weight:600; }
 .company-sort-option[aria-selected="true"]::after { content:'✓'; position:absolute; right:10px; top:8px; color:var(--muted); }
+
+/* Keep the full company practice list reachable within the compact popup. */
+.practice-pagination { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+.practice-pagination button { flex:1 1 auto; padding:7px 9px; font-size:var(--font-caption); background:var(--wash); }
+.practice-questions:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.current-problem { display:inline-block; margin-left:7px; color:var(--muted); font-size:var(--font-caption); font-weight:400; }

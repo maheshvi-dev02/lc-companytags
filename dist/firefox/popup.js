@@ -23,6 +23,10 @@
   let practiceTotal = 0;
   let practiceAvailable = false;
   let practiceLoading = false;
+  let practiceLoadingAll = false;
+  let practiceHasMore = false;
+  let practiceRevision = null;
+  let practiceNeedsRetry = false;
   let practiceError = '';
   let practiceRequestId = 0;
   let topicTimer;
@@ -366,6 +370,7 @@
     windowAvailable = false;
     companiesExpanded = false;
     error = '';
+    if (practiceCompany) { practiceRequestId++; practiceLoading = false; practiceLoadingAll = false; clearPracticeQuestions(); }
     render();
     void load();
     if (practiceCompany) void loadPractice();
@@ -373,6 +378,10 @@
 
   function openPractice(company) {
     closeCompanySort();
+    practiceRequestId++;
+    practiceLoading = false;
+    practiceLoadingAll = false;
+    clearPracticeQuestions();
     practiceCompany = company;
     $('difficulty-select').value = '';
     $('topic-input').value = '';
@@ -381,25 +390,59 @@
     void loadPractice();
   }
 
+  function practiceContext() {
+    return JSON.stringify([practiceCompany, selectedWindow(), $('difficulty-select').value, $('topic-input').value.trim(), slug]);
+  }
+
+  function clearPracticeQuestions() {
+    practiceQuestions = [];
+    practiceTotal = 0;
+    practiceAvailable = false;
+    practiceHasMore = false;
+    practiceRevision = null;
+    practiceNeedsRetry = false;
+    practiceError = '';
+    renderPracticeRows([]);
+  }
+
   function renderPracticeSummary() {
     if (!practiceCompany) return;
-    if (practiceError) $('practice-summary').textContent = practiceError;
-    else if (practiceLoading) $('practice-summary').textContent = 'Loading practice questions…';
-    else if (!practiceAvailable) $('practice-summary').textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
-    else if (!practiceTotal) $('practice-summary').textContent = 'No questions match these filters in this time window.';
+    const summary = $('practice-summary');
+    const count = `${practiceQuestions.length} of ${practiceTotal} questions`;
+    if (practiceError) summary.textContent = `${practiceQuestions.length ? count + ' · ' : ''}${practiceError}`;
+    else if (practiceLoading) summary.textContent = practiceQuestions.length
+      ? `${count} · ${practiceLoadingAll ? 'Loading all questions…' : 'Loading more…'}` : 'Loading practice questions…';
+    else if (!practiceAvailable) summary.textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
+    else if (!practiceTotal) summary.textContent = 'No questions match these filters in this time window.';
     else {
       const order = practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0) ? 'highest frequency first' : 'frequency unavailable';
-      $('practice-summary').textContent = `${practiceQuestions.length} of ${practiceTotal} questions · ${order}`;
+      summary.textContent = `${count} · ${order}`;
+    }
+    const more = $('practice-load-more'), all = $('practice-show-all'), retry = $('practice-retry');
+    const focusedControl = [more, all, retry].includes(document.activeElement);
+    more.hidden = all.hidden = !practiceHasMore;
+    retry.hidden = !practiceNeedsRetry;
+    $('practice-pagination').hidden = !practiceHasMore && !practiceNeedsRetry;
+    more.disabled = all.disabled = retry.disabled = practiceLoading;
+    more.textContent = practiceLoading && !practiceLoadingAll ? 'Loading…' : 'Load more';
+    all.textContent = practiceLoadingAll ? 'Loading all…' : `Show all ${practiceTotal} questions`;
+    $('practice-questions').setAttribute('aria-busy', String(practiceLoading));
+    $('practice-pagination').setAttribute('aria-busy', String(practiceLoading));
+    if (focusedControl && !practiceHasMore && !practiceNeedsRetry && practiceQuestions.length) {
+      $('practice-questions').focus({ preventScroll: true });
+    } else if (focusedControl && practiceNeedsRetry && !practiceLoading) {
+      retry.focus({ preventScroll: true });
+    } else if (focusedControl && retry.hidden && practiceHasMore && !practiceLoading) {
+      more.focus({ preventScroll: true });
     }
   }
 
-  function renderPractice() {
-    if (!practiceCompany) return;
-    $('practice-title').textContent = practiceCompany;
-    $('practice-heading').replaceChildren(logos.createBadge(practiceCompany), $('practice-title'));
-    renderPracticeSummary();
-    $('practice-questions').replaceChildren(...practiceQuestions.map(question => {
+  function renderPracticeRows(questions, append = false) {
+    const list = $('practice-questions');
+    const scroll = list.scrollTop;
+    const items = questions.map(question => {
       const item = document.createElement('li');
+      item.dataset.slug = question.slug;
       const link = document.createElement('a');
       link.href = `https://leetcode.com/problems/${encodeURIComponent(question.slug)}/`;
       link.target = '_blank';
@@ -407,13 +450,19 @@
       const title = document.createElement('span');
       title.className = 'question-title';
       title.textContent = question.title;
+      link.append(title);
+      if (question.slug === slug) {
+        const current = document.createElement('span');
+        current.className = 'current-problem';
+        current.textContent = 'Current problem';
+        link.append(current);
+      }
       const score = Number.isFinite(question.frequency) && question.frequency >= 0 ? String(question.frequency) : 'unavailable';
       const rank = Number.isInteger(question.rank) && question.rank > 0 ? `company rank #${question.rank}` : 'rank unavailable';
       const meta = document.createElement('span');
       meta.className = 'question-meta';
       const acceptance = acceptanceInfo(question.acceptanceRate);
       meta.append(document.createTextNode(`${question.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · score ${score} · ${rank}`));
-      link.append(title);
       item.append(link, meta, acceptance.help);
       if (Array.isArray(question.topics) && question.topics.length) {
         const topics = document.createElement('span');
@@ -423,32 +472,103 @@
         item.append(topics);
       }
       return item;
-    }));
+    });
+    if (append) list.append(...items); else list.replaceChildren(...items);
+    list.scrollTop = append ? scroll : 0;
   }
 
-  async function loadPractice() {
+  function renderPractice() {
     if (!practiceCompany) return;
+    $('practice-title').textContent = practiceCompany;
+    $('practice-heading').replaceChildren(logos.createBadge(practiceCompany), $('practice-title'));
+    renderPracticeSummary();
+  }
+
+  function practiceSourceRevision(result) {
+    // The source link is made from the actual data revision. It is more reliable
+    // than status, which can be sampled immediately before a dataset publication.
+    if (typeof result.sourceUrl === 'string') {
+      try {
+        const source = new URL(result.sourceUrl);
+        if (source.protocol === 'https:' && source.hostname === 'github.com' &&
+            /^\/liquidslr\/leetcode-company-wise-problems\/blob\/[a-f0-9]{40}\//i.test(source.pathname)) return source.href;
+      } catch (_) { /* Fall back to the response status revision. */ }
+    }
+    return core.SHA_PATTERN.test(result.status?.commit || '') ? `commit:${result.status.commit.toLowerCase()}` : null;
+  }
+
+  function practiceRestart(message) {
+    const cause = new Error(message);
+    cause.restartPractice = true;
+    return cause;
+  }
+
+  async function loadPractice({ append = false, all = false } = {}) {
+    if (!practiceCompany || (append && (practiceLoading || !practiceHasMore))) return;
+    clearTimeout(topicTimer);
     const id = ++practiceRequestId;
-    practiceQuestions = [];
+    const context = practiceContext();
+    const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow() };
+    if ($('difficulty-select').value) request.difficulty = $('difficulty-select').value;
+    if ($('topic-input').value.trim()) request.topic = $('topic-input').value.trim();
+    const current = () => id === practiceRequestId && Boolean(practiceCompany) && context === practiceContext();
+    if (!append) clearPracticeQuestions();
     practiceLoading = true;
+    practiceLoadingAll = all;
+    practiceNeedsRetry = false;
     practiceError = '';
     renderPractice();
     try {
-      const message = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), limit: 20 };
-      if (slug) message.excludeSlug = slug;
-      if ($('difficulty-select').value) message.difficulty = $('difficulty-select').value;
-      if ($('topic-input').value.trim()) message.topic = $('topic-input').value.trim();
-      const result = await api.runtime.sendMessage(message);
-      if (id !== practiceRequestId || !practiceCompany) return;
-      if (!result?.ok) throw new Error(result?.error || 'Could not load practice questions. Try again.');
-      practiceQuestions = Array.isArray(result.questions) ? result.questions : [];
-      practiceTotal = Number(result.total) || 0;
-      practiceAvailable = result.available !== false;
+      do {
+        const offset = practiceQuestions.length;
+        const result = await api.runtime.sendMessage({ ...request, offset, limit: all ? 100 : 20 });
+        if (!current()) return;
+        if (!result?.ok) throw new Error(result?.error || 'Could not load practice questions. Try again.');
+        const revision = practiceSourceRevision(result);
+        if (offset > 0 && (!practiceRevision || !revision || revision !== practiceRevision)) {
+          throw practiceRestart('The dataset changed. Reload questions to use one revision.');
+        }
+        if (offset > 0 && result.available === false) {
+          throw practiceRestart('This time window changed. Reload questions to check its availability.');
+        }
+        const questions = Array.isArray(result.questions) ? result.questions : [];
+        const total = Number(result.total);
+        const known = new Set(practiceQuestions.map(question => question.slug));
+        const seen = new Set();
+        const invalidQuestion = questions.some(question => {
+          if (!question || typeof question.slug !== 'string' || !core.SLUG_PATTERN.test(question.slug) ||
+              known.has(question.slug) || seen.has(question.slug)) return true;
+          seen.add(question.slug);
+          return false;
+        });
+        if (!Number.isInteger(total) || total < offset + questions.length ||
+            (result.offset !== undefined && result.offset !== offset) || invalidQuestion ||
+            (result.available !== false && Boolean(result.hasMore) !== (offset + questions.length < total))) {
+          throw new Error('Could not continue this question list. Try again.');
+        }
+        if (questions.length === 0 && (result.hasMore || total > offset)) {
+          throw new Error('No questions were returned for this page. Try again.');
+        }
+        practiceQuestions.push(...questions);
+        practiceTotal = total;
+        practiceAvailable = result.available !== false;
+        practiceHasMore = Boolean(result.hasMore) && practiceQuestions.length < practiceTotal;
+        practiceRevision = revision;
+        renderPracticeRows(questions, offset > 0);
+        renderPracticeSummary();
+        // Each page advances the offset; an empty or rejected page stops above.
+      } while (all && practiceHasMore && current());
     } catch (cause) {
-      if (id !== practiceRequestId) return;
+      if (!current()) return;
+      if (cause.restartPractice) clearPracticeQuestions();
       practiceError = cause.message || 'Could not load practice questions. Try again.';
+      practiceNeedsRetry = practiceQuestions.length === 0;
     } finally {
-      if (id === practiceRequestId) { practiceLoading = false; renderPractice(); }
+      if (current()) {
+        practiceLoading = false;
+        practiceLoadingAll = false;
+        renderPracticeSummary();
+      }
     }
   }
 
@@ -499,19 +619,25 @@
     const previousCompany = practiceCompany;
     practiceCompany = null;
     practiceRequestId++;
+    practiceLoading = false;
+    practiceLoadingAll = false;
     clearTimeout(topicTimer);
     render();
     const returnButton = Array.from($('companies').querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
     (returnButton || $('window-select')).focus();
   });
-  $('difficulty-select').addEventListener('change', loadPractice);
+  $('difficulty-select').addEventListener('change', () => void loadPractice());
+  $('practice-load-more').addEventListener('click', () => void loadPractice({ append: true }));
+  $('practice-show-all').addEventListener('click', () => void loadPractice({ append: true, all: true }));
+  $('practice-retry').addEventListener('click', () => void loadPractice());
   $('topic-input').addEventListener('input', () => {
     clearTimeout(topicTimer);
     practiceRequestId++;
-    practiceQuestions = [];
     practiceLoading = true;
+    practiceLoadingAll = false;
+    clearPracticeQuestions();
     renderPractice();
-    topicTimer = setTimeout(loadPractice, 250);
+    topicTimer = setTimeout(() => void loadPractice(), 250);
   });
   $('show-companies').addEventListener('click', () => {
     companiesExpanded = !companiesExpanded;

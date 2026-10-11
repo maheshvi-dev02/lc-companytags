@@ -47,7 +47,12 @@
           <label>Topic<input id="topic-input" type="search" aria-label="Topic filter" placeholder="e.g. Array"></label>
         </div>
         <p id="practice-summary" class="practice-summary" role="status"></p>
-        <ul id="practice-questions" class="practice-questions" aria-label="Practice questions sorted by frequency"></ul>
+        <ul id="practice-questions" class="practice-questions" aria-label="Practice questions sorted by frequency" tabindex="0"></ul>
+        <div id="practice-pagination" class="practice-pagination" hidden>
+          <button id="practice-load-more" type="button" aria-controls="practice-questions" hidden>Load more</button>
+          <button id="practice-show-all" type="button" aria-controls="practice-questions" hidden>Show all questions</button>
+          <button id="practice-retry" type="button" aria-controls="practice-questions" hidden>Reload questions</button>
+        </div>
       </section>
     </section>
     <section class="dataset" aria-labelledby="dataset-heading">

@@ -18,7 +18,7 @@ export async function bundledExpectations(directory, core) {
     return [window, companies];
   }));
   return { data, meta, windows, problem: core.problemForSlug(data, 'two-sum'), practice: core.practiceQuestions(data,
-    { company: 'Amazon', window: 'all', excludeSlug: 'two-sum' }) };
+    { company: 'Amazon', window: 'all' }) };
 }
 
 export async function expectTexts(locator, expected) {
@@ -130,8 +130,67 @@ export async function exerciseBundledPopup(ui, page, expected, core) {
   const meta = await ui.read('document.querySelector("#practice-questions .question-meta").textContent');
   assert.ok(meta.includes(`score ${first.frequency}`) && meta.includes(`company rank #${first.rank}`));
   await ui.click('#back-companies');
-  return { windowNote: note, acceptance,
+  await ui.fill('#search', 'Walmart Labs');
+  await ui.click('#companies button[data-company="Walmart Labs"]');
+  const pagination = await exercisePracticePagination(ui, { data: expected.data, core, company: 'Walmart Labs', slug: 'two-sum' });
+  await ui.click('#back-companies');
+  await ui.fill('#search', '');
+  return { windowNote: note, acceptance, pagination,
     check: 'Offline toolbar popup exposes all five bundled windows, source date, frequency/rank scores and saved acceptance rates with accessible global-submission explanations; changing windows preserves the current problem acceptance rate.' };
+}
+
+export async function exercisePracticePagination(ui, { data, core, company, slug, window = 'all' }) {
+  const options = { company, window };
+  const full = [];
+  let total = 0;
+  do {
+    const result = core.practiceQuestions(data, { ...options, offset: full.length, limit: 100 });
+    total = result.total;
+    full.push(...result.questions);
+    if (!result.questions.length) break;
+  } while (full.length < total);
+  assert.ok(total > 140, 'This pagination regression needs a real company exceeding the 100-result backend page cap.');
+  assert.equal(full.length, total);
+  const rendered = () => ui.read(`Array.from(document.querySelectorAll('#practice-questions li'), node => ({
+    slug: node.dataset.slug, title: node.querySelector('.question-title').textContent,
+    meta: node.querySelector('.question-meta').textContent, current: Boolean(node.querySelector('.current-problem')) }))`);
+  const assertRows = async questions => {
+    await expectUI(ui, `Array.from(document.querySelectorAll('#practice-questions li'), node => node.dataset.slug)`, questions.map(question => question.slug));
+    const rows = await rendered();
+    assert.equal(new Set(rows.map(row => row.slug)).size, rows.length, 'Appending practice pages must not duplicate questions.');
+    questions.forEach((question, index) => {
+      assert.equal(rows[index].title, question.title);
+      const score = Number.isFinite(question.frequency) ? question.frequency : 'unavailable';
+      const rank = Number.isInteger(question.rank) ? `company rank #${question.rank}` : 'rank unavailable';
+      assert.ok(rows[index].meta.includes(`score ${score}`) && rows[index].meta.includes(rank), 'Pagination must retain source frequency and rank.');
+      assert.equal(rows[index].current, question.slug === slug, 'Only the current LeetCode problem should carry the current marker.');
+    });
+  };
+  await assertRows(full.slice(0, 20));
+  assert.ok((await ui.read('document.querySelector("#practice-summary").textContent')).startsWith(`20 of ${total} questions`));
+  await ui.mutate("globalThis.__practiceFirstRow = document.querySelector('#practice-questions li');");
+  await ui.click('#practice-load-more');
+  await assertRows(full.slice(0, 40));
+  assert.equal(await ui.read('globalThis.__practiceFirstRow.isConnected && globalThis.__practiceFirstRow === document.querySelector("#practice-questions li")'), true, 'Loading a page should preserve existing rows.');
+  await ui.click('#practice-show-all');
+  await assertRows(full);
+  assert.equal(await ui.read('Boolean(document.querySelector("#practice-pagination").getClientRects().length)'), false);
+  assert.ok((await ui.read('document.querySelector("#practice-summary").textContent')).startsWith(`${total} of ${total} questions`));
+  await ui.select('#difficulty-select', 'Medium');
+  const filtered = core.practiceQuestions(data, { ...options, difficulty: 'Medium', limit: 20 });
+  await assertRows(filtered.questions);
+  assert.ok((await ui.read('document.querySelector("#practice-summary").textContent')).startsWith(`${filtered.questions.length} of ${filtered.total} questions`));
+  await ui.fill('#topic-input', 'not-a-real-pagination-topic');
+  await assertRows([]);
+  await expectUI(ui, 'document.querySelector("#practice-summary").textContent.includes("No questions match")', true);
+  assert.equal(await ui.read('Boolean(document.querySelector("#practice-pagination").getClientRects().length)'), false);
+  await ui.fill('#topic-input', '');
+  await assertRows(filtered.questions);
+  await ui.select('#difficulty-select', '');
+  await assertRows(full.slice(0, 20));
+  await ui.mutate('delete globalThis.__practiceFirstRow;');
+  return { company, total, pages: [20, 40, total], currentProblemIncluded: full.some(question => question.slug === slug),
+    check: 'Practice Load more and Show all reach the complete source-ordered company list beyond the 100-row page cap, preserve existing rows and original ranks, mark the current problem, and reset after difficulty/topic filtering.' };
 }
 
 export async function archiveFixture(root, core) {
@@ -402,7 +461,7 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
     await assertChips(page, core, data, slug, window);
   }
   checks.push('All five toolbar time windows rerank every inline company chip and update its source file and rank.');
-  const practice = options => core.practiceQuestions(data, { company: 'Amazon', window: 'all', excludeSlug: slug, ...options });
+  const practice = options => core.practiceQuestions(data, { company: 'Amazon', window: 'all', ...options });
   await ui.click('#companies button[data-company="Amazon"]');
   await expectUI(ui, uiTexts('#practice-questions .question-title'), practice().questions.map(question => question.title));
   const practiceLabels = practice().questions.map(question => acceptanceLabel(core, question.acceptanceRate));
@@ -434,7 +493,8 @@ export async function exercisePopupFeatures(ui, page, { data, core, getStatus, s
   assert.match(await ui.read('document.querySelector("#practice-summary").textContent'), /No questions match/);
   await ui.click('#back-companies'); await ui.click('#companies button[data-company="Amazon"]');
   await expectUI(ui, uiTexts('#practice-questions .question-title'), practice().questions.map(question => question.title));
-  checks.push('Toolbar practice retains frequency/rank, current-question exclusion, difficulty/topic filters, no-match states and direct LeetCode links.');
+  await expectUI(ui, `Array.from(document.querySelectorAll('#practice-questions li')).filter(row => row.querySelector('.current-problem')).map(row => row.dataset.slug)`, practice().questions.filter(question => question.slug === slug).map(question => question.slug));
+  checks.push('Toolbar practice retains source frequency/rank, includes and marks the current question, and supports difficulty/topic filters, no-match states and direct LeetCode links.');
   await ui.mutate(`globalThis.__lctProgressNodes = { company: document.querySelector('#companies a'), question: document.querySelector('#practice-questions a') };`);
   const host = page.locator('#company-lens-root');
   const retained = await host.locator('.companies a').last().elementHandle();
@@ -470,10 +530,11 @@ export async function exercisePopupContext(ui, { data, core, slug }) {
   await expectUI(ui, uiTexts('.company-name'), expected);
   await expectUI(ui, uiTexts('#problem-acceptance .acceptance-rate'), [acceptanceLabel(core, core.problemForSlug(data, slug).acceptanceRate)]);
   await ui.click('#companies button[data-company="Amazon"]');
-  const practice = core.practiceQuestions(data, { company: 'Amazon', window: 'all', excludeSlug: slug });
+  const practice = core.practiceQuestions(data, { company: 'Amazon', window: 'all' });
   await expectUI(ui, uiTexts('#practice-questions .question-title'), practice.questions.map(question => question.title));
+  await expectUI(ui, `Array.from(document.querySelectorAll('#practice-questions li')).filter(row => row.querySelector('.current-problem')).map(row => row.dataset.slug)`, practice.questions.filter(question => question.slug === slug).map(question => question.slug));
   await ui.click('#back-companies');
-  return 'Opening the toolbar after SPA navigation reads the new problem and updates practice current-question exclusion.';
+  return 'Opening the toolbar after SPA navigation reads the new problem and updates its practice current-question marker without excluding it.';
 }
 
 export async function exerciseInlineNavigation(page, { data, core, context, onSPA }) {
