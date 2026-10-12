@@ -22,6 +22,9 @@
   let problemViewDirty = false;
   let topicCatalog = [];
   let pickerOpen = false;
+  let pickerFrame = null;
+  let pickerTrigger = null;
+  let detailGroupOwner = null;
   let draftTopics = [];
   const topicGroups = new Map();
   let groupsContext = '';
@@ -70,7 +73,9 @@
     closeAcceptanceHelp();
     closeTopicPicker();
     groupQueue.length = 0;
-    for (const group of topicGroups.values()) { group.request++; group.loading = false; group.queued = false; renderTopicGroupState(group); }
+    for (const groups of [topicGroups, ...stack.filter(frame => frame.kind === 'company').map(frame => frame.topicGroups)]) {
+      for (const group of groups.values()) { group.request++; group.loading = false; group.queued = false; renderTopicGroupState(group); }
+    }
     generation++; clearTimeout(searchTimer); clearTimeout(questionTimer);
     list.loading = false;
     for (const frame of stack) frame.loading = false;
@@ -128,7 +133,7 @@
   const closeSelectMenu = returnFocus => selectMenus.close(returnFocus);
   const syncSelectControl = select => selectMenus.sync(select);
   function enhanceSelects() {
-    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'topic-select', 'problem-difficulty-select', 'topic-match-select'],
+    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'problem-difficulty-select', 'topic-match-select', 'detail-topic-match-select'],
       { iconIds: ['sort-select', 'detail-sort-select'] });
   }
   function validatedProblemView(value) {
@@ -151,14 +156,15 @@
   }
   function closeTopicPicker(returnFocus = false) {
     if (!pickerOpen) return;
-    pickerOpen = false; draftTopics = [];
+    const trigger = pickerTrigger;
+    pickerOpen = false; draftTopics = []; pickerFrame = null; pickerTrigger = null;
     $('topic-picker-menu').hidden = true;
-    $('topic-picker-trigger').setAttribute('aria-expanded', 'false');
-    if (returnFocus) $('topic-picker-trigger').focus();
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (returnFocus && trigger?.isConnected) trigger.focus();
   }
   function positionTopicPicker() {
-    if (!pickerOpen) return;
-    const menu = $('topic-picker-menu'), rect = $('topic-picker-trigger').getBoundingClientRect();
+    if (!pickerOpen || !pickerTrigger) return;
+    const menu = $('topic-picker-menu'), rect = pickerTrigger.getBoundingClientRect();
     const width = Math.min(Math.max(rect.width, 340), Math.max(0, document.documentElement.clientWidth - 16));
     const below = window.innerHeight - rect.bottom - 14, above = rect.top - 14;
     const upward = below < 270 && above > below;
@@ -168,8 +174,10 @@
     menu.style.top = (upward ? Math.max(8, rect.top - 6 - menu.getBoundingClientRect().height) : rect.bottom + 6) + 'px';
   }
   function topicPickerValues() {
-    const values = new Map(topicCatalog.map(topic => [topic.toLocaleLowerCase(), topic]));
-    for (const topic of [...problemView.topics, ...draftTopics]) if (!values.has(topic.toLocaleLowerCase())) values.set(topic.toLocaleLowerCase(), topic);
+    const catalog = pickerFrame ? pickerFrame.topics : topicCatalog;
+    const selected = pickerFrame ? pickerFrame.filters.topics : problemView.topics;
+    const values = new Map(catalog.map(topic => [topic.toLocaleLowerCase(), topic]));
+    for (const topic of [...selected, ...draftTopics]) if (!values.has(topic.toLocaleLowerCase())) values.set(topic.toLocaleLowerCase(), topic);
     return [...values.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }
   function syncTopicDraft() {
@@ -200,45 +208,63 @@
     if (focused) Array.from($('topic-picker-options').querySelectorAll('input')).find(input => input.dataset.topic === focused)?.focus();
     positionTopicPicker();
   }
-  function openTopicPicker() {
-    if (mode !== 'problems' || activeDetail()) return;
+  function openTopicPicker(frame = null) {
+    if (frame ? frame.kind !== 'company' || frame !== activeDetail() : mode !== 'problems' || activeDetail()) return;
     closeSelectMenu();
-    pickerOpen = true; draftTopics = [...problemView.topics];
+    pickerFrame = frame; pickerTrigger = $(frame ? 'detail-topic-picker-trigger' : 'topic-picker-trigger');
+    pickerOpen = true; draftTopics = [...(frame ? frame.filters.topics : problemView.topics)];
     $('topic-picker-search').value = '';
+    $('topic-picker-menu').setAttribute('aria-label', frame ? 'Select topics for ' + frame.name : 'Select problem topics');
     $('topic-picker-menu').hidden = false;
-    $('topic-picker-trigger').setAttribute('aria-expanded', 'true');
+    pickerTrigger.setAttribute('aria-expanded', 'true');
     renderTopicOptions(); positionTopicPicker();
     $('topic-picker-search').focus();
+  }
+  function renderTopicSelection(frame = null) {
+    const selected = frame ? frame.filters.topics : problemView.topics;
+    const prefix = frame ? 'detail-' : '';
+    const trigger = $(prefix + 'topic-picker-trigger');
+    $(prefix + 'topic-picker-value').textContent = selected.length ? selected.length + ' selected' : 'All topics';
+    trigger.title = selected.length ? 'Selected topics: ' + selected.join(', ') : frame ? 'Select company topics' : 'Select problem topics';
+    trigger.setAttribute('aria-label', (frame ? 'Select company topics' : 'Select problem topics') + (selected.length ? ', ' + selected.length + ' selected' : ', all topics'));
+    $(prefix + 'selected-topic-tools').hidden = !selected.length;
+    $(prefix + 'topic-picker-selected').replaceChildren(...selected.map(topic => {
+      const item = node('li'), button = node('button');
+      button.type = 'button'; button.dataset.topic = topic; button.setAttribute('aria-label', 'Remove topic ' + topic);
+      button.append(node('span', '', topic)); const remove = node('span', '', '×'); remove.setAttribute('aria-hidden', 'true'); button.append(remove);
+      button.addEventListener('click', () => {
+        if (frame) { frame.filters.topics = frame.filters.topics.filter(value => value !== topic); companyFiltersChanged(frame); }
+        else { problemView.topics = problemView.topics.filter(value => value !== topic); problemFiltersChanged(); }
+        trigger.focus();
+      });
+      item.append(button); return item;
+    }));
   }
   function renderProblemControls() {
     $('problem-filters').hidden = mode !== 'problems' || Boolean(activeDetail());
     $('problem-difficulty-select').value = problemView.difficulty;
     $('topic-match-select').value = problemView.topicMatch;
     syncSelectControl($('problem-difficulty-select')); syncSelectControl($('topic-match-select'));
-    $('topic-picker-value').textContent = problemView.topics.length ? problemView.topics.length + ' selected' : 'All topics';
-    $('topic-picker-trigger').title = problemView.topics.length ? 'Selected topics: ' + problemView.topics.join(', ') : 'Select problem topics';
-    $('topic-picker-trigger').setAttribute('aria-label', 'Select problem topics' + (problemView.topics.length ? ', ' + problemView.topics.length + ' selected' : ', all topics'));
-    $('selected-topic-tools').hidden = !problemView.topics.length;
-    $('topic-picker-selected').replaceChildren(...problemView.topics.map(topic => {
-      const item = node('li'), button = node('button');
-      button.type = 'button'; button.dataset.topic = topic; button.setAttribute('aria-label', 'Remove topic ' + topic);
-      button.append(node('span', '', topic)); const remove = node('span', '', '×'); remove.setAttribute('aria-hidden', 'true'); button.append(remove);
-      button.addEventListener('click', () => {
-        problemView.topics = problemView.topics.filter(value => value !== topic);
-        problemFiltersChanged();
-        $('topic-picker-trigger').focus();
-      });
-      item.append(button); return item;
-    }));
+    renderTopicSelection();
     $('problem-view-list').setAttribute('aria-pressed', String(problemView.view === 'list'));
     $('problem-view-topics').setAttribute('aria-pressed', String(problemView.view === 'topics'));
     $('results').hidden = grouped();
     $('topic-groups').hidden = !grouped();
     $('topic-group-tools').hidden = !grouped();
   }
-  function resetTopicGroups() {
-    groupQueue.length = 0; topicGroups.clear(); groupsContext = ''; groupsRevision = null;
-    $('topic-groups').replaceChildren(); renderTopicGroupProgress();
+  const scopeGroups = frame => frame ? frame.topicGroups : topicGroups;
+  const scopeContext = frame => frame ? JSON.stringify([frame.name, windowKey(), frame.filters.query, frame.sort, frame.filters.difficulty,
+    frame.filters.topics.map(topic => topic.toLocaleLowerCase()).sort(), frame.filters.topicMatch]) : problemContext();
+  const scopeGrouped = frame => frame ? frame.kind === 'company' && frame.filters.view === 'topics' : grouped();
+  const scopeActive = frame => frame ? frame === activeDetail() && scopeGrouped(frame) : grouped() && !activeDetail();
+  const scopeElement = (frame, suffix) => $((frame ? 'detail-' : '') + suffix);
+  function resetTopicGroups(frame = null) {
+    for (let index = groupQueue.length - 1; index >= 0; index--) if (groupQueue[index].frame === frame) groupQueue.splice(index, 1);
+    scopeGroups(frame).clear();
+    if (frame) { frame.groupsContext = ''; frame.groupsRevision = null; }
+    else { groupsContext = ''; groupsRevision = null; }
+    if (!frame || detailGroupOwner === frame) scopeElement(frame, 'topic-groups').replaceChildren();
+    renderTopicGroupProgress(frame);
   }
   function problemFiltersChanged(debounce = false, save = true) {
     pendingDetail = null;
@@ -250,6 +276,18 @@
   function baseProblemRequest() {
     return { type: 'LCT_SEARCH_PROBLEMS', query: queries.problems, window: windowKey(), sort: sorts.problems,
       difficulty: problemView.difficulty, topics: [...problemView.topics], topicMatch: problemView.topicMatch };
+  }
+  function baseCompanyRequest(frame) {
+    return { type: 'LCT_PRACTICE', company: frame.name, window: windowKey(), sort: frame.sort, query: frame.filters.query,
+      difficulty: frame.filters.difficulty, topics: [...frame.filters.topics], topicMatch: frame.filters.topicMatch };
+  }
+  function companyFiltersChanged(frame, debounce = false) {
+    if (frame !== activeDetail() || frame.kind !== 'company') return;
+    frame.filters.topic = frame.filters.topics.length === 1 ? frame.filters.topics[0] : '';
+    invalidate(); resetTopicGroups(frame);
+    frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null; frame.error = ''; frame.loading = true;
+    renderDetailRows([]); renderDetailShell(); renderDetailSummary();
+    if (debounce) questionTimer = setTimeout(() => void loadDetail(), 150); else void loadDetail();
   }
   function validatedSorts(value) {
     const stored = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -292,7 +330,10 @@
     sorts[key] = value;
     invalidate();
     if (!activeDetail() && key === 'problems') resetTopicGroups();
-    for (const frame of stack) if (detailSortKey(frame) === key) { frame.sort = value; frame.version = null; frame.hasMore = false; }
+    for (const item of stack) if (detailSortKey(item) === key && (key !== 'companyQuestions' || item === activeDetail())) {
+      item.sort = value; item.version = null; item.hasMore = false;
+      if (item.kind === 'company') resetTopicGroups(item);
+    }
     renderSortControls();
     if (activeDetail()) void loadDetail(); else void loadList();
     saveSorts();
@@ -448,31 +489,35 @@
   function sourceRevision(result) {
     return core.SHA_PATTERN.test(result.sourceRevision || '') ? result.sourceRevision.toLowerCase() : null;
   }
-  function renderTopicGroupProgress() {
-    const opened = [...topicGroups.values()].filter(group => group.open);
+  function renderTopicGroupProgress(frame = null) {
+    if (frame && frame !== activeDetail()) return;
+    const opened = [...scopeGroups(frame).values()].filter(group => group.open);
     const busy = opened.filter(group => group.loading || group.queued).length;
     const ready = opened.filter(group => group.rows.length || group.total === 0).length;
-    $('topic-group-progress').hidden = !busy;
-    $('topic-group-progress').textContent = busy ? 'Loading topic groups · ' + count(ready) + ' of ' + count(opened.length) + ' opened groups ready' : '';
+    scopeElement(frame, 'topic-group-progress').hidden = !busy;
+    scopeElement(frame, 'topic-group-progress').textContent = busy ? 'Loading topic groups · ' + count(ready) + ' of ' + count(opened.length) + ' opened groups ready' : '';
   }
   function renderTopicGroupState(group) {
     if (!group.dom) return;
+    const frame = group.frame || null;
+    const noun = frame ? 'questions' : 'problems';
     const dom = group.dom, busy = group.loading || group.queued;
     dom.toggle.setAttribute('aria-expanded', String(group.open));
     dom.toggle.setAttribute('aria-busy', String(busy));
     dom.body.hidden = !group.open;
-    dom.count.textContent = count(group.total) + (group.total === 1 ? ' problem' : ' problems');
-    const shown = count(group.rows.length) + ' of ' + count(group.total) + ' problems';
-    dom.summary.textContent = group.error ? shown + ' · ' + group.error : busy ? (group.rows.length ? shown + ' · Loading more…' : 'Loading saved problems…') : group.total ? shown : 'No problems in this group match your filters.';
+    dom.count.textContent = count(group.total) + (group.total === 1 ? frame ? ' question' : ' problem' : ' ' + noun);
+    const shown = count(group.rows.length) + ' of ' + count(group.total) + ' ' + noun;
+    dom.summary.textContent = group.error ? shown + ' · ' + group.error : busy ? (group.rows.length ? shown + ' · Loading more…' : 'Loading saved ' + noun + '…') : group.total ? shown : 'No ' + noun + ' in this group match your filters.';
     dom.summary.toggleAttribute('data-error', Boolean(group.error));
     dom.list.setAttribute('aria-busy', String(busy));
     dom.more.hidden = !group.hasMore || Boolean(group.error);
     dom.retry.hidden = !group.error;
     dom.more.disabled = dom.retry.disabled = busy;
     dom.more.textContent = busy ? 'Loading…' : 'Load more';
-    renderTopicGroupProgress();
+    renderTopicGroupProgress(frame);
   }
-  function createTopicGroupCard(group) {
+  function createTopicGroupCard(group, frame = null) {
+    group.frame = frame;
     const card = node('section', 'topic-group');
     card.dataset.topic = group.topic === null ? '' : group.topic;
     card.dataset.untagged = String(group.topic === null);
@@ -493,8 +538,8 @@
     heading.append(toggle);
     const body = node('div', 'topic-group-body'); body.id = id;
     const summary = node('p', 'topic-group-summary'); summary.setAttribute('role', 'status');
-    const rows = node('ul', 'topic-group-results results'); rows.tabIndex = 0; rows.setAttribute('aria-label', name + ' problems');
-    rows.append(...group.rows.map(problem => problemRow(problem)));
+    const rows = node('ul', 'topic-group-results results'); rows.tabIndex = 0; rows.setAttribute('aria-label', name + (frame ? ' questions from ' + frame.name : ' problems'));
+    rows.append(...group.rows.map(problem => problemRow(problem, Boolean(frame))));
     const actions = node('div', 'topic-group-buttons');
     const more = node('button', 'topic-group-load-more secondary', 'Load more');
     const retry = node('button', 'topic-group-retry secondary', 'Try again');
@@ -506,15 +551,24 @@
     renderTopicGroupState(group);
     return card;
   }
-  function syncTopicGroups(result) {
-    const context = problemContext(), revision = sourceRevision(result);
-    if (groupsContext && (groupsContext !== context || groupsRevision !== revision)) resetTopicGroups();
-    groupsContext = context; groupsRevision = revision;
+  function renderTopicGroupCards(frame = null) {
+    if (frame) detailGroupOwner = frame;
+    scopeElement(frame, 'topic-groups').replaceChildren(...Array.from(scopeGroups(frame).values(), group => createTopicGroupCard(group, frame)));
+  }
+  function syncTopicGroups(result, frame = null) {
+    const context = scopeContext(frame), revision = sourceRevision(result);
+    const previousContext = frame ? frame.groupsContext : groupsContext;
+    const previousRevision = frame ? frame.groupsRevision : groupsRevision;
+    if (previousContext && (previousContext !== context || previousRevision !== revision)) resetTopicGroups(frame);
+    if (frame) { frame.groupsContext = context; frame.groupsRevision = revision; }
+    else { groupsContext = context; groupsRevision = revision; }
+    const groups = scopeGroups(frame);
     const catalog = new Map();
     for (const topic of Array.isArray(result.topics) ? result.topics : []) {
       if (typeof topic === 'string' && topic.trim() && topic.length <= 200) catalog.set(topic.toLocaleLowerCase(), topic);
     }
-    topicCatalog = [...catalog.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const values = [...catalog.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    if (frame) frame.topics = values; else topicCatalog = values;
     const metadata = new Map();
     for (const entry of Array.isArray(result.topicGroups) ? result.topicGroups : []) {
       if (!entry || (entry.topic !== null && (typeof entry.topic !== 'string' || !entry.topic.trim())) ||
@@ -523,32 +577,34 @@
     }
     // Absent selected headings have zero matches; their selections stay visible
     // so an unknown or no-longer-present topic can be removed deliberately.
-    const selected = result.available === false ? [] : problemView.topics.length ? problemView.topics.map(topic => metadata.get(topicGroupKey(topic)) ||
+    const selection = frame ? frame.filters.topics : problemView.topics;
+    const selected = result.available === false ? [] : selection.length ? selection.map(topic => metadata.get(topicGroupKey(topic)) ||
       { topic: catalog.get(topic.toLocaleLowerCase()) || topic, total: 0 }) : [...metadata.values()];
     selected.sort((a, b) => a.topic === null ? 1 : b.topic === null ? -1 : a.topic.localeCompare(b.topic, undefined, { sensitivity: 'base' }));
     const next = new Map();
     for (const entry of selected) {
       const key = topicGroupKey(entry.topic);
-      const group = topicGroups.get(key) || { topic: entry.topic, rows: [], total: entry.total, hasMore: false, open: false,
+      const group = groups.get(key) || { topic: entry.topic, rows: [], total: entry.total, hasMore: false, open: false,
         queued: false, loading: false, error: '', request: 0, revision, dom: null };
       group.topic = entry.topic; group.total = entry.total;
       next.set(key, group);
     }
-    topicGroups.clear(); for (const [key, group] of next) topicGroups.set(key, group);
-    $('topic-groups').replaceChildren(...Array.from(topicGroups.values(), createTopicGroupCard));
-    renderProblemControls();
-    if (pickerOpen) renderTopicOptions();
-    resumeTopicGroups();
+    groups.clear(); for (const [key, group] of next) groups.set(key, group);
+    renderTopicGroupCards(frame);
+    if (frame) renderCompanyTopicControls(frame); else renderProblemControls();
+    if (pickerOpen && pickerFrame === frame) renderTopicOptions();
+    resumeTopicGroups(frame);
   }
-  function resumeTopicGroups() {
-    if (!grouped() || activeDetail()) return;
-    for (const group of topicGroups.values()) if (group.open && group.total > 0 && !group.rows.length && !group.error) queueTopicGroup(group);
+  function resumeTopicGroups(frame = null) {
+    if (!scopeActive(frame)) return;
+    for (const group of scopeGroups(frame).values()) if (group.open && group.total > 0 && !group.rows.length && !group.error) queueTopicGroup(group);
   }
   function queueTopicGroup(group, append = false) {
-    if (!grouped() || activeDetail() || !group.open || !group.total || group.loading || group.queued ||
-        (append && !group.hasMore) || groupsContext !== problemContext()) return;
+    const frame = group.frame || null;
+    if (!scopeActive(frame) || !group.open || !group.total || group.loading || group.queued ||
+        (append && !group.hasMore) || (frame ? frame.groupsContext : groupsContext) !== scopeContext(frame)) return;
     group.queued = true; group.error = '';
-    const task = { group, append, request: ++group.request, stamp: generation, context: problemContext(), message: baseProblemRequest() };
+    const task = { frame, group, append, request: ++group.request, stamp: generation, context: scopeContext(frame), message: frame ? baseCompanyRequest(frame) : baseProblemRequest() };
     const retryFocused = document.activeElement === group.dom.retry;
     groupQueue.push(task); renderTopicGroupState(group);
     if (retryFocused && group.dom.retry.hidden) group.dom.list.focus({ preventScroll: true });
@@ -556,8 +612,8 @@
   }
   function currentGroupTask(task) {
     return task.stamp === generation && task.request === task.group.request &&
-      topicGroups.get(topicGroupKey(task.group.topic)) === task.group &&
-      task.context === problemContext() && grouped() && !activeDetail();
+      scopeGroups(task.frame).get(topicGroupKey(task.group.topic)) === task.group &&
+      task.context === scopeContext(task.frame) && scopeActive(task.frame);
   }
   function pumpTopicGroups() {
     while (groupRunning < 3 && groupQueue.length) {
@@ -567,23 +623,30 @@
       void loadTopicGroup(task).finally(() => { groupRunning--; pumpTopicGroups(); });
     }
   }
-  function restartProblemResults() {
-    invalidate(); resetTopicGroups();
+  function restartProblemResults(frame = null) {
+    invalidate(); resetTopicGroups(frame);
+    if (frame) {
+      frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null; frame.error = '';
+      if (frame === activeDetail()) { renderDetailRows([]); renderDetailSummary(); void loadDetail(); }
+      return;
+    }
     list.rows = []; list.total = 0; list.hasMore = false; list.version = null; list.error = '';
     renderListRows([]); renderListSummary();
     if (!activeDetail() && mode === 'problems') void loadList();
   }
   async function loadTopicGroup(task) {
+    const frame = task.frame;
     const group = task.group, offset = task.append ? group.rows.length : 0;
     try {
       const result = await api.runtime.sendMessage({ ...task.message, groupTopic: group.topic, offset, limit: 20 });
       if (!currentGroupTask(task)) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load this topic. Try again.');
-      if (sourceRevision(result) !== groupsRevision) {
-        status = result.status || status; restartProblemResults(); return;
+      if (sourceRevision(result) !== (frame ? frame.groupsRevision : groupsRevision)) {
+        status = result.status || status; restartProblemResults(frame); return;
       }
       if (result.available === false) throw new Error('This time window is unavailable. Refresh the dataset.');
-      const rows = Array.isArray(result.problems) ? result.problems : [], total = Number(result.total);
+      const resultRows = frame ? result.questions : result.problems;
+      const rows = Array.isArray(resultRows) ? resultRows : [], total = Number(result.total);
       const known = new Set(task.append ? group.rows.map(row => row.slug) : []);
       const invalid = rows.some(row => {
         if (!row || typeof row.slug !== 'string' || !core.SLUG_PATTERN.test(row.slug) || known.has(row.slug)) return true;
@@ -594,9 +657,9 @@
           (!rows.length && total > offset)) throw new Error('Could not continue this topic list. Try again.');
       const focused = [group.dom.more, group.dom.retry].includes(document.activeElement);
       group.rows = task.append ? group.rows.concat(rows) : rows;
-      group.total = total; group.hasMore = Boolean(result.hasMore); group.revision = groupsRevision;
-      if (task.append) group.dom.list.append(...rows.map(row => problemRow(row)));
-      else group.dom.list.replaceChildren(...rows.map(row => problemRow(row)));
+      group.total = total; group.hasMore = Boolean(result.hasMore); group.revision = frame ? frame.groupsRevision : groupsRevision;
+      if (task.append) group.dom.list.append(...rows.map(row => problemRow(row, Boolean(frame))));
+      else group.dom.list.replaceChildren(...rows.map(row => problemRow(row, Boolean(frame))));
       if (focused && !group.hasMore) group.dom.list.focus({ preventScroll: true });
     } catch (cause) {
       if (currentGroupTask(task)) group.error = cause.message || 'Could not load this topic. Try again.';
@@ -681,14 +744,16 @@
     }
   }
 
-  function renderTopics(frame) {
-    const selected = frame.filters.topic;
-    const topics = Array.isArray(frame.topics) ? frame.topics : [];
-    const values = selected && !topics.includes(selected) ? [selected, ...topics] : topics;
-    const all = node('option', '', 'All topics'); all.value = '';
-    $('topic-select').replaceChildren(all, ...values.map(topic => { const option = node('option', '', topic); option.value = topic; return option; }));
-    $('topic-select').value = selected;
-    syncSelectControl($('topic-select'));
+  function renderCompanyTopicControls(frame) {
+    if (!frame || frame.kind !== 'company' || frame !== activeDetail()) return;
+    renderTopicSelection(frame);
+    $('detail-topic-match-select').value = frame.filters.topicMatch; syncSelectControl($('detail-topic-match-select'));
+    $('detail-view-list').setAttribute('aria-pressed', String(frame.filters.view === 'list'));
+    $('detail-view-topics').setAttribute('aria-pressed', String(frame.filters.view === 'topics'));
+    $('detail-results').hidden = scopeGrouped(frame);
+    $('detail-topic-groups').hidden = !scopeGrouped(frame);
+    $('detail-topic-group-tools').hidden = !scopeGrouped(frame);
+    if (detailGroupOwner !== frame) renderTopicGroupCards(frame);
   }
   function renderDetailShell() {
     const frame = activeDetail();
@@ -714,7 +779,9 @@
       $('difficulty-select').value = frame.filters.difficulty;
       syncSelectControl($('difficulty-select'));
       $('question-search').value = frame.filters.query;
-      renderTopics(frame);
+      renderCompanyTopicControls(frame);
+    } else {
+      $('detail-results').hidden = false; $('detail-topic-groups').hidden = true; $('detail-topic-group-tools').hidden = true;
     }
   }
   function renderDetailRows(rows, append = false) {
@@ -727,35 +794,64 @@
     const frame = activeDetail();
     if (!frame) return;
     const noun = frame.kind === 'problem' ? 'companies' : 'questions';
+    const byTopic = frame.kind === 'company' && scopeGrouped(frame);
+    const appearances = frame.kind === 'company' ? [...frame.topicGroups.values()].reduce((sum, group) => sum + group.total, 0) : 0;
     $('detail-results').setAttribute('aria-busy', String(frame.loading));
-    $('detail-summary').textContent = frame.loading ? `Loading saved ${noun}…` : `${count(frame.rows.length)} of ${count(frame.total)} ${noun}${frame.kind === 'company' && (frame.filters.query || frame.filters.topic || frame.filters.difficulty) ? ' matching your filters' : ''}`;
-    const message = frame.error || (!frame.loading && !frame.available ? unavailable() : !frame.loading && !frame.total ? frame.kind === 'company' ? 'No questions match these filters in this time window.' : 'No company matches in this dataset. Coverage may be incomplete.' : '');
-    $('detail-message').textContent = message;
-    $('detail-message').hidden = !message;
+    $('detail-topic-groups').setAttribute('aria-busy', String(frame.loading));
+    $('detail-summary').textContent = frame.loading ? 'Loading saved ' + noun + '…' : byTopic
+      ? count(frame.total) + ' unique questions · ' + count(frame.topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
+      : count(frame.rows.length) + ' of ' + count(frame.total) + ' ' + noun +
+        (frame.kind === 'company' && (frame.filters.query || frame.filters.topics.length || frame.filters.difficulty) ? ' matching your filters' : '');
+    const message = frame.error || (!frame.loading && !frame.available ? unavailable() : !frame.loading && !frame.total
+      ? frame.kind === 'company' ? 'No questions match these filters in this time window.' : 'No company matches in this dataset. Coverage may be incomplete.' : '');
+    $('detail-message').textContent = message; $('detail-message').hidden = !message;
     $('detail-message').toggleAttribute('data-error', Boolean(frame.error));
-    $('detail-retry').hidden = !frame.error;
-    $('detail-load-more').hidden = frame.kind !== 'company' || !frame.hasMore;
+    $('detail-retry').hidden = !frame.error; $('detail-retry').disabled = frame.loading;
+    $('detail-load-more').hidden = frame.kind !== 'company' || byTopic || !frame.hasMore;
     $('detail-load-more').disabled = frame.loading;
     $('detail-order').textContent = orderLabel(detailSortKey(frame), frame.sort);
+    if (frame.kind === 'company') {
+      $('expand-detail-topic-groups').disabled = $('collapse-detail-topic-groups').disabled = frame.loading || !frame.topicGroups.size;
+      const unavailableFilters = !frame.loading && frame.version !== null && !frame.available;
+      $('difficulty-select').disabled = unavailableFilters; syncSelectControl($('difficulty-select'));
+      $('detail-topic-match-select').disabled = unavailableFilters; syncSelectControl($('detail-topic-match-select'));
+      $('detail-topic-picker-trigger').disabled = unavailableFilters;
+    }
   }
   async function loadDetail(append = false) {
     const frame = activeDetail();
-    if (!frame) return;
+    if (!frame || (append && (frame.loading || !frame.hasMore || (frame.kind === 'company' && scopeGrouped(frame))))) return;
     if (append && frame.version !== detailVersion(frame)) append = false;
-    const id = ++detailRequest;
-    const stamp = generation;
+    const id = ++detailRequest, stamp = generation;
+    const offset = append ? frame.rows.length : 0;
     if (!append) {
       frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null;
       if (frame.kind === 'problem') { frame.acceptanceRate = null; renderDetailShell(); }
       renderDetailRows([]);
     }
-    frame.loading = true; frame.error = '';
-    renderDetailSummary();
+    frame.loading = true; frame.error = ''; renderDetailSummary();
     try {
-      const message = frame.kind === 'problem' ? { type: 'LCT_GET', slug: frame.slug, window: windowKey() } : { type: 'LCT_PRACTICE', company: frame.name, window: windowKey(), sort: frame.sort, query: frame.filters.query, difficulty: frame.filters.difficulty, topic: frame.filters.topic, offset: append ? frame.rows.length : 0, limit: 50 };
+      const message = frame.kind === 'problem' ? { type: 'LCT_GET', slug: frame.slug, window: windowKey() }
+        : { ...baseCompanyRequest(frame), offset, limit: scopeGrouped(frame) ? 1 : 50 };
       const result = await api.runtime.sendMessage(message);
       if (id !== detailRequest || stamp !== generation || frame !== activeDetail()) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load these details. Try again.');
+      if (frame.kind === 'company' && append && frame.sourceRevision !== sourceRevision(result)) {
+        status = result.status || status; restartProblemResults(frame); return;
+      }
+      const next = frame.kind === 'problem' ? core.sortCompanies(Array.isArray(result.companies) ? result.companies : [], frame.sort)
+        : Array.isArray(result.questions) ? result.questions : [];
+      if (frame.kind === 'company') {
+        const total = Number(result.total), known = new Set(append ? frame.rows.map(row => row.slug) : []);
+        const invalid = next.some(row => {
+          if (!row || typeof row.slug !== 'string' || !core.SLUG_PATTERN.test(row.slug) || known.has(row.slug)) return true;
+          known.add(row.slug); return false;
+        });
+        if (!Number.isInteger(total) || total < offset + next.length || invalid ||
+            (result.offset !== undefined && result.offset !== offset) ||
+            (result.available !== false && Boolean(result.hasMore) !== (offset + next.length < total)) ||
+            (result.available !== false && !next.length && total > offset)) throw new Error('Could not continue these questions. Try again.');
+      }
       status = result.status || status;
       if (frame.kind === 'problem') {
         const problem = result.problem && typeof result.problem === 'object' ? result.problem : null;
@@ -763,25 +859,36 @@
         if (typeof problem?.title === 'string' && problem.title.trim()) frame.title = problem.title;
         if (typeof problem?.difficulty === 'string') frame.difficulty = problem.difficulty;
       }
-      const next = frame.kind === 'problem' ? core.sortCompanies(Array.isArray(result.companies) ? result.companies : [], frame.sort) : Array.isArray(result.questions) ? result.questions : [];
       frame.rows = append ? frame.rows.concat(next) : next;
       frame.total = frame.kind === 'problem' ? next.length : Number(result.total) || 0;
       frame.available = result.available !== false;
       frame.hasMore = frame.kind === 'company' && Boolean(result.hasMore);
-      frame.topics = result.topics || frame.topics;
+      frame.sourceRevision = sourceRevision(result);
       frame.sourceUrl = typeof result.sourceUrl === 'string' ? result.sourceUrl : null;
       frame.version = detailVersion(frame);
       renderDetailRows(next, append);
-      renderDetailShell();
-      renderStatus();
-    } catch (cause) { if (id === detailRequest && stamp === generation && frame === activeDetail()) frame.error = cause.message || 'Could not load these details.'; }
-    finally { if (id === detailRequest && stamp === generation && frame === activeDetail()) { frame.loading = false; renderDetailSummary(); } }
+      if (frame.kind === 'company') syncTopicGroups(result, frame);
+      renderDetailShell(); renderStatus();
+    } catch (cause) {
+      if (id === detailRequest && stamp === generation && frame === activeDetail()) frame.error = cause.message || 'Could not load these details.';
+    } finally {
+      if (id === detailRequest && stamp === generation && frame === activeDetail()) { frame.loading = false; renderDetailSummary(); }
+    }
   }
 
   function openDetail(value) {
     pendingDetail = null;
     invalidate();
-    stack.push({ ...value, sort: value.sort || sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'], rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null, filters: { difficulty: '', topic: '', query: '', ...value.filters } });
+    const filters = { difficulty: '', topic: '', query: '', ...value.filters };
+    if (value.kind === 'company') {
+      const legacy = typeof filters.topic === 'string' && filters.topic.trim() ? [filters.topic.trim()] : [];
+      const selected = validatedProblemView({ ...filters, topics: Array.isArray(filters.topics) ? filters.topics : legacy });
+      Object.assign(filters, selected);
+      filters.topic = filters.topics.length === 1 ? filters.topics[0] : '';
+    }
+    stack.push({ ...value, sort: value.sort || sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'],
+      rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null,
+      topicGroups: new Map(), groupsContext: '', groupsRevision: null, filters });
     renderShell(); renderDetailShell();
     $('detail-back').focus();
     void loadDetail();
@@ -798,7 +905,8 @@
     if (frame) {
       renderDetailShell(); renderDetailRows(frame.rows); renderDetailSummary();
       if (frame.version !== detailVersion(frame)) void loadDetail();
-      focusResult($('detail-results'), previous);
+      focusResult(frame.kind === 'company' && scopeGrouped(frame) ? $('detail-topic-groups') : $('detail-results'), previous);
+      if (frame.kind === 'company') resumeTopicGroups(frame);
     } else {
       renderListRows(list.rows); renderListSummary();
       if (list.version !== listVersion()) void loadList();
@@ -815,7 +923,10 @@
   function reloadCurrent() {
     invalidate(); resetTopicGroups(); topicCatalog = [];
     list.version = null;
-    for (const frame of stack) { frame.version = null; frame.sourceUrl = null; frame.acceptanceRate = null; }
+    for (const frame of stack) {
+      frame.version = null; frame.sourceUrl = null; frame.acceptanceRate = null;
+      if (frame.kind === 'company') { resetTopicGroups(frame); frame.topics = []; }
+    }
     renderShell();
     if (activeDetail()) { renderDetailShell(); void loadDetail(); } else void loadList();
   }
@@ -859,7 +970,12 @@
   });
   $('topic-picker-reset').addEventListener('click', () => { draftTopics = []; syncTopicDraft(); });
   $('topic-picker-apply').addEventListener('click', () => {
-    problemView.topics = [...draftTopics]; closeTopicPicker(true); problemFiltersChanged();
+    if (!pickerOpen) return;
+    const frame = pickerFrame, topics = [...draftTopics];
+    if (frame ? frame !== activeDetail() : activeDetail() || mode !== 'problems') { closeTopicPicker(); return; }
+    closeTopicPicker(true);
+    if (frame) { frame.filters.topics = topics; companyFiltersChanged(frame); }
+    else { problemView.topics = topics; problemFiltersChanged(); }
   });
   $('topic-picker-clear').addEventListener('click', () => {
     problemView.topics = []; problemFiltersChanged(); $('topic-picker-trigger').focus();
@@ -868,10 +984,10 @@
     if (pickerOpen && event.key === 'Escape') { event.preventDefault(); closeTopicPicker(true); }
   });
   document.addEventListener('pointerdown', event => {
-    if (pickerOpen && !$('topic-picker-trigger').contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
+    if (pickerOpen && !pickerTrigger?.contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
   });
   document.addEventListener('focusin', event => {
-    if (pickerOpen && !$('topic-picker-trigger').contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
+    if (pickerOpen && !pickerTrigger?.contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
   });
   window.addEventListener('resize', () => closeTopicPicker($('topic-picker-menu').contains(document.activeElement)));
   window.addEventListener('scroll', event => {
@@ -882,19 +998,51 @@
     pendingDetail = null; invalidate(); problemView.view = view;
     list.version = null; renderProblemControls(); renderListSummary(); saveProblemView(); void loadList();
   });
-  $('expand-topic-groups').addEventListener('click', () => {
-    for (const group of topicGroups.values()) {
+  function expandTopicGroups(frame = null) {
+    if (!scopeActive(frame)) return;
+    for (const group of scopeGroups(frame).values()) {
       group.open = true; renderTopicGroupState(group);
       if (!group.rows.length && !group.error && group.total > 0) queueTopicGroup(group);
     }
-  });
-  $('collapse-topic-groups').addEventListener('click', () => {
-    groupQueue.length = 0;
-    for (const group of topicGroups.values()) {
+  }
+  function collapseTopicGroups(frame = null) {
+    if (!scopeActive(frame)) return;
+    for (let index = groupQueue.length - 1; index >= 0; index--) if (groupQueue[index].frame === frame) groupQueue.splice(index, 1);
+    for (const group of scopeGroups(frame).values()) {
       group.open = false;
       if (group.queued) { group.queued = false; group.request++; }
       renderTopicGroupState(group);
     }
+  }
+  $('expand-topic-groups').addEventListener('click', () => expandTopicGroups());
+  $('collapse-topic-groups').addEventListener('click', () => collapseTopicGroups());
+  $('expand-detail-topic-groups').addEventListener('click', () => expandTopicGroups(activeDetail()));
+  $('collapse-detail-topic-groups').addEventListener('click', () => collapseTopicGroups(activeDetail()));
+  $('detail-topic-picker-trigger').addEventListener('click', () => {
+    const frame = activeDetail();
+    if (!frame || frame.kind !== 'company') return;
+    if (pickerOpen && pickerFrame === frame) closeTopicPicker();
+    else { closeTopicPicker(); openTopicPicker(frame); }
+  });
+  $('detail-topic-picker-trigger').addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const frame = activeDetail(); if (frame?.kind === 'company' && !pickerOpen) openTopicPicker(frame);
+    }
+  });
+  $('detail-topic-picker-clear').addEventListener('click', () => {
+    const frame = activeDetail(); if (frame?.kind !== 'company') return;
+    frame.filters.topics = []; companyFiltersChanged(frame); $('detail-topic-picker-trigger').focus();
+  });
+  $('detail-topic-match-select').addEventListener('change', () => {
+    const frame = activeDetail(); if (frame?.kind !== 'company') return;
+    frame.filters.topicMatch = $('detail-topic-match-select').value === 'all' ? 'all' : 'any';
+    companyFiltersChanged(frame);
+  });
+  for (const view of ['list', 'topics']) $('detail-view-' + view).addEventListener('click', () => {
+    const frame = activeDetail(); if (frame?.kind !== 'company' || frame.filters.view === view) return;
+    invalidate(); frame.filters.view = view; frame.version = null;
+    renderCompanyTopicControls(frame); renderDetailSummary(); void loadDetail();
   });
   $('sort-select').addEventListener('change', () => changeSort(mode, $('sort-select').value));
   $('detail-sort-select').addEventListener('change', () => { const frame = activeDetail(); if (frame) changeSort(detailSortKey(frame), $('detail-sort-select').value); });
@@ -906,15 +1054,11 @@
   function filterChanged(debounce = false) {
     const frame = activeDetail();
     if (!frame || frame.kind !== 'company') return;
-    frame.filters = { difficulty: $('difficulty-select').value, topic: $('topic-select').value, query: $('question-search').value.slice(0, 200) };
-    frame.version = null;
-    invalidate();
-    frame.hasMore = false; frame.loading = true;
-    renderDetailSummary();
-    if (debounce) questionTimer = setTimeout(() => void loadDetail(), 150); else void loadDetail();
+    frame.filters.difficulty = $('difficulty-select').value;
+    frame.filters.query = $('question-search').value.slice(0, 200);
+    companyFiltersChanged(frame, debounce);
   }
   $('difficulty-select').addEventListener('change', () => filterChanged());
-  $('topic-select').addEventListener('change', () => filterChanged());
   $('question-search').addEventListener('input', () => filterChanged(true));
   $('window-select').addEventListener('change', () => {
     settings.window = $('window-select').value;

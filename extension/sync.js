@@ -423,6 +423,23 @@
       if (typeof sort !== 'string' || !core.SORT_OPTIONS[endpoint].includes(sort)) throw new Error('Invalid sort option.');
       return Object.assign({}, optionsForQuery, { query, offset, limit, sort, window: selectedWindow(optionsForQuery.window) });
     }
+    function topicOptions(validated) {
+      const topics = validated.topics === undefined ? [] : validated.topics;
+      if (!Array.isArray(topics) || topics.length > 256) throw new Error('Invalid topic filters: use at most 256 topic names.');
+      const trimmedTopics = [];
+      for (const topic of topics) {
+        if (typeof topic !== 'string' || !topic.trim() || topic.trim().length > 200) throw new Error('Invalid topic filter.');
+        trimmedTopics.push(topic.trim());
+      }
+      const topicMatch = validated.topicMatch === undefined ? 'any' : validated.topicMatch;
+      if (typeof topicMatch !== 'string' || !['any', 'all'].includes(topicMatch)) throw new Error('Invalid topic match mode.');
+      const groupTopic = validated.groupTopic;
+      if (groupTopic !== undefined && groupTopic !== null &&
+          (typeof groupTopic !== 'string' || !groupTopic.trim() || groupTopic.trim().length > 200)) throw new Error('Invalid topic group.');
+      Object.assign(validated, { topics: trimmedTopics, topicMatch,
+        groupTopic: typeof groupTopic === 'string' ? groupTopic.trim() : groupTopic });
+      return validated;
+    }
     return {
       initialize, startAutomatic, refresh: () => start({ manual: true }), resume: () => start(),
       async getStatus() { await initialize(); return Object.assign({}, state.lctStatus, dataStatus()); },
@@ -438,21 +455,7 @@
       },
       async windowAvailable(window) { await initialize(); return core.windowAvailable(state.lctData, selectedWindow(window)); },
       async searchProblems(searchOptions) {
-        const validated = queryOptions(searchOptions, 50, 'searchProblems', 'relevance');
-        const topics = validated.topics === undefined ? [] : validated.topics;
-        if (!Array.isArray(topics) || topics.length > 256) throw new Error('Invalid topic filters: use at most 256 topic names.');
-        const trimmedTopics = [];
-        for (const topic of topics) {
-          if (typeof topic !== 'string' || !topic.trim() || topic.trim().length > 200) throw new Error('Invalid topic filter.');
-          trimmedTopics.push(topic.trim());
-        }
-        const topicMatch = validated.topicMatch === undefined ? 'any' : validated.topicMatch;
-        if (typeof topicMatch !== 'string' || !['any', 'all'].includes(topicMatch)) throw new Error('Invalid topic match mode.');
-        const groupTopic = validated.groupTopic;
-        if (groupTopic !== undefined && groupTopic !== null &&
-            (typeof groupTopic !== 'string' || !groupTopic.trim() || groupTopic.trim().length > 200)) throw new Error('Invalid topic group.');
-        Object.assign(validated, { topics: trimmedTopics, topicMatch,
-          groupTopic: typeof groupTopic === 'string' ? groupTopic.trim() : groupTopic });
+        const validated = topicOptions(queryOptions(searchOptions, 50, 'searchProblems', 'relevance'));
         await initialize();
         return core.searchProblems(state.lctData, validated);
       },
@@ -462,7 +465,7 @@
         return core.searchCompanies(state.lctData, validated);
       },
       async getPractice(practiceOptions) {
-        const validated = queryOptions(practiceOptions, 20, 'practiceQuestions', 'frequency-desc');
+        const validated = topicOptions(queryOptions(practiceOptions, 20, 'practiceQuestions', 'frequency-desc'));
         if (typeof validated.company !== 'string' || !validated.company || validated.company.length > 200) throw new Error('Invalid company name.');
         if (validated.topic !== undefined && validated.topic !== '' &&
             (typeof validated.topic !== 'string' || validated.topic.length > 200)) throw new Error('Invalid topic filter.');

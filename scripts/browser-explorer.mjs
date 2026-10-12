@@ -98,6 +98,33 @@ async function expectSummary(ui, selector, total) {
   assert.ok(observed.includes(expected), `${selector} should report the source total ${expected}; got ${observed}`);
 }
 
+async function chooseCompanyTopics(ui, topics) {
+  await ui.mutate("document.querySelector('#detail-topic-picker-trigger').scrollIntoView({block:'nearest'});");
+  await wait(60);
+  await ui.click('#detail-topic-picker-trigger');
+  await ui.click('#topic-picker-reset');
+  for (const topic of topics) {
+    await ui.fill('#topic-picker-search', topic);
+    await ui.click(`#topic-picker-options input[data-topic=${JSON.stringify(topic)}]`);
+  }
+  await ui.click('#topic-picker-apply');
+  await expectRead(ui, visible('#topic-picker-menu'), false);
+  await expectRead(ui, "Array.from(document.querySelectorAll('#detail-topic-picker-selected button[data-topic]'),node=>node.dataset.topic).sort()", topics.slice().sort());
+}
+
+async function exerciseCompanyPicker(ui) {
+  await ui.mutate("document.querySelector('#detail-topic-picker-trigger').scrollIntoView({block:'nearest'});");
+  await wait(60);
+  await ui.activateWithKeyboard('#detail-topic-picker-trigger');
+  const opened = await ui.read("(()=>{const trigger=document.querySelector('#detail-topic-picker-trigger'),menu=document.querySelector('#topic-picker-menu'),r=menu.getBoundingClientRect();return{role:menu.getAttribute('role'),expanded:trigger.getAttribute('aria-expanded'),controls:trigger.getAttribute('aria-controls'),options:menu.querySelectorAll('input[type=checkbox][data-topic]').length,left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight};})()");
+  assert.equal(opened.role, 'dialog'); assert.equal(opened.expanded, 'true'); assert.equal(opened.controls, 'topic-picker-menu'); assert.ok(opened.options > 0);
+  assert.ok(opened.left >= 0 && opened.right <= opened.width + 1 && opened.top >= 0 && opened.bottom <= opened.height + 1);
+  await ui.press('#topic-picker-search', 'Escape');
+  await expectRead(ui, visible('#topic-picker-menu'), false);
+  await expectRead(ui, "document.activeElement===document.querySelector('#detail-topic-picker-trigger')", true);
+  return { ...opened, keyboard: ui.keyboard };
+}
+
 
 async function exerciseMenu(ui, selector, { output, browserName, capture, commit = false } = {}) {
   const id = selector.slice(1), trigger = `#${id}-trigger`, menu = `#${id}-menu`;
@@ -211,7 +238,7 @@ async function exerciseSorting(ui, { data, core, output, browserName }) {
   await expectRead(ui, text('#detail-title'), 'Amazon'); await options('#detail-sort-select', core.SORT_OPTIONS.practiceQuestions, 'Sort company questions');
   result.detailSortMenu=await exerciseMenu(ui,'#detail-sort-select');
   result.difficultyMenu=await exerciseMenu(ui,'#difficulty-select');
-  result.topicMenu=await exerciseMenu(ui,'#topic-select');
+  result.topicMenu=await exerciseCompanyPicker(ui);
   await choose('#detail-sort-select', 'frequency-asc');
   const leastFrequent = practice({ sort: 'frequency-asc' }); await verifyPractice(leastFrequent); monotonic(leastFrequent, 'frequency', 1);
   await ui.click('#detail-load-more'); await verifyPractice(practice({ sort: 'frequency-asc', limit: 100 }));
@@ -219,12 +246,12 @@ async function exerciseSorting(ui, { data, core, output, browserName }) {
   await choose('#detail-sort-select', 'companies-asc'); const sparseQuestions = practice({ sort: 'companies-asc' }); await verifyPractice(sparseQuestions); monotonic(sparseQuestions, 'companyCount', 1);
   await ui.fill('#question-search', 'sum'); await choose('#detail-sort-select', 'name-desc'); await verifyPractice(practice({ query: 'sum', sort: 'name-desc' }));
   await choose('#detail-sort-select', 'difficulty-asc'); await verifyPractice(practice({ query: 'sum', sort: 'difficulty-asc' }));
-  await choose('#detail-sort-select', 'companies-desc'); await ui.select('#difficulty-select', 'Easy'); await ui.select('#topic-select', 'Array');
-  const filter = { query: 'sum', difficulty: 'Easy', topic: 'Array', sort: 'companies-desc' };
+  await choose('#detail-sort-select', 'companies-desc'); await ui.select('#difficulty-select', 'Easy'); await chooseCompanyTopics(ui, ['Array']);
+  const filter = { query: 'sum', difficulty: 'Easy', topics: ['Array'], sort: 'companies-desc' };
   await verifyPractice(practice(filter));
   await ui.select('#window-select', '30d'); currentWindow = '30d'; await verifyPractice(practice({ ...filter, window: '30d' })); await expectRead(ui, selected('#detail-sort-select'), 'companies-desc');
   await ui.select('#window-select', 'all'); currentWindow = 'all'; await verifyPractice(practice(filter));
-  await ui.select('#difficulty-select', ''); await ui.select('#topic-select', ''); await ui.fill('#question-search', ''); await verifyPractice(popularQuestions);
+  await ui.select('#difficulty-select', ''); await chooseCompanyTopics(ui, []); await ui.fill('#question-search', ''); await verifyPractice(popularQuestions);
   await ui.mutate(`document.querySelector('#detail-load-more').click();const n=document.querySelector('#detail-sort-select');for(const value of ['frequency-asc','name-desc','companies-desc']){n.value=value;n.dispatchEvent(new Event('change',{bubbles:true}));}`);
   await verifyPractice(popularQuestions); await wait(350); await verifyPractice(popularQuestions);
   await ui.click('#detail-results [data-action="problem"][data-slug="two-sum"]');
@@ -263,7 +290,7 @@ async function exerciseSorting(ui, { data, core, output, browserName }) {
   } else result.reload = 'Stored preferences verified plus mode/window/drilldown/Back roundtrips; Firefox console driver cannot reacquire a navigated tab.';
   checks.push('Company question and problem-company sorts use real selected-window counts while retaining source frequency/rank, composed filters and independent sort choices through windows and Back.');
   checks.push('Pending Load more followed by rapid sort changes cannot append an old-order page; all four validated preferences are saved independently.');
-  checks.push('All five visible combobox menus have synchronized selected labels, neutral rounded options, active-descendant focus, endpoint scrolling and Escape/Tab/outside dismissal; keyboard commits retain the chosen value.');
+  checks.push('The dropdown menus retain synchronized labels, rounded options and keyboard/dismissal behavior; the company checkbox topic dialog opens by keyboard, fits its viewport and restores focus on Escape.');
   if (ui.reload) checks.push('A real explorer document reload restores global problem/company and both detail sort preferences from extension storage.');
 
   if (ui.setViewport && ui.setColorScheme) {
@@ -281,7 +308,7 @@ async function exerciseSorting(ui, { data, core, output, browserName }) {
       result[`${scheme}SortMenu375`]=await exerciseMenu(ui,'#sort-select',{output,browserName,capture:`explorer-sort-menu-375-${scheme}`});
       if(ui.screenshot)await ui.screenshot(path.join(output,`${browserName}-explorer-sort-375-${scheme}.png`));
       await ui.click('#mode-companies'); await ui.fill('#global-search','Amazon'); await expectRows(companyIds,[{name:'Amazon'}],'name'); await ui.click('#results .company-title[data-company="Amazon"]'); await verifyPractice(popularQuestions);
-      result[`${scheme}Detail375`] = await geometry(['#detail-back','#window-select','#detail-sort-select','#difficulty-select','#topic-select','#question-search','#detail-results a.leetcode-link']);
+      result[`${scheme}Detail375`] = await geometry(['#detail-back','#window-select','#detail-sort-select','#difficulty-select','#detail-topic-picker-trigger','#question-search','#detail-results a.leetcode-link']);
       result[`${scheme}DetailMenu375`]=await exerciseMenu(ui,'#detail-sort-select',{output,browserName,capture:`explorer-detail-menu-375-${scheme}`});
       if(ui.screenshot)await ui.screenshot(path.join(output,`${browserName}-explorer-question-sort-375-${scheme}.png`));
       await ui.click('#detail-back');
@@ -411,7 +438,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
     const previousViewport = ui.viewport();
     await ui.setViewport({ width: 375, height: 667 });
     const geometry = await ui.read(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
-      controls: ['#detail-back', '#window-select', '#difficulty-select', '#topic-select', '#question-search', '#detail-results a[href*=problems]', '#detail-results .acceptance-rate'].map(selector => {
+      controls: ['#detail-back', '#window-select', '#difficulty-select', '#detail-topic-picker-trigger', '#question-search', '#detail-results a[href*=problems]', '#detail-results .acceptance-rate'].map(selector => {
         const field=document.querySelector(selector);const node=field.tagName==='SELECT'?document.getElementById(field.id+'-trigger')||field:field;const rect=node.getBoundingClientRect();
         return { selector, left: rect.left, right: rect.right, width: rect.width, height: rect.height };
       }) })`);
@@ -430,20 +457,20 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
 
   await ui.select('#difficulty-select', 'Hard');
   await expectQuestions(questions('Acko', { difficulty: 'Hard' }).questions);
-  await ui.select('#topic-select', 'Math');
-  await expectQuestions(questions('Acko', { difficulty: 'Hard', topic: 'Math' }).questions);
+  await chooseCompanyTopics(ui, ['Math']);
+  await expectQuestions(questions('Acko', { difficulty: 'Hard', topics: ['Math'] }).questions);
   await ui.fill('#question-search', 'parallel');
   await expectQuestions([]);
-  await ui.select('#topic-select', '');
+  await chooseCompanyTopics(ui, []);
   await expectQuestions(questions('Acko', { difficulty: 'Hard', query: 'parallel' }).questions);
   await ui.select('#difficulty-select', 'Easy');
   await expectQuestions([]);
   await ui.fill('#question-search', '');
   await expectQuestions(questions('Acko', { difficulty: 'Easy' }).questions);
-  await ui.select('#topic-select', 'Database');
-  await expectQuestions(questions('Acko', { difficulty: 'Easy', topic: 'Database' }).questions);
+  await chooseCompanyTopics(ui, ['Database']);
+  await expectQuestions(questions('Acko', { difficulty: 'Easy', topics: ['Database'] }).questions);
   await ui.select('#difficulty-select', '');
-  await ui.select('#topic-select', '');
+  await chooseCompanyTopics(ui, []);
   await expectQuestions(questions('Acko').questions);
   await ui.select('#window-select', '30d');
   await expectQuestions([]);
@@ -507,7 +534,7 @@ export async function exerciseExplorer(ui, { data, core, output, browserName }) 
   await ui.mutate(`const node = document.querySelector('#window-select');
     for (const value of ['30d', 'all']) { node.value = value; node.dispatchEvent(new Event('change', { bubbles: true })); }`);
   await expectRead(ui, 'document.querySelector("#window-select").value', 'all');
-  const finalFilters = await ui.read('({ difficulty: document.querySelector("#difficulty-select").value, topic: document.querySelector("#topic-select").value, query: document.querySelector("#question-search").value })');
+  const finalFilters = await ui.read('({ difficulty: document.querySelector("#difficulty-select").value, topics: Array.from(document.querySelectorAll("#detail-topic-picker-selected button[data-topic]"),node=>node.dataset.topic), topicMatch: document.querySelector("#detail-topic-match-select").value, query: document.querySelector("#question-search").value })');
   await expectQuestions(questions('Amazon', finalFilters).questions);
   await ui.mutate(`const node = document.querySelector('#question-search'); node.value = 'lru';
     node.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('#detail-back').click();`);

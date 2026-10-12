@@ -1869,3 +1869,209 @@ test('global topic parameters are validated before storage, with trimmed exact v
   assert.equal((await fixture.service.searchProblems({ topics: [' ' + 'x'.repeat(200) + ' '] })).total, 0);
   assert.equal((await fixture.service.searchProblems({ groupTopic: ' ' + 'x'.repeat(200) + ' ' })).total, 0);
 });
+
+
+test('company topics stay within their source file and preserve complete case-deduplicated catalogs and ranks', async () => {
+  const { service, source, data } = topicExplorerFixture();
+  const alpha = await service.getPractice({ company: 'Alpha' });
+  assert.equal(alpha.total, 7);
+  assert.equal(alpha.limit, 20, 'Legacy default paging stays unchanged.');
+  assert.deepEqual(lowerTopics(alpha.topics), ['2d array', 'array', 'graph', 'tree']);
+  assert.deepEqual(lowerGroups(alpha.topicGroups), [['2d array', 2], ['array', 3], ['graph', 1], ['tree', 1], [null, 1]]);
+  const shared = alpha.questions.find((question) => question.slug === 'shared-problem');
+  assert.deepEqual(lowerTopics(shared.topics), ['array'], 'Company views never inherit the other company Hash Table record.');
+  assert.deepEqual([shared.frequency, shared.rank, shared.companyCount, shared.acceptanceRate], [100, 1, 2, 50]);
+  assert.equal(shared.url, 'https://leetcode.com/problems/shared-problem/');
+  assert.equal(alpha.sourceRevision, SHA_A);
+  assert.equal(alpha.sourceUrl, core.sourceFileURL(SHA_A, 'Alpha/' + core.WINDOW_FILES.all));
+  const beta = await service.getPractice({ company: 'Beta' });
+  assert.deepEqual(lowerTopics(beta.topics), ['array', 'hash table']);
+  assert.deepEqual(lowerTopics(beta.questions.find((question) => question.slug === 'shared-problem').topics), ['hash table']);
+  assert.deepEqual(lowerGroups(beta.topicGroups), [['array', 1], ['hash table', 1]]);
+  const local = core.practiceQuestions(data, { company: 'Alpha' });
+  const original = structuredClone(data);
+  local.questions[0].topics.push('Injected Topic');
+  local.topics.push('Injected Catalog');
+  local.topicGroups[0].total = 999;
+  assert.deepEqual(structuredClone(data), original, 'Company metadata derivation and returned arrays cannot mutate records.');
+  assert.deepEqual(core.practiceQuestions(data, { company: 'Alpha' }).topicGroups, alpha.topicGroups);
+  assert.equal(source.calls.length, 0);
+});
+
+test('company any/all topic filters compose with legacy exact topics, text, difficulty, sorting, and exclusion', async () => {
+  const { service, source } = topicExplorerFixture();
+  const company = 'Alpha';
+  const any = await service.getPractice({ company, topics: ['  ARRAY ', '2d ARRAY'], topicMatch: 'any', sort: 'name-asc' });
+  assert.deepEqual(any.questions.map((question) => question.slug), ['two-dimensional', 'array-only', 'array-two', 'shared-problem']);
+  const all = await service.getPractice({ company, topics: ['ARRAY', 'Array', '2D Array'], topicMatch: 'all' });
+  assert.deepEqual(all.questions.map((question) => [question.slug, question.frequency, question.rank]), [['array-two', 80, 3]]);
+  assert.equal((await service.getPractice({ company, topics: ['Array', 'Hash Table'], topicMatch: 'all' })).total, 0, 'All mode uses company topics rather than the global problem union.');
+  assert.equal((await service.getPractice({ company, topics: ['Hash'] })).total, 0);
+  const composed = await service.getPractice({ company, topic: 'ARRAY', topics: ['Array'], query: 'puzzle', difficulty: 'EASY',
+    sort: 'frequency-asc', offset: 1, limit: 1 });
+  assert.deepEqual(composed.questions.map((question) => [question.slug, question.frequency, question.rank]), [['shared-problem', 100, 1]]);
+  assert.equal(composed.total, 2);
+  assert.equal(composed.hasMore, false);
+  assert.deepEqual(lowerGroups(composed.topicGroups), [['array', 2]]);
+  assert.deepEqual(lowerTopics(composed.topics), ['2d array', 'array', 'graph', 'tree']);
+  const legacyAndModern = await service.getPractice({ company, topic: 'Array', topics: ['2D Array'], groupTopic: '  ARRAY ' });
+  assert.deepEqual(legacyAndModern.questions.map((question) => question.slug), ['array-two']);
+  const excluded = await service.getPractice({ company, topics: ['Array'], excludeSlug: 'shared-problem' });
+  assert.equal(excluded.total, 2);
+  assert.equal(excluded.questions.some((question) => question.slug === 'shared-problem'), false);
+  assert.deepEqual(lowerGroups(excluded.topicGroups), [['2d array', 1], ['array', 2]]);
+  assert.equal((await service.getPractice({ company, topic: '' })).total, 7);
+  assert.equal((await service.getPractice({ company: 'Beta', topic: 'Hash' })).total, 0, 'Legacy topic never becomes a substring filter.');
+  assert.equal((await service.getPractice({ company, topic: ' Array ' })).total, 0, 'Legacy untrimmed direct calls keep their established semantics.');
+  for (const topicMatch of ['any', 'all']) assert.equal((await service.getPractice({ company, topics: [], topicMatch })).total, 7);
+  assert.equal(source.calls.length, 0);
+});
+
+test('company group rows and totals narrow after complete base-filter counts, including genuine untagged questions', async () => {
+  const { service } = topicExplorerFixture();
+  const baseOptions = { company: 'Alpha', query: 'puzzle', topics: ['Array'], sort: 'frequency-desc', limit: 1 };
+  const base = await service.getPractice(baseOptions);
+  assert.equal(base.total, 3);
+  assert.equal(base.hasMore, true);
+  const twoD = await service.getPractice({ ...baseOptions, groupTopic: ' 2D ARRAY ' });
+  assert.equal(twoD.total, 1);
+  assert.equal(twoD.hasMore, false);
+  assert.deepEqual(twoD.questions.map((question) => [question.slug, question.rank]), [['array-two', 3]]);
+  assert.deepEqual(twoD.topicGroups, base.topicGroups);
+  assert.deepEqual(twoD.topics, base.topics);
+  assert.equal(twoD.sourceUrl, base.sourceUrl);
+  const none = await service.getPractice({ ...baseOptions, groupTopic: null });
+  assert.equal(none.total, 0);
+  assert.deepEqual(none.topicGroups, base.topicGroups);
+  const untagged = await service.getPractice({ company: 'Alpha', groupTopic: null });
+  assert.deepEqual(untagged.questions.map((question) => [question.slug, question.topics, question.rank]), [['no-topics', [], 5]]);
+  assert.equal(untagged.total, 1);
+  assert.deepEqual(lowerGroups(untagged.topicGroups).at(-1), [null, 1]);
+  const unknown = await service.getPractice({ company: 'Alpha', groupTopic: 'Unknown' });
+  assert.equal(unknown.total, 0);
+  assert.equal(unknown.available, true);
+  assert.deepEqual(unknown.topicGroups, untagged.topicGroups);
+  const noBase = await service.getPractice({ company: 'Alpha', topics: ['Unknown'] });
+  assert.equal(noBase.total, 0);
+  assert.deepEqual(noBase.topicGroups, []);
+  assert.deepEqual(noBase.topics, untagged.topics);
+  const excluded = await service.getPractice({ company: 'Alpha', groupTopic: null, excludeSlug: 'no-topics' });
+  assert.equal(excluded.total, 0);
+  assert.equal(excluded.topicGroups.some((group) => group.topic === null), false);
+  assert.deepEqual(excluded.topics, untagged.topics);
+});
+
+test('company groups cover every paged question and preserve all sorting modes, frequency ties, and source ranks', async () => {
+  const { service, source } = globalExplorerFixture();
+  const options = { company: 'Zeta Practice', groupTopic: 'Array', limit: 17 };
+  const first = await service.getPractice(options);
+  assert.equal(first.total, 77);
+  assert.deepEqual(lowerTopics(first.topics), ['array', 'graph']);
+  assert.deepEqual(lowerGroups(first.topicGroups), [['array', 77], ['graph', 76]]);
+  const questions = [];
+  for (let offset = 0; ; offset += 17) {
+    const page = await service.getPractice({ ...options, offset });
+    assert.equal(page.total, 77);
+    assert.deepEqual(page.topicGroups, first.topicGroups);
+    assert.deepEqual(page.topics, first.topics);
+    assert.equal(page.sourceRevision, SHA_A);
+    assert.equal(page.sourceUrl, first.sourceUrl);
+    questions.push(...page.questions);
+    if (!page.hasMore) break;
+  }
+  assert.equal(questions.length, 77);
+  assert.equal(new Set(questions.map((question) => question.slug)).size, 77);
+  assert.deepEqual(questions.slice(0, 3).map((question) => [question.slug, question.frequency, question.rank]), [
+    ['exercise-000', 100, 1], ['exercise-002', 99, 3], ['exercise-004', 98, 5]
+  ]);
+  assert.deepEqual(questions.slice(-2).map((question) => [question.slug, question.frequency, question.rank]), [
+    ['exercise-150', 0, 151], ['exercise-152', null, null]
+  ]);
+  for (const sort of core.SORT_OPTIONS.practiceQuestions) {
+    const base = { company: 'Zeta Practice', query: 'exercise', excludeSlug: 'exercise-002', sort, limit: 100 };
+    const legacy = await service.getPractice({ ...base, topic: 'Array' });
+    const multi = await service.getPractice({ ...base, topics: ['array'], groupTopic: 'ARRAY' });
+    assert.deepEqual(multi.questions, legacy.questions, sort);
+    assert.equal(multi.total, 76);
+    assert.deepEqual(lowerGroups(multi.topicGroups), [['array', 76]]);
+  }
+  const composed = await service.getPractice({ company: 'Zeta Practice', query: 'exercise 1', difficulty: 'medium',
+    topics: ['ARRAY'], topicMatch: 'all', groupTopic: 'Array', offset: 2, limit: 3 });
+  assert.equal(composed.total, 11);
+  assert.deepEqual(composed.questions.map((question) => [question.slug, question.rank]), [
+    ['exercise-100', 101], ['exercise-106', 107], ['exercise-112', 113]
+  ]);
+  assert.deepEqual(lowerGroups(composed.topicGroups), [['array', 11]]);
+  const tail = await service.getPractice({ ...options, offset: 1000 });
+  assert.equal(tail.total, 77);
+  assert.equal(tail.hasMore, false);
+  assert.deepEqual(tail.questions, []);
+  assert.deepEqual(tail.topicGroups, first.topicGroups);
+  assert.equal(source.calls.length, 0);
+});
+
+test('company topic catalogs and groups isolate windows and preserve empty, missing-file, and unavailable distinctions', async () => {
+  const { service, source } = topicExplorerFixture();
+  const recent = await service.getPractice({ company: 'Alpha', window: '30d' });
+  assert.deepEqual(lowerTopics(recent.topics), ['graph']);
+  assert.deepEqual(lowerGroups(recent.topicGroups), [['graph', 1], [null, 1]]);
+  assert.deepEqual(recent.questions.find((question) => question.slug === 'shared-problem').topics, ['Graph']);
+  assert.equal(recent.questions.find((question) => question.slug === 'shared-problem').frequency, 70);
+  assert.equal((await service.getPractice({ company: 'Alpha', window: '30d', topics: ['Array'] })).total, 0);
+  const betaRecent = await service.getPractice({ company: 'Beta', window: '30d' });
+  assert.deepEqual(betaRecent.topics, ['String']);
+  assert.equal((await service.getPractice({ company: 'Alpha', topics: ['String'] })).total, 0);
+  const empty = await service.getPractice({ company: 'Alpha', window: 'older' });
+  assert.equal(empty.available, true);
+  assert.equal(empty.total, 0);
+  assert.deepEqual(empty.topics, []);
+  assert.deepEqual(empty.topicGroups, []);
+  assert.equal(empty.sourceUrl, core.sourceFileURL(SHA_A, 'Alpha/' + core.WINDOW_FILES.older));
+  const missingFile = await service.getPractice({ company: 'Beta', window: 'older' });
+  assert.equal(missingFile.available, true, 'The selected window exists even when this company has no file in it.');
+  assert.equal(missingFile.sourceUrl, undefined);
+  assert.deepEqual(missingFile.topicGroups, []);
+  assert.equal(missingFile.sourceRevision, SHA_A);
+  const unavailable = await service.getPractice({ company: 'Alpha', window: '3m' });
+  assert.equal(unavailable.available, false);
+  assert.deepEqual(unavailable.topics, []);
+  assert.deepEqual(unavailable.topicGroups, []);
+  assert.equal(unavailable.sourceRevision, SHA_A);
+  for (const storage of [memoryStorage(), memoryStorage(legacyState())]) {
+    const missing = await makeService(storage, source).getPractice({ company: 'Alpha', topics: ['Array'] });
+    assert.equal(missing.available, false);
+    assert.deepEqual(missing.topicGroups, []);
+    assert.deepEqual(missing.topics, []);
+    assert.equal(missing.hasMore, false);
+  }
+  assert.equal(core.practiceQuestions(null, { company: 'Alpha' }).sourceRevision, null);
+  assert.equal(source.calls.length, 0);
+});
+
+test('company multi-topic and legacy parameters reject malformed requests before any storage work', async () => {
+  const source = sourceFixture();
+  const storage = memoryStorage();
+  let reads = 0;
+  const get = storage.get;
+  storage.get = async (...args) => { reads += 1; return get(...args); };
+  const service = makeService(storage, source);
+  const invalid = [
+    ...[null, false, 0, 'Array', {}, new Set(['Array'])].map((topics) => ({ topics })),
+    ...[[null], [undefined], [false], [0], [{}], [[]], [''], ['  '], ['Array', false], ['x'.repeat(201)], Array(1), Array(257).fill('Array')].map((topics) => ({ topics })),
+    ...[null, false, 0, '', 'ANY', 'or', [], {}].map((topicMatch) => ({ topicMatch })),
+    ...[false, 0, '', '  ', 'x'.repeat(201), [], {}].map((groupTopic) => ({ groupTopic })),
+    ...[null, false, 0, [], {}, 'x'.repeat(201)].map((topic) => ({ topic }))
+  ];
+  for (const options of invalid) await assert.rejects(service.getPractice({ company: 'Alpha', ...options }), /topic/i, JSON.stringify(options));
+  assert.equal(reads, 0);
+  assert.equal(storage.writes.length, 0);
+  assert.equal(source.calls.length, 0);
+  const fixture = topicExplorerFixture();
+  const options = { company: 'Alpha', topics: [' ARRAY ', '2D Array', 'array'], topicMatch: 'all', groupTopic: '  Array ' };
+  const before = structuredClone(options);
+  assert.equal((await fixture.service.getPractice(options)).total, 1);
+  assert.deepEqual(options, before);
+  assert.equal((await fixture.service.getPractice({ company: 'Alpha', topics: Array(256).fill('Array') })).total, 3);
+  assert.equal((await fixture.service.getPractice({ company: 'Alpha', topics: [' ' + 'x'.repeat(200) + ' '] })).total, 0);
+  assert.equal((await fixture.service.getPractice({ company: 'Alpha', groupTopic: ' ' + 'x'.repeat(200) + ' ' })).total, 0);
+});

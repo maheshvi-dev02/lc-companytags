@@ -140,3 +140,12 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .topic-group-buttons button { padding:7px 10px; font-size:var(--font-label); }
 @media(max-width:900px) { .problem-filters { grid-template-columns:1fr 1fr; } .problem-view-switch { justify-self:start; } }
 @media(max-width:540px) { .problem-filters { grid-template-columns:1fr; } .topic-group-tools { flex-direction:column; gap:8px; } .selected-topic-tools { gap:8px; } .topic-group-toggle { padding:11px 12px; } .topic-group-body { padding:0 12px 12px; } }
+
+/* Company question filters use the same picker and view controls as Problems. */
+.detail-filters { grid-template-columns:minmax(140px,1fr) minmax(150px,1.15fr) minmax(190px,1.35fr) auto; align-items:end; }
+.detail-filters .question-search { grid-column:1/-1; }
+.detail-filters .problem-filter > .select-trigger { display:flex; margin-top:5px; }
+.detail-filters .problem-view-switch { justify-self:start; align-self:end; }
+.detail-filters .selected-topic-tools { margin-top:0; }
+@media(max-width:900px) { .detail-filters { grid-template-columns:1fr 1fr; } }
+@media(max-width:540px) { .detail-filters { grid-template-columns:1fr; } }

@@ -518,27 +518,57 @@
     const window = options.window || 'all';
     const available = searchAvailability(data, window);
     const { offset, limit } = pagination(options, 20);
-    const empty = { questions: [], total: 0, topics: [], offset, limit, hasMore: false, available, windowAvailable: available };
+    const sourceRevision = data && typeof data.commit === 'string' && SHA_PATTERN.test(data.commit) ? data.commit : null;
+    const empty = { questions: [], total: 0, topics: [], topicGroups: [], offset, limit, hasMore: false,
+      available, windowAvailable: available, sourceRevision };
     if (!available || typeof options.company !== 'string') return empty;
     const path = options.company + '/' + WINDOW_FILES[window];
     const file = data.files && Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
     if (!file || !Array.isArray(file.records)) return empty;
-    const topics = Array.from(new Set(file.records.flatMap((record) => record.topics))).sort((a, b) => a.localeCompare(b, 'en'));
+    const catalog = new Map();
+    const candidates = file.records.map((record) => {
+      const topicKeys = new Set();
+      for (const topic of Array.isArray(record.topics) ? record.topics : []) {
+        if (typeof topic !== 'string' || !topic.trim()) continue;
+        const label = topic.trim(), key = label.toLowerCase();
+        topicKeys.add(key);
+        if (!catalog.has(key) || compareTopicLabels(label, catalog.get(key)) < 0) catalog.set(key, label);
+      }
+      return { record, topicKeys };
+    });
+    // Keep the complete company-window catalog available while filters narrow
+    // the rows. Company topics never inherit another company's source tags.
+    const topics = Array.from(catalog.values()).sort(compareTopicLabels);
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
     const topic = typeof options.topic === 'string' ? options.topic.toLowerCase() : '';
+    const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
+      .filter((value) => typeof value === 'string').map((value) => value.trim().toLowerCase()).filter(Boolean))) : [];
+    const topicMatch = options.topicMatch === 'all' ? 'all' : 'any';
+    const groupTopic = typeof options.groupTopic === 'string' ? options.groupTopic.trim().toLowerCase() : options.groupTopic;
     const { terms } = queryTerms(options.query);
     const sort = selectedSort(options.sort, 'practiceQuestions', 'frequency-desc');
-    const filtered = file.records.filter((record) => record.slug !== options.excludeSlug &&
-      (!difficulty || (record.difficulty || '').toLowerCase() === difficulty) &&
-      (!topic || record.topics.some((value) => value.toLowerCase() === topic)) && matchesProblem(record, terms))
-      .map((record) => Object.assign({}, record, { topics: record.topics.slice(),
+    const filtered = [], groups = new Map();
+    for (const { record, topicKeys } of candidates) {
+      if (record.slug === options.excludeSlug || (difficulty && (record.difficulty || '').toLowerCase() !== difficulty) ||
+          (topic && !record.topics.some((value) => value.toLowerCase() === topic)) || !matchesProblem(record, terms)) continue;
+      if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((value) => topicKeys.has(value)) :
+        selectedTopics.some((value) => topicKeys.has(value)))) continue;
+      for (const key of topicKeys.size ? topicKeys : [null]) {
+        if (!groups.has(key)) groups.set(key, new Set());
+        groups.get(key).add(record.slug);
+      }
+      if (groupTopic === null ? topicKeys.size > 0 : groupTopic !== undefined && !topicKeys.has(groupTopic)) continue;
+      filtered.push(Object.assign({}, record, { topics: Array.from(topicKeys, (key) => catalog.get(key)).sort(compareTopicLabels),
         acceptanceRate: problemForSlug(data, record.slug)?.acceptanceRate ?? null,
         companyCount: matchingCompanyRecords(data, record.slug, window).length,
         url: 'https://leetcode.com/problems/' + record.slug + '/' }));
+    }
+    const topicGroups = Array.from(groups, ([key, slugs]) => ({ topic: key === null ? null : catalog.get(key), total: slugs.size }))
+      .sort((a, b) => a.topic === null ? (b.topic === null ? 0 : 1) : b.topic === null ? -1 : compareTopicLabels(a.topic, b.topic));
     filtered.sort((a, b) => compareProblemRows(a, b, sort));
     const questions = filtered.slice(offset, offset + limit);
-    return { questions, total: filtered.length, topics, offset, limit, hasMore: offset + questions.length < filtered.length,
-      available: true, windowAvailable: true, sourceUrl: sourceFileURL(data.commit, path) };
+    return { questions, total: filtered.length, topics, topicGroups, offset, limit, hasMore: offset + questions.length < filtered.length,
+      available: true, windowAvailable: true, sourceUrl: sourceFileURL(data.commit, path), sourceRevision };
   }
 
   return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, getProblemSlug, formatProblemTitle,

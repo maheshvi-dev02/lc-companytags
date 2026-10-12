@@ -5,7 +5,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const value = selector => `document.querySelector(${JSON.stringify(selector)})?.value`;
 const visible = selector => `Boolean(document.querySelector(${JSON.stringify(selector)})?.getClientRects().length)`;
 const text = selector => `document.querySelector(${JSON.stringify(selector)})?.textContent || ''`;
-const group = topic => `.topic-group[data-topic=${JSON.stringify(topic ?? '')}]`;
+const group = topic => `#topic-groups .topic-group[data-topic=${JSON.stringify(topic ?? '')}]`;
 
 async function expectRead(ui, expression, expected, label) {
   let observed;
@@ -126,7 +126,7 @@ export async function exerciseProblemTopics(ui, { data, core, output, browserNam
     await assertCatalog();
     report.anyTotal = any.total; report.allTotal = all.total;
     await ui.click('#problem-view-topics'); await assertGroups();
-    await expectRead(ui, "Array.from(document.querySelectorAll('.topic-group-toggle')).every(node=>node.getAttribute('aria-expanded')==='false')", true);
+    await expectRead(ui, "Array.from(document.querySelectorAll('#topic-groups .topic-group-toggle')).every(node=>node.getAttribute('aria-expanded')==='false')", true);
     for (const topic of options.topics) { await toggleGroup(topic, true); await assertGroupRows(topic); }
     const array = source({ groupTopic: 'Array', limit: 100 }), linked = source({ groupTopic: 'Linked List', limit: 100 });
     assert.deepEqual(array.problems.map(row => row.slug), linked.problems.map(row => row.slug), 'All-matching problems must legitimately appear in both selected topic groups.');
@@ -161,9 +161,9 @@ export async function exerciseProblemTopics(ui, { data, core, output, browserNam
     assert.equal(expansionCalls.length, 4); assert.equal(new Set(expansionCalls.map(call => call.groupTopic)).size, 4);
     assert.ok(expansionCalls.every(call => call.offset === 0 && call.limit === 20));
     assert.ok((await ui.read('__problemTopicsAudit.maxConcurrent')) <= 3);
-    await ui.mutate("globalThis.__retainedTopicRows=Array.from(document.querySelectorAll('.topic-group-results > .question-row'));");
+    await ui.mutate("globalThis.__retainedTopicRows=Array.from(document.querySelectorAll('#topic-groups .topic-group-results > .question-row'));");
     await ui.click('#collapse-topic-groups');
-    await expectRead(ui, "Array.from(document.querySelectorAll('.topic-group-toggle')).every(node=>node.getAttribute('aria-expanded')==='false')", true);
+    await expectRead(ui, "Array.from(document.querySelectorAll('#topic-groups .topic-group-toggle')).every(node=>node.getAttribute('aria-expanded')==='false')", true);
     assert.equal(await ui.read('__retainedTopicRows.every(node=>node.isConnected)'), true);
     await toggleGroup('Array', true); await assertGroupRows('Array');
     assert.equal(await ui.read('__problemTopicsAudit.calls.filter(call=>Object.hasOwn(call,"groupTopic")).length'), 4, 'Reopening loaded groups must not refetch or duplicate rows.');

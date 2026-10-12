@@ -43,13 +43,18 @@
       <div class="detail-heading"><div><p id="detail-kind" class="eyebrow"></p><div id="detail-name"><h2 id="detail-title"></h2></div></div><a id="detail-source" class="source-link" target="_blank" rel="noopener noreferrer" hidden>View source ↗</a></div>
       <p id="detail-context" class="muted"></p>
       <div id="detail-filters" class="detail-filters" hidden>
-        <label>Difficulty<select id="difficulty-select" aria-label="Difficulty"><option value="">All difficulties</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select></label>
-        <label>Topic<select id="topic-select" aria-label="Topic"><option value="">All topics</option></select></label>
         <label class="question-search">Search this company<input id="question-search" type="search" placeholder="Problem title or slug" aria-label="Search this company's questions" maxlength="200" autocomplete="off"></label>
+        <label>Difficulty<select id="difficulty-select" aria-label="Difficulty"><option value="">All difficulties</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select></label>
+        <div class="problem-filter topic-picker"><span>Topics</span><button id="detail-topic-picker-trigger" class="select-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="topic-picker-menu" aria-label="Select company topics"><span id="detail-topic-picker-value">All topics</span><span class="select-chevron" aria-hidden="true"></span></button></div>
+        <label class="problem-filter">Topic matching<select id="detail-topic-match-select" aria-label="Company topic matching"><option value="any">Match any selected topic</option><option value="all">Match all selected topics</option></select></label>
+        <div class="problem-view-switch" role="group" aria-label="Company question view"><button id="detail-view-list" type="button" aria-pressed="true">List</button><button id="detail-view-topics" type="button" aria-pressed="false">By topic</button></div>
+        <div id="detail-selected-topic-tools" class="selected-topic-tools" hidden><ul id="detail-topic-picker-selected" class="selected-topics" aria-label="Selected company topics"></ul><button id="detail-topic-picker-clear" class="clear-topics" type="button">Clear topics</button></div>
       </div>
       <p id="frequency-help" class="frequency-help">Frequency scores come from the selected source window. They are not interview counts and may not be directly comparable between companies.</p>
       <div class="results-heading list-tools"><p id="detail-summary" role="status"></p><label class="sort-filter" for="detail-sort-select"><select id="detail-sort-select" aria-label="Sort company questions"></select></label><span id="detail-order" class="muted" hidden></span></div>
       <p id="detail-message" class="message" role="status" hidden></p><button id="detail-retry" class="secondary" type="button" hidden>Try again</button>
+      <div id="detail-topic-group-tools" class="topic-group-tools" hidden><div><p id="detail-topic-group-note" class="muted">Questions with multiple topics appear in each relevant group. The summary counts each question once.</p><p id="detail-topic-group-progress" class="muted" role="status" hidden></p></div><div class="topic-group-actions"><button id="expand-detail-topic-groups" class="secondary" type="button">Expand all</button><button id="collapse-detail-topic-groups" class="secondary" type="button">Collapse all</button></div></div>
+      <div id="detail-topic-groups" class="topic-groups" aria-label="Company questions grouped by topic" hidden></div>
       <ul id="detail-results" class="results" aria-label="Dataset details"></ul>
       <button id="detail-load-more" class="load-more secondary" type="button" hidden>Load more questions</button>
     </section>
