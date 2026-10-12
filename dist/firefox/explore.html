@@ -24,8 +24,17 @@
     <section id="search-view" aria-labelledby="search-heading">
       <div class="intro"><p class="eyebrow">Dataset explorer</p><h2 id="search-heading">Find a problem. See its companies.</h2><p id="search-help" class="muted">Search the saved dataset by problem title or slug.</p></div>
       <label class="global-search" for="global-search"><span id="search-label">Search problems</span><input id="global-search" type="search" placeholder="Search problems by title or slug" maxlength="200" autocomplete="off"></label>
+      <div id="problem-filters" class="problem-filters">
+        <label class="problem-filter">Difficulty<select id="problem-difficulty-select" aria-label="Problem difficulty"><option value="">All difficulties</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select></label>
+        <div class="problem-filter topic-picker"><span id="topic-picker-label">Topics</span><button id="topic-picker-trigger" class="select-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="topic-picker-menu" aria-label="Select problem topics"><span id="topic-picker-value">All topics</span><span class="select-chevron" aria-hidden="true"></span></button></div>
+        <label class="problem-filter">Topic matching<select id="topic-match-select" aria-label="Topic matching"><option value="any">Match any selected topic</option><option value="all">Match all selected topics</option></select></label>
+        <div class="problem-view-switch" role="group" aria-label="Problem view"><button id="problem-view-list" type="button" aria-pressed="true">List</button><button id="problem-view-topics" type="button" aria-pressed="false">By topic</button></div>
+        <div id="selected-topic-tools" class="selected-topic-tools" hidden><ul id="topic-picker-selected" class="selected-topics" aria-label="Selected topics"></ul><button id="topic-picker-clear" class="clear-topics" type="button">Clear topics</button></div>
+      </div>
       <div class="results-heading list-tools"><p id="result-summary" role="status">Loading saved problems…</p><label class="sort-filter" for="sort-select"><select id="sort-select" aria-label="Sort problems"></select></label><span id="result-order" class="muted" hidden></span></div>
       <p id="search-message" class="message" role="status" hidden></p><button id="search-retry" class="secondary" type="button" hidden>Try again</button>
+      <div id="topic-group-tools" class="topic-group-tools" hidden><div><p id="topic-group-note" class="muted">Problems with multiple topics appear in each relevant group. The summary counts each problem once.</p><p id="topic-group-progress" class="muted" role="status" hidden></p></div><div class="topic-group-actions"><button id="expand-topic-groups" class="secondary" type="button">Expand all</button><button id="collapse-topic-groups" class="secondary" type="button">Collapse all</button></div></div>
+      <div id="topic-groups" class="topic-groups" aria-label="Problems grouped by topic" hidden></div>
       <ul id="results" class="results" aria-label="Problem search results"></ul>
       <button id="load-more" class="load-more secondary" type="button" hidden>Load more problems</button>
     </section>
@@ -50,6 +59,13 @@
     <p id="status" class="status" role="status"></p><progress id="progress" aria-label="Dataset sync progress" hidden></progress>
     <p class="coverage-note">Community company reports by liquidslr. Coverage may be incomplete. Searches use your saved dataset and work offline.</p>
   </footer>
+  <div id="topic-picker-menu" class="topic-picker-menu select-menu" role="dialog" aria-label="Select problem topics" hidden>
+    <label class="topic-picker-search">Search topics<input id="topic-picker-search" type="search" placeholder="Find a topic" maxlength="200" autocomplete="off"></label>
+    <p id="topic-picker-hint" class="muted">Select topics, then apply. No selection includes all topics.</p>
+    <div id="topic-picker-options" class="topic-picker-options"></div>
+    <p id="topic-picker-empty" class="muted" role="status" hidden>No topics match your search.</p>
+    <div class="topic-picker-actions"><button id="topic-picker-reset" class="secondary" type="button">Clear selection</button><button id="topic-picker-apply" type="button">Apply topics</button></div>
+  </div>
   <script src="core.js"></script>
   <script src="logo-catalog.js"></script>
   <script src="company-logos.js"></script>

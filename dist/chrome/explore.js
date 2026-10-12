@@ -16,6 +16,19 @@
   const sortNames = { problems: 'Sort problems', companies: 'Sort companies', companyQuestions: 'Sort company questions', problemCompanies: 'Sort problem companies' };
   let sorts = { ...sortDefaults };
   let sortSave = Promise.resolve();
+  const problemViewDefaults = { difficulty: '', topics: [], topicMatch: 'any', view: 'list' };
+  let problemView = { ...problemViewDefaults, topics: [] };
+  let problemViewSave = Promise.resolve();
+  let problemViewDirty = false;
+  let topicCatalog = [];
+  let pickerOpen = false;
+  let draftTopics = [];
+  const topicGroups = new Map();
+  let groupsContext = '';
+  let groupsRevision = null;
+  let groupSequence = 0;
+  let groupRunning = 0;
+  const groupQueue = [];
   const params = new URLSearchParams(location.search);
   const requestedSlug = params.get('slug');
   const requestedCompany = params.get('company');
@@ -48,11 +61,16 @@
   const version = () => `${mode}|${windowKey()}|${status.commit || ''}`;
   const count = value => Number(value || 0).toLocaleString();
   const detailSortKey = frame => frame.kind === 'company' ? 'companyQuestions' : 'problemCompanies';
-  const listVersion = () => JSON.stringify([version(), queries[mode], sorts[mode]]);
+  const problemContext = () => JSON.stringify([windowKey(), queries.problems, sorts.problems, problemView.difficulty, problemView.topics.map(topic => topic.toLocaleLowerCase()).sort(), problemView.topicMatch]);
+  const grouped = () => mode === 'problems' && problemView.view === 'topics';
+  const listVersion = () => JSON.stringify([version(), queries[mode], sorts[mode], mode === 'problems' ? problemContext() : null, mode === 'problems' ? problemView.view : null]);
   const detailVersion = frame => JSON.stringify([version(), frame.kind, frame.slug || frame.name, frame.sort, frame.filters]);
   const invalidate = () => {
     closeSelectMenu();
     closeAcceptanceHelp();
+    closeTopicPicker();
+    groupQueue.length = 0;
+    for (const group of topicGroups.values()) { group.request++; group.loading = false; group.queued = false; renderTopicGroupState(group); }
     generation++; clearTimeout(searchTimer); clearTimeout(questionTimer);
     list.loading = false;
     for (const frame of stack) frame.loading = false;
@@ -110,8 +128,128 @@
   const closeSelectMenu = returnFocus => selectMenus.close(returnFocus);
   const syncSelectControl = select => selectMenus.sync(select);
   function enhanceSelects() {
-    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'topic-select'],
+    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'topic-select', 'problem-difficulty-select', 'topic-match-select'],
       { iconIds: ['sort-select', 'detail-sort-select'] });
+  }
+  function validatedProblemView(value) {
+    const stored = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const seen = new Set();
+    const topics = (Array.isArray(stored.topics) ? stored.topics : []).filter(topic => {
+      if (typeof topic !== 'string' || !topic.trim() || topic.trim().length > 200 || seen.has(topic.trim().toLocaleLowerCase())) return false;
+      seen.add(topic.trim().toLocaleLowerCase()); return true;
+    }).slice(0, 256).map(topic => topic.trim());
+    return { difficulty: ['', 'Easy', 'Medium', 'Hard'].includes(stored.difficulty) ? stored.difficulty : '',
+      topics, topicMatch: stored.topicMatch === 'all' ? 'all' : 'any', view: stored.view === 'topics' ? 'topics' : 'list' };
+  }
+  function saveProblemView() {
+    problemViewDirty = true;
+    const value = { ...problemView, topics: [...problemView.topics] };
+    problemViewSave = problemViewSave.then(() => api.storage.local.set({ lctExplorerProblemView: value })).catch(() => {
+      refreshError = 'Could not save your problem view preference. The current view still works.';
+      renderStatus();
+    });
+  }
+  function closeTopicPicker(returnFocus = false) {
+    if (!pickerOpen) return;
+    pickerOpen = false; draftTopics = [];
+    $('topic-picker-menu').hidden = true;
+    $('topic-picker-trigger').setAttribute('aria-expanded', 'false');
+    if (returnFocus) $('topic-picker-trigger').focus();
+  }
+  function positionTopicPicker() {
+    if (!pickerOpen) return;
+    const menu = $('topic-picker-menu'), rect = $('topic-picker-trigger').getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 340), Math.max(0, document.documentElement.clientWidth - 16));
+    const below = window.innerHeight - rect.bottom - 14, above = rect.top - 14;
+    const upward = below < 270 && above > below;
+    menu.style.width = width + 'px';
+    menu.style.maxHeight = Math.max(0, Math.min(440, upward ? above : below)) + 'px';
+    menu.style.left = Math.max(8, Math.min(rect.left, document.documentElement.clientWidth - width - 8)) + 'px';
+    menu.style.top = (upward ? Math.max(8, rect.top - 6 - menu.getBoundingClientRect().height) : rect.bottom + 6) + 'px';
+  }
+  function topicPickerValues() {
+    const values = new Map(topicCatalog.map(topic => [topic.toLocaleLowerCase(), topic]));
+    for (const topic of [...problemView.topics, ...draftTopics]) if (!values.has(topic.toLocaleLowerCase())) values.set(topic.toLocaleLowerCase(), topic);
+    return [...values.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }
+  function syncTopicDraft() {
+    const selected = new Set(draftTopics.map(topic => topic.toLocaleLowerCase()));
+    $('topic-picker-options').querySelectorAll('input[data-topic]').forEach(input => {
+      input.checked = selected.has(input.dataset.topic.toLocaleLowerCase());
+      input.disabled = !input.checked && selected.size >= 256;
+    });
+    $('topic-picker-hint').textContent = selected.size >= 256 ? '256 topics selected. Remove a topic to select another.' : 'Select topics, then apply. No selection includes all topics.';
+  }
+  function renderTopicOptions() {
+    const focused = document.activeElement?.dataset.topic;
+    const query = $('topic-picker-search').value.trim().toLocaleLowerCase();
+    const values = topicPickerValues().filter(topic => topic.toLocaleLowerCase().includes(query));
+    $('topic-picker-options').replaceChildren(...values.map(topic => {
+      const label = node('label', 'topic-picker-option');
+      const input = node('input'); input.type = 'checkbox'; input.dataset.topic = topic;
+      input.addEventListener('change', () => {
+        draftTopics = draftTopics.filter(value => value.toLocaleLowerCase() !== topic.toLocaleLowerCase());
+        if (input.checked) draftTopics.push(topic);
+        syncTopicDraft();
+      });
+      label.append(input, node('span', '', topic)); return label;
+    }));
+    $('topic-picker-empty').hidden = values.length > 0;
+    $('topic-picker-empty').textContent = query ? 'No topics match your search.' : 'No topics are available in this time window.';
+    syncTopicDraft();
+    if (focused) Array.from($('topic-picker-options').querySelectorAll('input')).find(input => input.dataset.topic === focused)?.focus();
+    positionTopicPicker();
+  }
+  function openTopicPicker() {
+    if (mode !== 'problems' || activeDetail()) return;
+    closeSelectMenu();
+    pickerOpen = true; draftTopics = [...problemView.topics];
+    $('topic-picker-search').value = '';
+    $('topic-picker-menu').hidden = false;
+    $('topic-picker-trigger').setAttribute('aria-expanded', 'true');
+    renderTopicOptions(); positionTopicPicker();
+    $('topic-picker-search').focus();
+  }
+  function renderProblemControls() {
+    $('problem-filters').hidden = mode !== 'problems' || Boolean(activeDetail());
+    $('problem-difficulty-select').value = problemView.difficulty;
+    $('topic-match-select').value = problemView.topicMatch;
+    syncSelectControl($('problem-difficulty-select')); syncSelectControl($('topic-match-select'));
+    $('topic-picker-value').textContent = problemView.topics.length ? problemView.topics.length + ' selected' : 'All topics';
+    $('topic-picker-trigger').title = problemView.topics.length ? 'Selected topics: ' + problemView.topics.join(', ') : 'Select problem topics';
+    $('topic-picker-trigger').setAttribute('aria-label', 'Select problem topics' + (problemView.topics.length ? ', ' + problemView.topics.length + ' selected' : ', all topics'));
+    $('selected-topic-tools').hidden = !problemView.topics.length;
+    $('topic-picker-selected').replaceChildren(...problemView.topics.map(topic => {
+      const item = node('li'), button = node('button');
+      button.type = 'button'; button.dataset.topic = topic; button.setAttribute('aria-label', 'Remove topic ' + topic);
+      button.append(node('span', '', topic)); const remove = node('span', '', '×'); remove.setAttribute('aria-hidden', 'true'); button.append(remove);
+      button.addEventListener('click', () => {
+        problemView.topics = problemView.topics.filter(value => value !== topic);
+        problemFiltersChanged();
+        $('topic-picker-trigger').focus();
+      });
+      item.append(button); return item;
+    }));
+    $('problem-view-list').setAttribute('aria-pressed', String(problemView.view === 'list'));
+    $('problem-view-topics').setAttribute('aria-pressed', String(problemView.view === 'topics'));
+    $('results').hidden = grouped();
+    $('topic-groups').hidden = !grouped();
+    $('topic-group-tools').hidden = !grouped();
+  }
+  function resetTopicGroups() {
+    groupQueue.length = 0; topicGroups.clear(); groupsContext = ''; groupsRevision = null;
+    $('topic-groups').replaceChildren(); renderTopicGroupProgress();
+  }
+  function problemFiltersChanged(debounce = false, save = true) {
+    pendingDetail = null;
+    invalidate(); resetTopicGroups();
+    list.version = null; list.rows = []; list.total = 0; list.hasMore = false; list.loading = true; list.error = '';
+    renderListRows([]); renderProblemControls(); renderListSummary(); if (save) saveProblemView();
+    if (debounce) searchTimer = setTimeout(() => void loadList(), 150); else void loadList();
+  }
+  function baseProblemRequest() {
+    return { type: 'LCT_SEARCH_PROBLEMS', query: queries.problems, window: windowKey(), sort: sorts.problems,
+      difficulty: problemView.difficulty, topics: [...problemView.topics], topicMatch: problemView.topicMatch };
   }
   function validatedSorts(value) {
     const stored = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -153,6 +291,7 @@
     if (!sortOptions[key].some(([allowed]) => allowed === value) || current === value) return;
     sorts[key] = value;
     invalidate();
+    if (!activeDetail() && key === 'problems') resetTopicGroups();
     for (const frame of stack) if (detailSortKey(frame) === key) { frame.sort = value; frame.version = null; frame.hasMore = false; }
     renderSortControls();
     if (activeDetail()) void loadDetail(); else void loadList();
@@ -245,7 +384,7 @@
     $('detail-view').hidden = !activeDetail();
     $('results').setAttribute('aria-label', mode === 'problems' ? 'Problem search results' : 'Company search results');
     $('load-more').textContent = `Load more ${mode}`;
-    renderSortControls();
+    renderSortControls(); renderProblemControls();
   }
 
   function problemRow(problem, companyView = false) {
@@ -267,6 +406,7 @@
       const acceptance = acceptanceInfo(problem.acceptanceRate);
       meta.append(document.createTextNode(`${problem.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · ${count(problem.companyCount)} ${problem.companyCount === 1 ? 'company' : 'companies'}`));
       info.append(meta, acceptance.help);
+      if (Array.isArray(problem.topics) && problem.topics.length) info.append(node('span', 'question-topics', problem.topics.join(' · ')));
     }
     const actions = node('div', 'result-actions');
     const button = action('problem', problem.slug, 'View companies');
@@ -304,49 +444,241 @@
     return row;
   }
 
+  const topicGroupKey = topic => JSON.stringify(topic === null ? null : topic.toLocaleLowerCase());
+  function sourceRevision(result) {
+    return core.SHA_PATTERN.test(result.sourceRevision || '') ? result.sourceRevision.toLowerCase() : null;
+  }
+  function renderTopicGroupProgress() {
+    const opened = [...topicGroups.values()].filter(group => group.open);
+    const busy = opened.filter(group => group.loading || group.queued).length;
+    const ready = opened.filter(group => group.rows.length || group.total === 0).length;
+    $('topic-group-progress').hidden = !busy;
+    $('topic-group-progress').textContent = busy ? 'Loading topic groups · ' + count(ready) + ' of ' + count(opened.length) + ' opened groups ready' : '';
+  }
+  function renderTopicGroupState(group) {
+    if (!group.dom) return;
+    const dom = group.dom, busy = group.loading || group.queued;
+    dom.toggle.setAttribute('aria-expanded', String(group.open));
+    dom.toggle.setAttribute('aria-busy', String(busy));
+    dom.body.hidden = !group.open;
+    dom.count.textContent = count(group.total) + (group.total === 1 ? ' problem' : ' problems');
+    const shown = count(group.rows.length) + ' of ' + count(group.total) + ' problems';
+    dom.summary.textContent = group.error ? shown + ' · ' + group.error : busy ? (group.rows.length ? shown + ' · Loading more…' : 'Loading saved problems…') : group.total ? shown : 'No problems in this group match your filters.';
+    dom.summary.toggleAttribute('data-error', Boolean(group.error));
+    dom.list.setAttribute('aria-busy', String(busy));
+    dom.more.hidden = !group.hasMore || Boolean(group.error);
+    dom.retry.hidden = !group.error;
+    dom.more.disabled = dom.retry.disabled = busy;
+    dom.more.textContent = busy ? 'Loading…' : 'Load more';
+    renderTopicGroupProgress();
+  }
+  function createTopicGroupCard(group) {
+    const card = node('section', 'topic-group');
+    card.dataset.topic = group.topic === null ? '' : group.topic;
+    card.dataset.untagged = String(group.topic === null);
+    const heading = node('h3', 'topic-group-heading'), toggle = node('button', 'topic-group-toggle');
+    toggle.type = 'button';
+    const name = group.topic === null ? 'No topics' : group.topic;
+    const id = 'topic-group-' + (++groupSequence);
+    const chevron = node('span', 'select-chevron'); chevron.setAttribute('aria-hidden', 'true');
+    const total = node('span', 'topic-group-count');
+    toggle.append(chevron, node('span', 'topic-group-name', name), total);
+    toggle.setAttribute('aria-controls', id);
+    toggle.addEventListener('click', () => {
+      group.open = !group.open;
+      if (!group.open && group.queued) { group.queued = false; group.request++; }
+      renderTopicGroupState(group);
+      if (group.open && !group.rows.length && !group.error && group.total > 0) queueTopicGroup(group);
+    });
+    heading.append(toggle);
+    const body = node('div', 'topic-group-body'); body.id = id;
+    const summary = node('p', 'topic-group-summary'); summary.setAttribute('role', 'status');
+    const rows = node('ul', 'topic-group-results results'); rows.tabIndex = 0; rows.setAttribute('aria-label', name + ' problems');
+    rows.append(...group.rows.map(problem => problemRow(problem)));
+    const actions = node('div', 'topic-group-buttons');
+    const more = node('button', 'topic-group-load-more secondary', 'Load more');
+    const retry = node('button', 'topic-group-retry secondary', 'Try again');
+    more.type = retry.type = 'button';
+    more.addEventListener('click', () => queueTopicGroup(group, true));
+    retry.addEventListener('click', () => queueTopicGroup(group, group.rows.length > 0));
+    actions.append(more, retry); body.append(summary, rows, actions); card.append(heading, body);
+    group.dom = { card, toggle, count: total, body, summary, list: rows, more, retry };
+    renderTopicGroupState(group);
+    return card;
+  }
+  function syncTopicGroups(result) {
+    const context = problemContext(), revision = sourceRevision(result);
+    if (groupsContext && (groupsContext !== context || groupsRevision !== revision)) resetTopicGroups();
+    groupsContext = context; groupsRevision = revision;
+    const catalog = new Map();
+    for (const topic of Array.isArray(result.topics) ? result.topics : []) {
+      if (typeof topic === 'string' && topic.trim() && topic.length <= 200) catalog.set(topic.toLocaleLowerCase(), topic);
+    }
+    topicCatalog = [...catalog.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const metadata = new Map();
+    for (const entry of Array.isArray(result.topicGroups) ? result.topicGroups : []) {
+      if (!entry || (entry.topic !== null && (typeof entry.topic !== 'string' || !entry.topic.trim())) ||
+          !Number.isInteger(entry.total) || entry.total < 0) continue;
+      metadata.set(topicGroupKey(entry.topic), { topic: entry.topic, total: entry.total });
+    }
+    // Absent selected headings have zero matches; their selections stay visible
+    // so an unknown or no-longer-present topic can be removed deliberately.
+    const selected = result.available === false ? [] : problemView.topics.length ? problemView.topics.map(topic => metadata.get(topicGroupKey(topic)) ||
+      { topic: catalog.get(topic.toLocaleLowerCase()) || topic, total: 0 }) : [...metadata.values()];
+    selected.sort((a, b) => a.topic === null ? 1 : b.topic === null ? -1 : a.topic.localeCompare(b.topic, undefined, { sensitivity: 'base' }));
+    const next = new Map();
+    for (const entry of selected) {
+      const key = topicGroupKey(entry.topic);
+      const group = topicGroups.get(key) || { topic: entry.topic, rows: [], total: entry.total, hasMore: false, open: false,
+        queued: false, loading: false, error: '', request: 0, revision, dom: null };
+      group.topic = entry.topic; group.total = entry.total;
+      next.set(key, group);
+    }
+    topicGroups.clear(); for (const [key, group] of next) topicGroups.set(key, group);
+    $('topic-groups').replaceChildren(...Array.from(topicGroups.values(), createTopicGroupCard));
+    renderProblemControls();
+    if (pickerOpen) renderTopicOptions();
+    resumeTopicGroups();
+  }
+  function resumeTopicGroups() {
+    if (!grouped() || activeDetail()) return;
+    for (const group of topicGroups.values()) if (group.open && group.total > 0 && !group.rows.length && !group.error) queueTopicGroup(group);
+  }
+  function queueTopicGroup(group, append = false) {
+    if (!grouped() || activeDetail() || !group.open || !group.total || group.loading || group.queued ||
+        (append && !group.hasMore) || groupsContext !== problemContext()) return;
+    group.queued = true; group.error = '';
+    const task = { group, append, request: ++group.request, stamp: generation, context: problemContext(), message: baseProblemRequest() };
+    const retryFocused = document.activeElement === group.dom.retry;
+    groupQueue.push(task); renderTopicGroupState(group);
+    if (retryFocused && group.dom.retry.hidden) group.dom.list.focus({ preventScroll: true });
+    pumpTopicGroups();
+  }
+  function currentGroupTask(task) {
+    return task.stamp === generation && task.request === task.group.request &&
+      topicGroups.get(topicGroupKey(task.group.topic)) === task.group &&
+      task.context === problemContext() && grouped() && !activeDetail();
+  }
+  function pumpTopicGroups() {
+    while (groupRunning < 3 && groupQueue.length) {
+      const task = groupQueue.shift(), group = task.group;
+      if (!currentGroupTask(task) || !group.open || !group.queued) continue;
+      group.queued = false; group.loading = true; groupRunning++; renderTopicGroupState(group);
+      void loadTopicGroup(task).finally(() => { groupRunning--; pumpTopicGroups(); });
+    }
+  }
+  function restartProblemResults() {
+    invalidate(); resetTopicGroups();
+    list.rows = []; list.total = 0; list.hasMore = false; list.version = null; list.error = '';
+    renderListRows([]); renderListSummary();
+    if (!activeDetail() && mode === 'problems') void loadList();
+  }
+  async function loadTopicGroup(task) {
+    const group = task.group, offset = task.append ? group.rows.length : 0;
+    try {
+      const result = await api.runtime.sendMessage({ ...task.message, groupTopic: group.topic, offset, limit: 20 });
+      if (!currentGroupTask(task)) return;
+      if (!result?.ok) throw new Error(result?.error || 'Could not load this topic. Try again.');
+      if (sourceRevision(result) !== groupsRevision) {
+        status = result.status || status; restartProblemResults(); return;
+      }
+      if (result.available === false) throw new Error('This time window is unavailable. Refresh the dataset.');
+      const rows = Array.isArray(result.problems) ? result.problems : [], total = Number(result.total);
+      const known = new Set(task.append ? group.rows.map(row => row.slug) : []);
+      const invalid = rows.some(row => {
+        if (!row || typeof row.slug !== 'string' || !core.SLUG_PATTERN.test(row.slug) || known.has(row.slug)) return true;
+        known.add(row.slug); return false;
+      });
+      if (!Number.isInteger(total) || total < offset + rows.length || total !== group.total || invalid ||
+          (result.offset !== undefined && result.offset !== offset) || Boolean(result.hasMore) !== (offset + rows.length < total) ||
+          (!rows.length && total > offset)) throw new Error('Could not continue this topic list. Try again.');
+      const focused = [group.dom.more, group.dom.retry].includes(document.activeElement);
+      group.rows = task.append ? group.rows.concat(rows) : rows;
+      group.total = total; group.hasMore = Boolean(result.hasMore); group.revision = groupsRevision;
+      if (task.append) group.dom.list.append(...rows.map(row => problemRow(row)));
+      else group.dom.list.replaceChildren(...rows.map(row => problemRow(row)));
+      if (focused && !group.hasMore) group.dom.list.focus({ preventScroll: true });
+    } catch (cause) {
+      if (currentGroupTask(task)) group.error = cause.message || 'Could not load this topic. Try again.';
+    } finally {
+      if (currentGroupTask(task)) {
+        const focused = document.activeElement;
+        group.loading = false; renderTopicGroupState(group);
+        if ([group.dom.more, group.dom.retry].includes(focused) && focused.hidden) {
+          (group.error ? group.dom.retry : group.hasMore ? group.dom.more : group.dom.list).focus({ preventScroll: true });
+        }
+      }
+    }
+  }
+
   function renderListRows(rows, append = false) {
     const nodes = rows.map(row => mode === 'problems' ? problemRow(row) : companyRow(row));
     if (append) $('results').append(...nodes); else $('results').replaceChildren(...nodes);
   }
   function renderListSummary() {
     $('results').setAttribute('aria-busy', String(list.loading));
-    $('result-summary').textContent = list.loading ? `Loading saved ${mode}…` : `${count(list.rows.length)} of ${count(list.total)} ${mode}${queries[mode].trim() ? ' matching your search' : ''}`;
-    const message = list.error || (!list.loading && !list.available ? unavailable() : !list.loading && !list.total ? `No ${mode} match your search in this time window.` : '');
+    $('topic-groups').setAttribute('aria-busy', String(list.loading));
+    const filtered = queries[mode].trim() || (mode === 'problems' && (problemView.difficulty || problemView.topics.length));
+    const appearances = Array.from(topicGroups.values()).reduce((sum, group) => sum + group.total, 0);
+    $('result-summary').textContent = list.loading ? 'Loading saved ' + mode + '…' : grouped()
+      ? count(list.total) + ' unique problems · ' + count(topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
+      : count(list.rows.length) + ' of ' + count(list.total) + ' ' + mode + (filtered ? ' matching your filters' : '');
+    const message = list.error || (!list.loading && !list.available ? unavailable() : !list.loading && !list.total ? 'No ' + mode + ' match your filters in this time window.' : '');
     $('search-message').textContent = message;
     $('search-message').hidden = !message;
     $('search-message').toggleAttribute('data-error', Boolean(list.error));
-    $('search-retry').hidden = !list.error;
-    $('load-more').hidden = !list.hasMore;
+    $('search-retry').hidden = !list.error; $('search-retry').disabled = list.loading;
+    $('load-more').hidden = grouped() || !list.hasMore;
     $('load-more').disabled = list.loading;
+    $('expand-topic-groups').disabled = $('collapse-topic-groups').disabled = list.loading || !topicGroups.size;
     $('result-order').textContent = orderLabel(mode, sorts[mode]);
+    const unavailableFilters = mode === 'problems' && !list.loading && list.version !== null && !list.available;
+    $('problem-difficulty-select').disabled = unavailableFilters; syncSelectControl($('problem-difficulty-select'));
+    $('topic-match-select').disabled = unavailableFilters; syncSelectControl($('topic-match-select'));
+    $('topic-picker-trigger').disabled = unavailableFilters;
   }
   async function loadList(append = false) {
-    if (activeDetail()) return;
+    if (activeDetail() || (append && (list.loading || !list.hasMore || grouped()))) return;
     if (append && list.version !== listVersion()) append = false;
-    const id = ++listRequest;
-    const stamp = generation;
-    const requestedMode = mode;
-    const requestedWindow = windowKey();
-    const requestedSort = sorts[requestedMode];
+    const id = ++listRequest, stamp = generation;
+    const requestedMode = mode, requestedWindow = windowKey(), requestedSort = sorts[requestedMode];
+    const context = requestedMode === 'problems' ? problemContext() : null;
+    const offset = append ? list.rows.length : 0;
     if (!append) { list.rows = []; list.total = 0; list.hasMore = false; list.version = null; renderListRows([]); }
-    list.loading = true; list.error = '';
-    renderListSummary();
+    list.loading = true; list.error = ''; renderListSummary();
     try {
-      const result = await api.runtime.sendMessage({ type: requestedMode === 'problems' ? 'LCT_SEARCH_PROBLEMS' : 'LCT_SEARCH_COMPANIES', query: queries[requestedMode], window: requestedWindow, sort: requestedSort, offset: append ? list.rows.length : 0, limit: 50 });
-      if (id !== listRequest || stamp !== generation || activeDetail()) return;
+      const message = requestedMode === 'problems' ? baseProblemRequest()
+        : { type: 'LCT_SEARCH_COMPANIES', query: queries.companies, window: requestedWindow, sort: requestedSort };
+      const result = await api.runtime.sendMessage({ ...message, offset, limit: grouped() ? 1 : 50 });
+      if (id !== listRequest || stamp !== generation || activeDetail() || requestedMode !== mode || (context && context !== problemContext())) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not search the saved dataset. Try again.');
-      const rows = requestedMode === 'problems' ? result.problems : result.companies;
-      const next = Array.isArray(rows) ? rows : [];
+      const next = Array.isArray(requestedMode === 'problems' ? result.problems : result.companies)
+        ? requestedMode === 'problems' ? result.problems : result.companies : [];
+      if (requestedMode === 'problems' && append && list.sourceRevision !== sourceRevision(result)) {
+        status = result.status || status; restartProblemResults(); return;
+      }
+      const total = Number(result.total), known = new Set(append ? list.rows.map(row => requestedMode === 'problems' ? row.slug : row.name) : []);
+      const invalid = next.some(row => {
+        const key = requestedMode === 'problems' ? row?.slug : row?.name;
+        if (typeof key !== 'string' || known.has(key)) return true;
+        known.add(key); return false;
+      });
+      if (!Number.isInteger(total) || total < offset + next.length || invalid ||
+          (result.offset !== undefined && result.offset !== offset) ||
+          (result.available !== false && Boolean(result.hasMore) !== (offset + next.length < total)) ||
+          (result.available !== false && !next.length && total > offset)) throw new Error('Could not continue these results. Try again.');
       status = result.status || status;
-      list.rows = append ? list.rows.concat(next) : next;
-      list.total = Number(result.total) || 0;
-      list.available = result.available !== false;
-      list.hasMore = Boolean(result.hasMore);
+      list.rows = append ? list.rows.concat(next) : next; list.total = total;
+      list.available = result.available !== false; list.hasMore = Boolean(result.hasMore); list.sourceRevision = sourceRevision(result);
       list.version = listVersion();
       renderListRows(next, append);
+      if (requestedMode === 'problems') syncTopicGroups(result);
       renderStatus();
-    } catch (cause) { if (id === listRequest && stamp === generation) list.error = cause.message || 'Could not load the saved dataset.'; }
-    finally { if (id === listRequest && stamp === generation && !activeDetail()) { list.loading = false; renderListSummary(); } }
+    } catch (cause) {
+      if (id === listRequest && stamp === generation) list.error = cause.message || 'Could not load the saved dataset.';
+    } finally {
+      if (id === listRequest && stamp === generation && !activeDetail()) { list.loading = false; renderListSummary(); }
+    }
   }
 
   function renderTopics(frame) {
@@ -455,7 +787,7 @@
     void loadDetail();
   }
   function focusResult(container, frame) {
-    const button = Array.from(container.querySelectorAll('button[data-action]')).find(item => frame.kind === 'problem' ? item.dataset.slug === frame.slug : item.dataset.company === frame.name);
+    const button = Array.from(container.querySelectorAll('button[data-action]')).filter(item => item.getClientRects().length).find(item => frame.kind === 'problem' ? item.dataset.slug === frame.slug : item.dataset.company === frame.name);
     (button || (activeDetail() ? $('detail-back') : $('global-search'))).focus();
   }
   function back() {
@@ -470,7 +802,8 @@
     } else {
       renderListRows(list.rows); renderListSummary();
       if (list.version !== listVersion()) void loadList();
-      focusResult($('results'), previous);
+      focusResult(grouped() ? $('topic-groups') : $('results'), previous);
+      resumeTopicGroups();
     }
   }
   function switchMode(next) {
@@ -480,7 +813,7 @@
     renderShell(); $('global-search').focus(); void loadList();
   }
   function reloadCurrent() {
-    invalidate();
+    invalidate(); resetTopicGroups(); topicCatalog = [];
     list.version = null;
     for (const frame of stack) { frame.version = null; frame.sourceUrl = null; frame.acceptanceRate = null; }
     renderShell();
@@ -497,10 +830,71 @@
   $('global-search').addEventListener('input', () => {
     pendingDetail = null;
     queries[mode] = $('global-search').value.slice(0, 200);
+    if (mode === 'problems') { problemFiltersChanged(true, false); return; }
     invalidate();
     list.version = null; list.hasMore = false; list.loading = true;
     renderListSummary();
     searchTimer = setTimeout(() => void loadList(), 150);
+  });
+  $('problem-difficulty-select').addEventListener('change', () => {
+    problemView.difficulty = $('problem-difficulty-select').value; problemFiltersChanged();
+  });
+  $('topic-match-select').addEventListener('change', () => {
+    problemView.topicMatch = $('topic-match-select').value === 'all' ? 'all' : 'any'; problemFiltersChanged();
+  });
+  $('topic-picker-trigger').addEventListener('click', () => pickerOpen ? closeTopicPicker() : openTopicPicker());
+  $('topic-picker-trigger').addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); if (!pickerOpen) openTopicPicker(); }
+  });
+  $('topic-picker-search').addEventListener('input', renderTopicOptions);
+  $('topic-picker-search').addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); $('topic-picker-options').querySelector('input:not(:disabled)')?.focus(); }
+  });
+  $('topic-picker-options').addEventListener('keydown', event => {
+    if (!event.target.matches('input') || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const inputs = Array.from($('topic-picker-options').querySelectorAll('input:not(:disabled)'));
+    const index = inputs.indexOf(event.target);
+    event.preventDefault();
+    inputs[event.key === 'Home' ? 0 : event.key === 'End' ? inputs.length - 1 : Math.max(0, Math.min(inputs.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+  });
+  $('topic-picker-reset').addEventListener('click', () => { draftTopics = []; syncTopicDraft(); });
+  $('topic-picker-apply').addEventListener('click', () => {
+    problemView.topics = [...draftTopics]; closeTopicPicker(true); problemFiltersChanged();
+  });
+  $('topic-picker-clear').addEventListener('click', () => {
+    problemView.topics = []; problemFiltersChanged(); $('topic-picker-trigger').focus();
+  });
+  document.addEventListener('keydown', event => {
+    if (pickerOpen && event.key === 'Escape') { event.preventDefault(); closeTopicPicker(true); }
+  });
+  document.addEventListener('pointerdown', event => {
+    if (pickerOpen && !$('topic-picker-trigger').contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
+  });
+  document.addEventListener('focusin', event => {
+    if (pickerOpen && !$('topic-picker-trigger').contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
+  });
+  window.addEventListener('resize', () => closeTopicPicker($('topic-picker-menu').contains(document.activeElement)));
+  window.addEventListener('scroll', event => {
+    if (pickerOpen && !$('topic-picker-menu').contains(event.target)) closeTopicPicker($('topic-picker-menu').contains(document.activeElement));
+  }, true);
+  for (const view of ['list', 'topics']) $('problem-view-' + view).addEventListener('click', () => {
+    if (problemView.view === view) return;
+    pendingDetail = null; invalidate(); problemView.view = view;
+    list.version = null; renderProblemControls(); renderListSummary(); saveProblemView(); void loadList();
+  });
+  $('expand-topic-groups').addEventListener('click', () => {
+    for (const group of topicGroups.values()) {
+      group.open = true; renderTopicGroupState(group);
+      if (!group.rows.length && !group.error && group.total > 0) queueTopicGroup(group);
+    }
+  });
+  $('collapse-topic-groups').addEventListener('click', () => {
+    groupQueue.length = 0;
+    for (const group of topicGroups.values()) {
+      group.open = false;
+      if (group.queued) { group.queued = false; group.request++; }
+      renderTopicGroupState(group);
+    }
   });
   $('sort-select').addEventListener('change', () => changeSort(mode, $('sort-select').value));
   $('detail-sort-select').addEventListener('change', () => { const frame = activeDetail(); if (frame) changeSort(detailSortKey(frame), $('detail-sort-select').value); });
@@ -552,9 +946,10 @@
   });
   async function start() {
     try {
-      const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctExplorerSorts']);
+      const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctExplorerSorts', 'lctExplorerProblemView']);
       settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
       sorts = validatedSorts(stored.lctExplorerSorts);
+      if (!problemViewDirty) problemView = validatedProblemView(stored.lctExplorerProblemView);
     } catch (_) { /* The cache request below reports a usable connection error. */ }
     // Consume the initial route once. User navigation can cancel it while the
     // preferences load; automatic storage updates cannot reopen it later.

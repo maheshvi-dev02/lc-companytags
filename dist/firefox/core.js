@@ -423,36 +423,70 @@
       Array.isArray(data.companies) && data.files);
   }
 
+  function compareTopicLabels(a, b) {
+    return compareText(a, b) || (a < b ? -1 : a > b ? 1 : 0);
+  }
+
   function searchProblems(data, options = {}) {
     const window = options.window || 'all';
     const available = searchAvailability(data, window);
     const { offset, limit } = pagination(options, 50);
-    const empty = { problems: [], total: 0, offset, limit, hasMore: false, available, windowAvailable: available };
+    const sourceRevision = data && typeof data.commit === 'string' && SHA_PATTERN.test(data.commit) ? data.commit : null;
+    const empty = { problems: [], total: 0, topics: [], topicGroups: [], offset, limit, hasMore: false,
+      available, windowAvailable: available, sourceRevision };
     if (!available) return empty;
     const { query, terms } = queryTerms(options.query);
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
     const sort = selectedSort(options.sort, 'searchProblems', 'relevance');
-    const problems = [];
+    const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
+      .filter((topic) => typeof topic === 'string').map((topic) => topic.trim().toLowerCase()).filter(Boolean))) : [];
+    const topicMatch = options.topicMatch === 'all' ? 'all' : 'any';
+    const groupTopic = typeof options.groupTopic === 'string' ? options.groupTopic.trim().toLowerCase() : options.groupTopic;
+    const catalog = new Map();
+    const candidates = [];
     for (const [slug, entries] of Object.entries(data.windows[window].index)) {
       if (!SLUG_PATTERN.test(slug) || !Array.isArray(entries)) continue;
       let representative = null, knownDifficulty = null;
-      const companies = new Set();
+      const companies = new Set(), topicKeys = new Set();
       for (const { company, record } of matchingCompanyRecords(data, slug, window)) {
         companies.add(company.name);
         if (!representative) representative = record;
         if (!knownDifficulty && ['Easy', 'Medium', 'Hard'].includes(record.difficulty)) knownDifficulty = record.difficulty;
+        for (const topic of Array.isArray(record.topics) ? record.topics : []) {
+          if (typeof topic !== 'string' || !topic.trim()) continue;
+          const label = topic.trim(), key = label.toLowerCase();
+          topicKeys.add(key);
+          if (!catalog.has(key) || compareTopicLabels(label, catalog.get(key)) < 0) catalog.set(key, label);
+        }
       }
       if (!representative || !companies.size) continue;
       const problem = { slug, title: typeof representative.title === 'string' && representative.title.trim() ?
         representative.title : formatProblemTitle(slug), difficulty: knownDifficulty,
         acceptanceRate: problemForSlug(data, slug)?.acceptanceRate ?? null,
         companyCount: companies.size, url: 'https://leetcode.com/problems/' + slug + '/' };
-      if ((!difficulty || (problem.difficulty || '').toLowerCase() === difficulty) && matchesProblem(problem, terms)) problems.push(problem);
+      candidates.push({ problem, topicKeys });
     }
+    // Derive the catalog from the complete selected window before applying any
+    // filters. Reuse its deterministic labels in every row and group.
+    const topics = Array.from(catalog.values()).sort(compareTopicLabels);
+    const groups = new Map(), problems = [];
+    for (const { problem, topicKeys } of candidates) {
+      if ((difficulty && (problem.difficulty || '').toLowerCase() !== difficulty) || !matchesProblem(problem, terms)) continue;
+      if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((topic) => topicKeys.has(topic)) :
+        selectedTopics.some((topic) => topicKeys.has(topic)))) continue;
+      problem.topics = Array.from(topicKeys, (key) => catalog.get(key)).sort(compareTopicLabels);
+      // Count each unique matching problem once per source topic, before the
+      // selected group and pagination narrow the returned rows.
+      for (const key of topicKeys.size ? topicKeys : [null]) groups.set(key, (groups.get(key) || 0) + 1);
+      if (groupTopic === null ? topicKeys.size > 0 : groupTopic !== undefined && !topicKeys.has(groupTopic)) continue;
+      problems.push(problem);
+    }
+    const topicGroups = Array.from(groups, ([key, total]) => ({ topic: key === null ? null : catalog.get(key), total }))
+      .sort((a, b) => a.topic === null ? (b.topic === null ? 0 : 1) : b.topic === null ? -1 : compareTopicLabels(a.topic, b.topic));
     problems.sort((a, b) => compareProblemRows(a, b, sort, query));
     const page = problems.slice(offset, offset + limit);
-    return { problems: page, total: problems.length, offset, limit, hasMore: offset + page.length < problems.length,
-      available: true, windowAvailable: true };
+    return { problems: page, total: problems.length, topics, topicGroups, offset, limit, hasMore: offset + page.length < problems.length,
+      available: true, windowAvailable: true, sourceRevision };
   }
 
   function searchCompanies(data, options = {}) {

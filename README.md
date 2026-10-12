@@ -32,6 +32,8 @@ Click the **Company Lens toolbar icon** for detailed information. The popup offe
 
 Open **Explore dataset** in the toolbar popup to search the whole cached dataset from any website. **Problems** finds a question by title or slug and shows all recorded companies, ranked by frequency. **Companies** finds any company, including companies without a tag on the current problem, and opens all its recorded questions. Company question lists retain source ranks and frequency order, with difficulty/topic filters, title search, and **Load more** to reach every result. For example, searching Acko shows its source questions even though it has no Two Sum tag. Searches run locally and work with the bundled snapshot offline.
 
+In the Explorer's **Problems** tab, combine title search with **Difficulty** and a searchable **Topics** selector. Select several topics and use **Match any** to include problems with either topic, or **Match all** to require every selected topic. **By topic** organizes matching problems into collapsible groups with complete selected-window counts. Expand one topic, **Expand all**, or **Collapse all**; each group's **Load more** reaches the rest of its questions. Problems with multiple topics appear in each relevant group, while the overall count counts each problem once. These filters and groups work offline with your saved dataset.
+
 The company filter in the toolbar popup searches only the current problem’s tags; **Explore dataset** searches the whole collection.
 
 **Acceptance** appears beside difficulty in explorer and company practice question lists, and beneath the current problem title in the toolbar popup. Hover over the acceptance text for its meaning, or activate it with a click, tap, or Enter to read the explanation. This is the problem’s overall LeetCode submission acceptance rate, shared across companies. The inline company bar continues to show company logos, names and frequency.
@@ -89,10 +91,13 @@ Optional checks:
 ```powershell
 npm run verify:live
 npm run test:browser
+npm run test:topics
 npm run test:firefox
 ```
 
 `verify:live` downloads the real dataset into the ignored `output/live-source` directory and validates the resulting index. Add `-- --fresh` to exercise the initial ZIP path without reusing its existing verification cache. `test:browser` first verifies a fresh install using the packaged snapshot with GitHub networking blocked, then checks the actual Chromium extension against deterministic local page fixtures. It needs an existing Playwright installation and Chromium binary; use `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` to select them. `node scripts/smoke.mjs --live` additionally verifies a real GitHub refresh after `verify:live` has populated its cache.
+
+`test:topics` is a focused Chromium check of the packaged Problems Explorer using the bundled snapshot with GitHub networking blocked. It verifies topic any/all matching, difficulty, complete group counts, pagination, collapse/expand, retry, delayed responses, navigation restoration, keyboard controls, and light/dark layouts at desktop and narrow widths. It uses the same `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` overrides and saves reports/screenshots under `output/playwright`.
 
 `test:firefox` installs the actual temporary add-on in an isolated Firefox profile, blocks GitHub networking, and seeds deterministic fixtures. It first verifies offline results on a fresh install, then verifies the inline problem bar and packaged popup using Playwright and Mozilla's localhost debugging protocol, including all five windows, practice filters, inline placement, horizontal scrolling, and bar recreation. It needs an existing Playwright installation and compatible Firefox binary; set `PLAYWRIGHT_MODULE` and `FIREFOX_EXECUTABLE` to select them. Reports and preview screenshots are saved under `output/playwright`; fixture previews are not captures of the live LeetCode site. Nothing is installed in your normal browser profiles.
 

@@ -1646,3 +1646,226 @@ test('old completed checkpoints without acceptance are downloaded again before c
   assert.equal(source.calls.filter((url) => url.startsWith(core.RAW_URL)).length, 2);
   assert.equal((await service.getProblem('two-sum')).acceptanceRate, 50);
 });
+
+
+function topicExplorerFixture() {
+  const source = sourceFixture();
+  source.files = [];
+  source.csvByPath = {};
+  addWindow(source, 'Alpha', 'all', [
+    { slug: 'shared-problem', title: 'Shared Puzzle', difficulty: 'Easy', frequency: 100, topics: [' Array ', 'ARRAY'] },
+    { slug: 'array-only', title: 'Array Puzzle', difficulty: 'Easy', frequency: 90, topics: ['Array'] },
+    { slug: 'array-two', title: 'Array Two Puzzle', difficulty: 'Medium', frequency: 80, topics: ['Array', '2D Array'] },
+    { slug: 'two-dimensional', title: '2D Puzzle', difficulty: 'Medium', frequency: 70, topics: ['2D Array'] },
+    { slug: 'no-topics', title: 'Bare Puzzle', difficulty: 'Hard', frequency: 60, topics: [] },
+    { slug: 'graph-puzzle', title: 'Graph Puzzle', difficulty: 'Easy', frequency: 50, topics: ['Graph'] },
+    { slug: 'tree-puzzle', title: 'Tree Puzzle', difficulty: 'Hard', frequency: 40, topics: ['Tree'] }
+  ]);
+  addWindow(source, 'Beta', 'all', [
+    { slug: 'shared-problem', title: 'Shared Puzzle', difficulty: 'Easy', frequency: 100, topics: ['hash table', 'Hash Table'] },
+    { slug: 'array-only', title: 'Array Puzzle', difficulty: 'Easy', frequency: 80, topics: ['array'] }
+  ]);
+  addWindow(source, 'Alpha', '30d', [
+    { slug: 'shared-problem', title: 'Shared Puzzle', difficulty: 'Easy', frequency: 70, topics: ['Graph'] },
+    { slug: 'no-topics', title: 'Bare Puzzle', difficulty: 'Hard', frequency: 60, topics: [] }
+  ]);
+  addWindow(source, 'Beta', '30d', [
+    { slug: 'shared-problem', title: 'Shared Puzzle', difficulty: 'Easy', frequency: 30, topics: ['String'] }
+  ]);
+  addWindow(source, 'Alpha', 'older', []);
+  const files = core.selectWindowFiles({ truncated: false, tree: source.files });
+  const parsed = Object.fromEntries(files.map((file) => [file.path, {
+    sha: file.sha, records: core.parseCompanyRecords(source.csvByPath[file.path])
+  }]));
+  const data = core.buildData(files, parsed, SHA_A, '2026-08-16T22:18:35Z', new Date(FIXED_NOW).toISOString());
+  const storage = memoryStorage({ lctData: data, lctStatus: { phase: 'idle', dataSource: 'live', lastCheckedAt: new Date(FIXED_NOW).toISOString() } });
+  return { source, data, storage, service: makeService(storage, source) };
+}
+
+const lowerTopics = (topics) => topics.map((topic) => topic.toLowerCase());
+const lowerGroups = (groups) => groups.map(({ topic, total }) => [topic === null ? null : topic.toLowerCase(), total]);
+
+test('global problem topics union valid company rows, deduplicate case, and retain deterministic labels without mutation', () => {
+  const { data } = topicExplorerFixture();
+  const original = structuredClone(data);
+  const first = core.searchProblems(data, { sort: 'name-asc' });
+  const shared = first.problems.find((problem) => problem.slug === 'shared-problem');
+  assert.deepEqual(lowerTopics(shared.topics), ['array', 'hash table']);
+  assert.equal(shared.companyCount, 2);
+  assert.equal(shared.acceptanceRate, 50);
+  assert.deepEqual(lowerTopics(first.topics), ['2d array', 'array', 'graph', 'hash table', 'tree']);
+  assert.equal(first.sourceRevision, SHA_A);
+  for (const row of first.problems) for (const topic of row.topics) assert.ok(first.topics.includes(topic), 'Rows reuse the canonical catalog labels.');
+  assert.deepEqual(lowerGroups(first.topicGroups), [['2d array', 2], ['array', 3], ['graph', 1], ['hash table', 1], ['tree', 1], [null, 1]]);
+  const reordered = structuredClone(data);
+  for (const entries of Object.values(reordered.windows.all.index)) entries.reverse();
+  assert.deepEqual(core.searchProblems(reordered, { sort: 'name-asc' }), first, 'Case labels do not depend on reverse-index traversal order.');
+  shared.topics.push('Injected Topic');
+  first.topics.push('Injected Catalog');
+  first.topicGroups[0].total = 999;
+  const repeated = core.searchProblems(data, { sort: 'name-asc' });
+  assert.equal(repeated.problems.find((problem) => problem.slug === 'shared-problem').topics.includes('Injected Topic'), false);
+  assert.equal(repeated.topics.includes('Injected Catalog'), false);
+  assert.equal(repeated.topicGroups[0].total, 2);
+  assert.deepEqual(structuredClone(data), original, 'Topic derivation never mutates source records, ranks, or indexes.');
+});
+
+test('global topics exclude stale, duplicate, missing, and malformed company associations', () => {
+  const { data } = topicExplorerFixture();
+  const baseline = core.searchProblems(data, { query: 'shared-problem' });
+  const alpha = data.companies.findIndex((company) => company.name === 'Alpha');
+  const beta = data.companies.findIndex((company) => company.name === 'Beta');
+  const file = data.files['Alpha/' + core.WINDOW_FILES.all];
+  const sharedIndex = file.records.findIndex((record) => record.slug === 'shared-problem');
+  const wrongIndex = file.records.push({ ...file.records[sharedIndex], slug: 'unindexed-wrong-record', topics: ['Stale Topic'] }) - 1;
+  const duplicateRecord = file.records.push({ ...file.records[sharedIndex], topics: ['Duplicate Company Topic'] }) - 1;
+  const duplicateCompany = data.companies.push({ ...data.companies[beta] }) - 1;
+  const missingCompany = data.companies.push({ name: 'Missing', sourceUrl: core.SOURCE_URL }) - 1;
+  data.windows.all.index['shared-problem'].push([alpha, sharedIndex], [alpha, wrongIndex], [alpha, duplicateRecord],
+    [duplicateCompany, 0], [missingCompany, 0], [alpha, -1], [alpha, 999], [-1, 0], [999, 0], ['0', 0], null);
+  assert.deepEqual(core.searchProblems(data, { query: 'shared-problem' }), baseline);
+});
+
+test('global topic any/all filters use exact membership across companies and compose with query, difficulty, and sorting', async () => {
+  const { service, source } = topicExplorerFixture();
+  const any = await service.searchProblems({ topics: ['ARRAY', '2D array'], topicMatch: 'any', sort: 'name-asc' });
+  assert.deepEqual(any.problems.map((problem) => problem.slug), ['two-dimensional', 'array-only', 'array-two', 'shared-problem']);
+  const all = await service.searchProblems({ topics: ['Array', '2D Array'], topicMatch: 'all' });
+  assert.deepEqual(all.problems.map((problem) => problem.slug), ['array-two']);
+  const acrossCompanies = await service.searchProblems({ topics: ['  ARRAY  ', 'array', 'HASH TABLE'], topicMatch: 'all' });
+  assert.deepEqual(acrossCompanies.problems.map((problem) => problem.slug), ['shared-problem']);
+  assert.equal((await service.searchProblems({ topics: ['Hash'] })).total, 0, 'Topic names are never substring matches.');
+  assert.equal((await service.searchProblems({ topics: ['Array'] })).problems.some((problem) => problem.slug === 'two-dimensional'), false);
+  const composed = await service.searchProblems({ topics: ['Array'], query: 'puzzle', difficulty: 'EASY', sort: 'name-desc', offset: 1, limit: 1 });
+  assert.deepEqual(composed.problems.map((problem) => problem.slug), ['array-only']);
+  assert.equal(composed.total, 2);
+  assert.equal(composed.hasMore, false);
+  assert.deepEqual(lowerGroups(composed.topicGroups), [['array', 2], ['hash table', 1]]);
+  assert.deepEqual(lowerTopics(composed.topics), ['2d array', 'array', 'graph', 'hash table', 'tree']);
+  for (const topicMatch of ['any', 'all']) assert.equal((await service.searchProblems({ topics: [], topicMatch })).total, 7);
+  assert.equal(source.calls.length, 0);
+});
+
+test('topic group selection constrains rows and totals after full base-filter group counts', async () => {
+  const { service } = topicExplorerFixture();
+  const options = { topics: ['Array'], query: 'puzzle', difficulty: 'easy', sort: 'name-desc', limit: 1 };
+  const base = await service.searchProblems(options);
+  assert.equal(base.total, 2);
+  assert.equal(base.hasMore, true);
+  const hash = await service.searchProblems({ ...options, groupTopic: '  HASH Table  ' });
+  assert.equal(hash.total, 1);
+  assert.deepEqual(hash.problems.map((problem) => problem.slug), ['shared-problem']);
+  assert.equal(hash.hasMore, false);
+  assert.deepEqual(hash.topicGroups, base.topicGroups);
+  assert.deepEqual(hash.topics, base.topics);
+  const emptyGroup = await service.searchProblems({ ...options, groupTopic: null });
+  assert.equal(emptyGroup.available, true);
+  assert.equal(emptyGroup.total, 0);
+  assert.deepEqual(emptyGroup.topicGroups, base.topicGroups);
+  const bare = await service.searchProblems({ groupTopic: null });
+  assert.equal(bare.total, 1);
+  assert.deepEqual(bare.problems.map((problem) => [problem.slug, problem.topics]), [['no-topics', []]]);
+  assert.deepEqual(lowerGroups(bare.topicGroups).at(-1), [null, 1]);
+  const missingGroup = await service.searchProblems({ groupTopic: 'Unknown Topic' });
+  assert.equal(missingGroup.total, 0);
+  assert.deepEqual(missingGroup.topicGroups, bare.topicGroups);
+  const noBaseMatch = await service.searchProblems({ topics: ['Unknown Topic'] });
+  assert.equal(noBaseMatch.available, true);
+  assert.equal(noBaseMatch.total, 0);
+  assert.deepEqual(noBaseMatch.topicGroups, []);
+  assert.deepEqual(noBaseMatch.topics, bare.topics);
+});
+
+test('global topic catalog and group totals cover all records before pagination, including group pages', async () => {
+  const { service, source } = globalExplorerFixture();
+  const first = await service.searchProblems({ groupTopic: 'Array', sort: 'name-asc', limit: 17 });
+  assert.equal(first.total, 80, 'Includes 77 Array exercises and 3 distinct source questions, beyond a first page.');
+  assert.equal(first.problems.length, 17);
+  assert.equal(first.hasMore, true);
+  assert.deepEqual(lowerTopics(first.topics), ['array', 'graph', 'hash table', 'string', 'two pointers']);
+  assert.deepEqual(lowerGroups(first.topicGroups), [['array', 80], ['graph', 77], ['hash table', 2], ['string', 3], ['two pointers', 1]]);
+  const slugs = [];
+  for (let offset = 0; ; offset += 17) {
+    const page = await service.searchProblems({ groupTopic: 'Array', sort: 'name-asc', limit: 17, offset });
+    assert.equal(page.total, 80);
+    assert.deepEqual(page.topicGroups, first.topicGroups);
+    assert.deepEqual(page.topics, first.topics);
+    slugs.push(...page.problems.map((problem) => problem.slug));
+    if (!page.hasMore) break;
+  }
+  assert.equal(slugs.length, 80);
+  assert.equal(new Set(slugs).size, 80);
+  const selected = await service.searchProblems({ topics: ['Array'], limit: 1 });
+  assert.equal(selected.total, 80);
+  assert.deepEqual(lowerGroups(selected.topicGroups), [['array', 80], ['hash table', 2]], 'Groups respect the base topic filter but count its entire match set.');
+  const tail = await service.searchProblems({ groupTopic: 'Array', offset: 1000, limit: 17 });
+  assert.equal(tail.total, 80);
+  assert.equal(tail.hasMore, false);
+  assert.deepEqual(tail.problems, []);
+  assert.deepEqual(tail.topicGroups, first.topicGroups);
+  assert.equal(source.calls.length, 0);
+});
+
+test('global topics isolate time windows and distinguish empty files, no matches, unavailable and legacy caches', async () => {
+  const { service, source } = topicExplorerFixture();
+  const recent = await service.searchProblems({ window: '30d' });
+  assert.equal(recent.total, 2);
+  assert.deepEqual(lowerTopics(recent.topics), ['graph', 'string']);
+  assert.deepEqual(lowerTopics(recent.problems.find((problem) => problem.slug === 'shared-problem').topics), ['graph', 'string']);
+  assert.deepEqual(lowerGroups(recent.topicGroups), [['graph', 1], ['string', 1], [null, 1]]);
+  assert.equal((await service.searchProblems({ window: '30d', topics: ['Array'] })).total, 0);
+  assert.equal((await service.searchProblems({ window: 'all', topics: ['String'] })).total, 0);
+  const emptyFile = await service.searchProblems({ window: 'older' });
+  assert.equal(emptyFile.available, true);
+  assert.equal(emptyFile.total, 0);
+  assert.deepEqual(emptyFile.topics, []);
+  assert.deepEqual(emptyFile.topicGroups, []);
+  assert.equal(emptyFile.sourceRevision, SHA_A);
+  const unavailable = await service.searchProblems({ window: '3m' });
+  assert.equal(unavailable.available, false);
+  assert.equal(unavailable.windowAvailable, false);
+  assert.deepEqual(unavailable.topics, []);
+  assert.deepEqual(unavailable.topicGroups, []);
+  assert.equal(unavailable.sourceRevision, SHA_A);
+  const noMatch = await service.searchProblems({ query: 'no matching text', groupTopic: 'Array' });
+  assert.equal(noMatch.available, true);
+  assert.equal(noMatch.total, 0);
+  assert.equal(noMatch.topics.length, 5);
+  assert.deepEqual(noMatch.topicGroups, []);
+  for (const storage of [memoryStorage(), memoryStorage(legacyState())]) {
+    const missing = await makeService(storage, source).searchProblems({ topics: ['Array'] });
+    assert.equal(missing.available, false);
+    assert.deepEqual(missing.topics, []);
+    assert.deepEqual(missing.topicGroups, []);
+    assert.equal(missing.hasMore, false);
+  }
+  assert.equal(core.searchProblems(null).sourceRevision, null);
+  assert.equal(source.calls.length, 0);
+});
+
+test('global topic parameters are validated before storage, with trimmed exact values and bounded arrays', async () => {
+  const source = sourceFixture();
+  const storage = memoryStorage();
+  let reads = 0;
+  const get = storage.get;
+  storage.get = async (...args) => { reads += 1; return get(...args); };
+  const service = makeService(storage, source);
+  const invalid = [
+    ...[null, false, 0, 'Array', {}, new Set(['Array'])].map((topics) => ({ topics })),
+    ...[[null], [undefined], [false], [0], [{}], [[]], [''], ['  '], ['Array', false], ['x'.repeat(201)], Array(1), Array(257).fill('Array')].map((topics) => ({ topics })),
+    ...[null, false, 0, '', 'ANY', 'or', [], {}].map((topicMatch) => ({ topicMatch })),
+    ...[false, 0, '', '  ', 'x'.repeat(201), [], {}].map((groupTopic) => ({ groupTopic }))
+  ];
+  for (const options of invalid) await assert.rejects(service.searchProblems(options), /topic/i, JSON.stringify(options));
+  assert.equal(reads, 0, 'Every malformed topic selection is rejected before initialization reads storage.');
+  assert.equal(source.calls.length, 0);
+  assert.equal(storage.writes.length, 0);
+  const fixture = topicExplorerFixture();
+  const options = { topics: ['  array  ', ' HASH TABLE ', 'array'], topicMatch: 'all', groupTopic: '  hash table  ' };
+  const before = structuredClone(options);
+  assert.equal((await fixture.service.searchProblems(options)).total, 1);
+  assert.deepEqual(options, before, 'Trimming and deduplication do not alter caller preferences.');
+  assert.equal((await fixture.service.searchProblems({ topics: Array(256).fill('Array') })).total, 3);
+  assert.equal((await fixture.service.searchProblems({ topics: [' ' + 'x'.repeat(200) + ' '] })).total, 0);
+  assert.equal((await fixture.service.searchProblems({ groupTopic: ' ' + 'x'.repeat(200) + ' ' })).total, 0);
+});
