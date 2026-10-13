@@ -25,7 +25,7 @@
     <details id="target-coverage" class="target-coverage" hidden><summary id="target-coverage-title"></summary><p id="target-coverage-topics"></p></details>
     <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><button id="target-edit" type="button" hidden>Edit collection</button><span id="target-saved-status" role="status"></span></div>
     <details id="target-collection" class="target-collection"><summary id="target-collection-title">Saved targets</summary><p id="target-collection-empty" class="target-help">Company prep lists are saved here automatically.</p><ul id="target-collection-list"></ul></details>
-    <ul id="target-results" class="target-results" aria-label="Target problems"></ul>`;
+    <ul id="target-results" class="target-results" aria-label="Target problems" tabindex="-1"></ul>`;
   if (popup) document.querySelector('.problem').after(panel); else $('detail-view').after(panel);
   $('target-expand').hidden = !popup;
   controls.enhance(['target-company', 'target-difficulty', 'target-topic', 'target-status', 'target-count']);
@@ -154,6 +154,10 @@
     $('target-save').textContent = saving ? 'Saving…' : 'Save to collection';
     $('target-saved-status').textContent = currentSaved ? 'Saved to collection' : '';
     $('target-save').hidden = Boolean(currentSaved) || Boolean(editing);
+    for (const tile of $('target-collection-list').children) {
+      const active = tile.dataset.targetId === currentSaved?.id; tile.toggleAttribute('data-active', active);
+      tile.querySelector('.target-saved-open').setAttribute('aria-current', String(active));
+    }
     $('target-edit').hidden = !currentSaved || Boolean(editing);
     $('target-saved-status').textContent = currentSaved ? 'Saved · ' + currentSaved.name : '';
   }
@@ -168,7 +172,6 @@
   }
   const windowLabel = value => ({ all: 'All time', '30d': '30 days', '3m': '3 months', '6m': '6 months', older: 'Older than 6 months' })[value];
   const collectionIcons = {
-    Open: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
     Edit: '<path d="m16 3 5 5-13 13-5 1 1-5L16 3ZM13 6l5 5"/>',
     Clone: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
     CSV: '<path d="M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4"/>',
@@ -184,9 +187,15 @@
     $('target-collection-empty').hidden = Boolean(savedTargets.length);
     $('target-collection-list').replaceChildren(...savedTargets.map(target => {
       const li = node('li', 'target-saved-entry'), info = node('div', 'target-saved-info');
-      info.append(node('h3', '', target.name), node('p', '', [target.context.company || 'Any company', target.questions.length + ' questions', windowLabel(target.context.window), target.context.difficulty || 'All difficulties', ...(target.context.topics || []), target.context.completionFilter !== 'all' ? target.context.completionFilter === 'solved' ? 'Solved' : 'Not solved' : '', new Date(target.updatedAt).toLocaleDateString()].filter(Boolean).join(' · ')));
+      li.dataset.targetId = target.id; li.toggleAttribute('data-active', currentSaved?.id === target.id);
+      const heading = node('h3'), open = node('button', 'target-saved-open', target.name); open.type = 'button';
+      open.setAttribute('aria-label', 'Open collection · ' + target.name); open.setAttribute('aria-current', String(currentSaved?.id === target.id));
+      const activate = () => { openSaved(target); $('target-results').scrollIntoView({ block: 'nearest' }); $('target-results').focus({ preventScroll: true }); };
+      open.addEventListener('click', activate); heading.append(open);
+      li.addEventListener('click', event => { if (!event.target.closest('button')) activate(); });
+      info.append(heading, node('p', '', [target.context.company || 'Any company', target.questions.length + ' questions', windowLabel(target.context.window), target.context.difficulty || 'All difficulties', ...(target.context.topics || []), target.context.completionFilter !== 'all' ? target.context.completionFilter === 'solved' ? 'Solved' : 'Not solved' : '', new Date(target.updatedAt).toLocaleDateString()].filter(Boolean).join(' · ')));
       const actions = node('div', 'target-saved-actions');
-      for (const [label, callback] of [['Open', () => openSaved(target)], ['Edit', () => startEdit(target, 'edit')], ['Clone', () => startEdit(target, 'clone')], ['CSV', () => download(target)], ['Remove', async button => {
+      for (const [label, callback] of [['Edit', () => startEdit(target, 'edit')], ['Clone', () => startEdit(target, 'clone')], ['CSV', () => download(target)], ['Remove', async button => {
         button.disabled = true;
         try {
           const result = await api.runtime.sendMessage({ type: 'LCT_TARGET_REMOVE', id: target.id });

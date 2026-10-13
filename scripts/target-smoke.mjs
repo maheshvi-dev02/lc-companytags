@@ -120,7 +120,7 @@ try {
   await expanded.locator('#target-collection').evaluate(node => { node.open = true; });
   await expanded.locator('.target-saved-entry').filter({ has: expanded.locator('h3', { hasText: /^Microsoft next week$/ }) }).locator('[data-collection-action="Remove"]').click();
   await expanded.waitForFunction(() => document.querySelectorAll('.target-saved-entry').length === 1);
-  await expanded.locator('.target-saved-actions [data-collection-action="Open"]').click();
+  await expanded.locator('.target-saved-info').click();
   report.checks.push('Popup rename, named exact clone, Medium-only 12-question update, original preserved, and Cancel restores saved questions');
   await choose(expanded, 'target-status', 'Not solved');
   await expanded.locator('#target-generate').click();
@@ -128,7 +128,8 @@ try {
   assert.equal(await expanded.locator('.target-question').count(), 0);
   report.checks.push('Not-solved without a LeetCode tab shows guidance, not fake results');
   await expanded.locator('#target-collection').evaluate(node => { node.open = true; });
-  await expanded.locator('.target-saved-actions [data-collection-action="Open"]').click();
+  await expanded.locator('.target-saved-open').focus();
+  await expanded.locator('.target-saved-open').press('Enter');
   assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), expectedLinks);
   await expanded.locator('.target-saved-actions [data-collection-action="Remove"]').click();
   await expanded.waitForFunction(() => !document.querySelector('.target-saved-entry'));
