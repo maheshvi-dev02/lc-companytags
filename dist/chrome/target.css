@@ -51,7 +51,8 @@ body[data-target] #search-view,body[data-target] #detail-view,body[data-target] 
 .target-saved-info h3 { margin:0; font-size:var(--font-name); overflow-wrap:anywhere; }
 .target-saved-info p { margin:5px 0 0; font-size:var(--font-caption); color:var(--muted); }
 .target-saved-actions { display:flex; flex-wrap:wrap; gap:6px; flex:none; }
-.target-saved-actions button { padding:6px 10px; font-size:var(--font-caption); }
+.target-saved-actions button { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:7px; flex:none; border:1px solid var(--line); border-radius:8px; background:var(--wash); color:var(--ink); }
+.target-saved-actions svg { width:16px; height:16px; flex:none; }
 .target-view[data-popup] .target-saved-entry { align-items:flex-start; flex-direction:column; }
 @media(max-width:540px) { .target-saved-entry { align-items:flex-start; flex-direction:column; } }
 .target-editor { margin:0 0 16px; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--wash); }

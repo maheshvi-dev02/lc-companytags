@@ -166,6 +166,18 @@
     } catch (error) { message('Could not download CSV. ' + error.message, true); }
   }
   const windowLabel = value => ({ all: 'All time', '30d': '30 days', '3m': '3 months', '6m': '6 months', older: 'Older than 6 months' })[value];
+  const collectionIcons = {
+    Open: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+    Edit: '<path d="m16 3 5 5-13 13-5 1 1-5L16 3ZM13 6l5 5"/>',
+    Clone: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+    CSV: '<path d="M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4"/>',
+    Remove: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>'
+  };
+  function collectionIcon(action) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' })) svg.setAttribute(key, value);
+    svg.innerHTML = collectionIcons[action]; return svg;
+  }
   function renderCollection() {
     $('target-collection-title').textContent = 'Saved targets' + (savedTargets.length ? ' · ' + savedTargets.length : '');
     $('target-collection-empty').hidden = Boolean(savedTargets.length);
@@ -183,7 +195,9 @@
           await loadCollection();
         } catch (error) { message(error.message, true); button.disabled = false; }
       }]]) {
-        const button = node('button', '', label); button.type = 'button'; button.setAttribute('aria-label', label + ' saved target for ' + (target.context.company || 'random problem'));
+        const button = node('button', 'target-saved-action'); button.type = 'button'; button.dataset.collectionAction = label;
+        button.title = label === 'CSV' ? 'Download CSV' : label + ' collection';
+        button.setAttribute('aria-label', button.title + ' · ' + target.name); button.append(collectionIcon(label));
         button.addEventListener('click', () => void callback(button)); actions.append(button);
       }
       li.append(info, actions); return li;

@@ -52,7 +52,7 @@ try {
   await page.reload(); await page.locator('#target-results .target-question').waitFor();
   assert.equal(await page.locator('.target-open').getAttribute('href'), pickedSlug);
   await page.locator('#target-collection').evaluate(node => { node.open = true; });
-  await page.locator('.target-saved-actions button').filter({ hasText: /^Remove$/ }).click();
+  await page.locator('.target-saved-actions [data-collection-action="Remove"]').click();
   await page.waitForFunction(() => !document.querySelector('.target-saved-entry'));
   report.checks.push('Random company + difficulty + topic filters, distinct next pick, manual save and exact restoration');
   await page.locator('#target-plan').click();
@@ -98,7 +98,7 @@ try {
   assert.deepEqual(await popup.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), expectedLinks);
   await expanded.locator('#target-collection').evaluate(node => { node.open = true; });
   const namedRow = expanded.locator('.target-saved-entry').filter({ has: expanded.locator('h3', { hasText: /^Microsoft warmup$/ }) });
-  await namedRow.locator('button').filter({ hasText: /^Clone$/ }).click();
+  await namedRow.locator('[data-collection-action="Clone"]').click();
   await expanded.locator('#target-name').fill('Microsoft next week');
   await expanded.locator('#target-rename').click();
   await expanded.waitForFunction(() => document.querySelector('#target-saved-status').textContent === 'Saved · Microsoft next week');
@@ -116,9 +116,9 @@ try {
   await expanded.locator('#target-edit').click(); await choose(expanded, 'target-difficulty', 'Hard'); await expanded.locator('#target-cancel').click();
   assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), beforeCancel);
   await expanded.locator('#target-collection').evaluate(node => { node.open = true; });
-  await expanded.locator('.target-saved-entry').filter({ has: expanded.locator('h3', { hasText: /^Microsoft next week$/ }) }).locator('button').filter({ hasText: /^Remove$/ }).click();
+  await expanded.locator('.target-saved-entry').filter({ has: expanded.locator('h3', { hasText: /^Microsoft next week$/ }) }).locator('[data-collection-action="Remove"]').click();
   await expanded.waitForFunction(() => document.querySelectorAll('.target-saved-entry').length === 1);
-  await expanded.locator('.target-saved-actions button').filter({ hasText: /^Open$/ }).click();
+  await expanded.locator('.target-saved-actions [data-collection-action="Open"]').click();
   report.checks.push('Popup rename, named exact clone, Medium-only 12-question update, original preserved, and Cancel restores saved questions');
   await choose(expanded, 'target-status', 'Not solved');
   await expanded.locator('#target-generate').click();
@@ -126,9 +126,9 @@ try {
   assert.equal(await expanded.locator('.target-question').count(), 0);
   report.checks.push('Not-solved without a LeetCode tab shows guidance, not fake results');
   await expanded.locator('#target-collection').evaluate(node => { node.open = true; });
-  await expanded.locator('.target-saved-actions button').filter({ hasText: /^Open$/ }).click();
+  await expanded.locator('.target-saved-actions [data-collection-action="Open"]').click();
   assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), expectedLinks);
-  await expanded.locator('.target-saved-actions button').filter({ hasText: /^Remove$/ }).click();
+  await expanded.locator('.target-saved-actions [data-collection-action="Remove"]').click();
   await expanded.waitForFunction(() => !document.querySelector('.target-saved-entry'));
   assert.equal(await expanded.locator('#target-results .target-question').count(), 20);
   assert.equal(await expanded.locator('#target-save').isVisible(), true);
