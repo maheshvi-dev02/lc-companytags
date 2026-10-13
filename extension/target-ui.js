@@ -18,25 +18,28 @@
     </div><button id="target-generate" type="button" class="target-submit">Pick a problem</button>
     <p id="target-message" class="target-message" role="status" aria-live="polite">Choose optional filters, then pick a problem.</p>
     <details id="target-coverage" class="target-coverage" hidden><summary id="target-coverage-title"></summary><p id="target-coverage-topics"></p></details>
+    <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><span id="target-saved-status" role="status"></span></div>
+    <details id="target-collection" class="target-collection"><summary id="target-collection-title">Saved targets</summary><p id="target-collection-empty" class="target-help">Company prep lists are saved here automatically.</p><ul id="target-collection-list"></ul></details>
     <ul id="target-results" class="target-results" aria-label="Target problems"></ul>`;
   if (popup) document.querySelector('.problem').after(panel); else $('detail-view').after(panel);
   $('target-expand').hidden = !popup;
   controls.enhance(['target-company', 'target-difficulty', 'target-topic', 'target-status', 'target-count']);
   let initialized = false, initializing = null, companies = [], kind = 'random', generation = 0, catalogGeneration = 0;
   let recent = [], recentContext = '', lastResult = null, hasPlan = false, saveQueue = Promise.resolve();
+  let savedTargets = [], currentSaved = null, lastContext = null, saving = 0;
   const visible = () => document.body.hasAttribute('data-target');
   function node(tag, cls, text) { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; }
   function message(text, error = false) { $('target-message').textContent = text; $('target-message').toggleAttribute('data-error', error); }
-  function clearResults(text) { generation++; $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
-  function preferences() { return { targetMode: kind, company: $('target-company').value, difficulty: $('target-difficulty').value, topic: $('target-topic').value, completionFilter: $('target-status').value, count: Number($('target-count').value), hasPlan }; }
+  function clearResults(text) { generation++; $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; currentSaved = null; lastContext = null; renderActions(); $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
+  function preferences() { return { targetMode: kind, company: $('target-company').value, difficulty: $('target-difficulty').value, topic: $('target-topic').value, completionFilter: $('target-status').value, count: Number($('target-count').value), hasPlan, savedTargetId: currentSaved?.id || null }; }
   function save() { const value = preferences(); saveQueue = saveQueue.then(() => api.storage.local.set({ lctTargetPreferences: value })).catch(() => {}); return saveQueue; }
   function setKind(value) {
     kind = value; $('target-random').setAttribute('aria-pressed', String(kind === 'random')); $('target-plan').setAttribute('aria-pressed', String(kind === 'plan'));
-    $('target-count-wrap').hidden = kind !== 'plan'; $('target-company-search').closest('label').hidden = kind !== 'plan'; $('target-company').closest('label').hidden = kind !== 'plan'; $('target-company-label').textContent = kind === 'plan' ? 'Target company' : 'Company (optional)';
+    $('target-count-wrap').hidden = kind !== 'plan'; $('target-company-label').textContent = kind === 'plan' ? 'Target company' : 'Company (optional)';
     $('target-generate').textContent = kind === 'plan' ? 'Build prep list' : 'Pick a problem';
     $('target-help').textContent = kind === 'plan' ? 'Prioritize company frequency while covering different topics.' : 'Choose optional filters. Recent picks are skipped while you keep picking.';
   }
-  function request(targetMode = kind) { return { type: 'LCT_TARGET', targetMode, company: kind === 'plan' ? $('target-company').value : '',
+  function request(targetMode = kind) { return { type: 'LCT_TARGET', targetMode, company: $('target-company').value,
     difficulty: $('target-difficulty').value, topics: $('target-topic').value ? [$('target-topic').value] : [],
     completionFilter: $('target-status').value, count: Number($('target-count').value), window: $('window-select').value }; }
   function companyOptions() {
@@ -84,7 +87,10 @@
       await catalog(); if ([...$('target-topic').options].some(option => option.value === pref.topic)) $('target-topic').value = pref.topic;
       for (const id of ['target-company', 'target-difficulty', 'target-status', 'target-topic', 'target-count']) controls.sync($(id));
       initialized = true; message(kind === 'plan' ? 'Choose a company, then build your prep list.' : 'Choose optional filters, then pick a problem.');
-      if (kind === 'plan' && hasPlan && $('target-company').value && visible()) await generate();
+      await loadCollection();
+      const saved = savedTargets.find(target => target.id === pref.savedTargetId);
+      if (saved && saved.context.targetMode === kind && visible()) openSaved(saved);
+      else if (kind === 'plan' && hasPlan && !Object.hasOwn(pref, 'savedTargetId') && $('target-company').value && visible()) await generate();
     })().finally(() => { initializing = null; for (const id of ['target-random', 'target-plan', 'target-company-search', 'target-company', 'target-difficulty', 'target-topic', 'target-status', 'target-count', 'target-generate']) { $(id).disabled = false; if ($(id).tagName === 'SELECT') controls.sync($(id)); } });
     return initializing;
   }
@@ -108,6 +114,7 @@
     if (kind === 'plan') { $('target-coverage-title').textContent = (result.coveredTopics || []).length + ' of ' + result.availableTopicCount + ' matching topics covered'; $('target-coverage-topics').textContent = (result.coveredTopics || []).join(' · '); }
     message(rows.length ? kind === 'plan' ? rows.length + ' questions · ' + (result.coveredTopics || []).length + ' topics · ' + $('target-company').value : 'Picked from ' + result.total.toLocaleString() + ' matching problems.' : 'No matching problems. Try another difficulty, topic, status, or time window.');
     if (result.completion?.unknownCount > 0) message($('target-message').textContent + ' ' + result.completion.unknownCount + ' unknown statuses excluded.');
+    renderActions();
   }
   async function generate() {
     controls.close();
@@ -122,10 +129,90 @@
       if (query.completionFilter !== 'all' && result.completion?.state !== 'ready') throw new Error(result.completion?.state === 'signed-out' ? 'Sign in to LeetCode, then try again.' : result.completion?.state === 'no-tab' ? 'Open a signed-in LeetCode tab, then try again.' : 'Could not check completion status. Refresh your LeetCode tab or choose All problems.');
       if (!result.available) throw new Error('The saved dataset is unavailable for this time window. Refresh the dataset or choose another window.');
       if (kind === 'random' && result.questions?.length) recent.push(result.questions[0].slug);
-      hasPlan = kind === 'plan' && Boolean(result.questions?.length); render(result); void save();
+      hasPlan = kind === 'plan' && Boolean(result.questions?.length); lastContext = query; render(result);
+      if (hasPlan) await saveCurrent(true);
+      if (id === generation) void save();
     } catch (error) { if (id === generation) message(error.message, true); }
     finally { if (id === generation) { $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); } }
   }
+  function renderActions() {
+    $('target-actions').hidden = !lastResult?.questions?.length;
+    $('target-save').disabled = saving || Boolean(currentSaved);
+    $('target-download').disabled = !lastResult?.questions?.length;
+    $('target-save').textContent = saving ? 'Saving…' : 'Save to collection';
+    $('target-saved-status').textContent = currentSaved ? 'Saved to collection' : '';
+    $('target-save').hidden = Boolean(currentSaved);
+  }
+  function targetSnapshot() { return { ...lastResult, context: lastContext }; }
+  function download(target) {
+    try {
+      const blob = new Blob([globalThis.LCTTargetCollection.csv(target)], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = 'company-lens-' + (target.context.company || 'random').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + target.context.window + '.csv';
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (error) { message('Could not download CSV. ' + error.message, true); }
+  }
+  const windowLabel = value => ({ all: 'All time', '30d': '30 days', '3m': '3 months', '6m': '6 months', older: 'Older than 6 months' })[value];
+  function renderCollection() {
+    $('target-collection-title').textContent = 'Saved targets' + (savedTargets.length ? ' · ' + savedTargets.length : '');
+    $('target-collection-empty').hidden = Boolean(savedTargets.length);
+    $('target-collection-list').replaceChildren(...savedTargets.map(target => {
+      const li = node('li', 'target-saved-entry'), info = node('div', 'target-saved-info');
+      info.append(node('h3', '', target.context.company || 'Random problem'), node('p', '', target.questions.length + ' questions · ' + windowLabel(target.context.window) + ' · ' + new Date(target.createdAt).toLocaleDateString()));
+      const actions = node('div', 'target-saved-actions');
+      for (const [label, callback] of [['Open', () => openSaved(target)], ['CSV', () => download(target)], ['Remove', async button => {
+        button.disabled = true;
+        try {
+          const result = await api.runtime.sendMessage({ type: 'LCT_TARGET_REMOVE', id: target.id });
+          if (!result?.ok) throw new Error(result?.error || 'Could not remove saved Target.');
+          if (currentSaved?.id === target.id) { currentSaved = null; renderActions(); void save(); }
+          await loadCollection();
+        } catch (error) { message(error.message, true); button.disabled = false; }
+      }]]) {
+        const button = node('button', '', label); button.type = 'button'; button.setAttribute('aria-label', label + ' saved target for ' + (target.context.company || 'random problem'));
+        button.addEventListener('click', () => void callback(button)); actions.append(button);
+      }
+      li.append(info, actions); return li;
+    }));
+  }
+  async function loadCollection() {
+    const result = await api.runtime.sendMessage({ type: 'LCT_TARGET_LIST' });
+    if (!result?.ok) throw new Error(result?.error || 'Could not load your saved targets.');
+    savedTargets = result.targets || [];
+    if (currentSaved && !savedTargets.some(target => target.id === currentSaved.id)) { currentSaved = null; renderActions(); void save(); }
+    renderCollection();
+  }
+  async function saveCurrent(automatic = false) {
+    if ((saving && !automatic) || currentSaved || !lastResult?.questions?.length) return;
+    const resultRef = lastResult, id = generation, target = targetSnapshot();
+    saving++; renderActions();
+    try {
+      const result = await api.runtime.sendMessage({ type: 'LCT_TARGET_SAVE', target });
+      if (!result?.ok) throw new Error(result?.error || 'Could not save your target.');
+      if (id === generation && lastResult === resultRef) { currentSaved = result.target; await save(); }
+      await loadCollection();
+    } catch (error) { if (id === generation) message('Your questions are ready, but could not be saved. ' + error.message, true); }
+    finally { saving--; renderActions(); }
+  }
+  function openSaved(target) {
+    clearResults(); setKind(target.context.targetMode);
+    if ($('window-select').value !== target.context.window) { $('window-select').value = target.context.window; $('window-select').dispatchEvent(new Event('change', { bubbles: true })); }
+    $('target-company-search').value = ''; companyOptions();
+    if (![...$('target-company').options].some(option => option.value === target.context.company) && target.context.company) $('target-company').append(new Option(target.context.company, target.context.company));
+    $('target-company').value = target.context.company;
+    $('target-difficulty').value = target.context.difficulty;
+    $('target-status').value = target.context.completionFilter;
+    const topic = target.context.topics[0] || '';
+    if (topic && ![...$('target-topic').options].some(option => option.value === topic)) $('target-topic').append(new Option(topic, topic));
+    $('target-topic').value = topic;
+    if ([12, 20, 30, 50].includes(target.context.count)) $('target-count').value = String(target.context.count);
+    for (const id of ['target-company', 'target-difficulty', 'target-topic', 'target-status', 'target-count']) controls.sync($(id));
+    currentSaved = target; lastContext = target.context; hasPlan = kind === 'plan'; render(target);
+    message('Saved target · ' + (target.context.company || 'Random problem') + ' · ' + windowLabel(target.context.window) + ' · ' + new Date(target.createdAt).toLocaleDateString());
+    void catalog(); void save();
+  }
+  $('target-download').addEventListener('click', () => download(targetSnapshot()));
+  $('target-save').addEventListener('click', () => void saveCurrent());
   function show(active) {
     if (active) invalidatePrivate();
     document.body.toggleAttribute('data-target', active); panel.hidden = !active; controls.close();
@@ -150,9 +237,11 @@
   $('window-select').addEventListener('change', () => { if (initialized) { clearResults('Time window changed. Generate a new target.'); void catalog(); } });
   $('target-generate').addEventListener('click', () => void generate());
   $('target-expand').addEventListener('click', async () => { try { await save(); const result = await api.runtime.sendMessage({ type: 'LCT_OPEN_EXPLORER', mode: 'target' }); if (!result?.ok) throw new Error(result?.error || 'Could not expand Target.'); } catch (error) { message(error.message, true); } });
-  function invalidatePrivate() { if ($('target-status').value !== 'all' && (lastResult || (visible() && panel.getAttribute('aria-busy') === 'true'))) { clearResults('Generate again to refresh your LeetCode status.'); $('target-generate').disabled = false; } }
+  function invalidatePrivate() { if (!currentSaved && $('target-status').value !== 'all' && (lastResult || (visible() && panel.getAttribute('aria-busy') === 'true'))) { clearResults('Generate again to refresh your LeetCode status.'); $('target-generate').disabled = false; } }
   window.addEventListener('focus', invalidatePrivate); document.addEventListener('visibilitychange', () => { if (!document.hidden) invalidatePrivate(); });
   setInterval(() => { if (!document.hidden) invalidatePrivate(); }, 60000);
-  api.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.lctStatus && initialized && lastResult && changes.lctStatus.newValue?.commit && changes.lctStatus.newValue.commit !== lastResult.sourceRevision) clearResults('Dataset updated. Generate a fresh target.'); });
+  api.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.lctTargetCollection && initialized) void loadCollection().catch(error => message(error.message, true));
+    if (area === 'local' && changes.lctStatus && initialized && lastResult && !currentSaved && changes.lctStatus.newValue?.commit && changes.lctStatus.newValue.commit !== lastResult.sourceRevision) clearResults('Dataset updated. Generate a fresh target.'); });
   if (!popup && new URLSearchParams(location.search).get('mode') === 'target') show(true);
 })();

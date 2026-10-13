@@ -2,7 +2,7 @@
 'use strict';
 
 if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
-  importScripts('core.js', 'archive.js', 'seed.js', 'lookup.js', 'sync.js', 'completion.js');
+  importScripts('core.js', 'archive.js', 'seed.js', 'lookup.js', 'sync.js', 'completion.js', 'target-collection.js');
 }
 
 (function () {
@@ -22,6 +22,8 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
 
   const completionService = LCTCompletion.createCompletionService({ tabs: api.tabs, runtime: api.runtime,
     incognito: api.extension?.inIncognitoContext === true });
+
+  const targetCollection = LCTTargetCollection.create(api.storage.local);
 
   const checkingCompletion = Object.freeze({ state: 'checking', sessionKey: null, revision: null, site: null,
     completed: Object.freeze({}) });
@@ -101,7 +103,8 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!sender || sender.id !== api.runtime.id) return false;
     if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
-      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION', 'LCT_TARGET'].includes(message.type)) return false;
+      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION', 'LCT_TARGET', 'LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE'].includes(message.type)) return false;
+    if (['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE'].includes(message.type) && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
     if (message.type === 'LCT_COMPLETION' && !LCTCompletion.isExplorerSender(sender, api.runtime)) return false;
     if (['LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS', 'LCT_TARGET'].includes(message.type) && message.completionFilter !== undefined &&
         message.completionFilter !== 'all' && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
@@ -169,6 +172,9 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         const available = await service.windowAvailable(message.window);
         return { ok: true, problem: await service.getProblem(message.slug), companies, available, windowAvailable: available, status: await service.getStatus() };
       }
+      if (message.type === 'LCT_TARGET_LIST') return { ok: true, targets: await targetCollection.list() };
+      if (message.type === 'LCT_TARGET_SAVE') return { ok: true, target: await targetCollection.save(message.target) };
+      if (message.type === 'LCT_TARGET_REMOVE') { await targetCollection.remove(message.id); return { ok: true }; }
       if (message.type === 'LCT_TARGET') return queryWithCompletion(message, sender, (options, snapshot) => service.getTarget(options, snapshot));
       if (message.type === 'LCT_PRACTICE') return queryWithCompletion(message, sender, (options, snapshot) => service.getPractice(options, snapshot));
       if (message.type === 'LCT_SEARCH_PROBLEMS') return queryWithCompletion(message, sender, (options, snapshot) => service.searchProblems(options, snapshot));

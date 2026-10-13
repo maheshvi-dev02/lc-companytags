@@ -49,6 +49,7 @@ function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, 
       getStatus: querySource ? async () => { calls.status++; return { phase: 'ready', hasData: true }; } : fail('initialize'),
       searchProblems: sourceQuery, getPractice: sourceQuery, refresh: fail('initialize'), resume: fail('initialize')
     }) },
+    LCTTargetCollection: require('../extension/target-collection.js'),
     LCTCore: require('../extension/core.js'),
     LCTCompletion: { ...require('../extension/completion.js'),
       ...(completionDeadlineMs === undefined ? {} : { OVERALL_TIMEOUT_MS: completionDeadlineMs }) },
@@ -778,4 +779,14 @@ test('one completion deadline includes popup context lookup and expired context 
   await new Promise(resolve => setTimeout(resolve, 5));
   assert.equal(fixture.calls.queriedTabs.length, 1, 'Late context metadata cannot revive a timed-out account request.');
   assert.deepEqual(fixture.calls.completionMessages, []);
+});
+
+test('Target collection messages reject content pages and unrelated senders before storage access', async () => {
+  const fixture = harness();
+  for (const type of ['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE']) {
+    for (const caller of [sender(), { ...sender(), url: 'chrome-extension://' + EXTENSION_ID + '/other.html' }, { ...sender(), id: 'another-extension' }]) {
+      assert.equal(fixture.dispatch({ type }, caller).accepted, false);
+    }
+  }
+  noDataWork(fixture.calls);
 });

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'lookup.js', 'archive.js', 'seed.js', 'sync.js', 'completion.js', 'completion-content.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'select-controls.js', 'ui.css', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'target-ui.js', 'target.css', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const files = ['core.js', 'lookup.js', 'archive.js', 'seed.js', 'sync.js', 'completion.js', 'completion-content.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'select-controls.js', 'ui.css', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'target-ui.js', 'target-collection.js', 'target.css', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
 const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
 const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
 assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');
@@ -116,7 +116,7 @@ for (const browser of ['chrome','firefox']) {
     manifest.minimum_chrome_version = '127';
     manifest.background = {service_worker:'background.js'};
   } else {
-    manifest.background = {scripts:['core.js','lookup.js','archive.js','seed.js','sync.js','completion.js','background.js']};
+    manifest.background = {scripts:['core.js','lookup.js','archive.js','seed.js','sync.js','completion.js','target-collection.js','background.js']};
     manifest.browser_specific_settings = {gecko:{id:'company-lens@leetcode-tags.local',strict_min_version:'140.0',data_collection_permissions:{required:['authenticationInfo','websiteContent','websiteActivity']}}};
   }
   await writeFile(path.join(out,'manifest.json'), JSON.stringify(manifest,null,2)+'\n');

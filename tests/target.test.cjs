@@ -53,3 +53,49 @@ test('Target service validates options and uses only the trusted account snapsho
   assert.equal(unavailable.total, null);
   assert.deepEqual(unavailable.questions, []);
 });
+
+const collection = require('../extension/target-collection.js');
+test('company-filtered random Target combines company, window, difficulty and topic', () => {
+  const options = { targetMode: 'random', company: 'Microsoft', window: '6m', difficulty: 'Medium', topics: ['Array'] };
+  const pool = core.practiceQuestions(data, { ...options, limit: 100 });
+  assert.ok(pool.total > 0);
+  const all = [...pool.questions];
+  for (let offset = all.length; offset < pool.total; offset += 100) all.push(...core.practiceQuestions(data, { ...options, offset, limit: 100 }).questions);
+  for (const fraction of [0, .5, .999999]) {
+    const result = core.targetQuestions(data, options, undefined, () => fraction);
+    assert.equal(result.total, pool.total);
+    assert.ok(all.some(row => row.slug === result.questions[0].slug));
+    assert.equal(result.questions[0].difficulty, 'Medium');
+    assert.ok(result.questions[0].topics.includes('Array'));
+  }
+});
+function savedExample(title = 'Two Sum') {
+  return { context: { targetMode: 'plan', company: 'Microsoft', window: 'all', difficulty: '', completionFilter: 'not-solved', topics: [] },
+    questions: [{ slug: 'two-sum', title, difficulty: 'Easy', topics: ['Array', 'Hash Table'], frequency: 93.1, rank: 3, acceptanceRate: 55.2, completed: false }],
+    coveredTopics: ['Array', 'Hash Table'], availableTopicCount: 3, completion: { username: 'private-user', completed: { 'two-sum': false } } };
+}
+test('saved Target writes are serialized, survive reopening, and omit account progress', async () => {
+  const state = {}, storage = { get: async () => structuredClone(state), set: async value => { await new Promise(resolve => setTimeout(resolve, 2)); Object.assign(state, structuredClone(value)); } };
+  const service = collection.create(storage);
+  const [a, b] = await Promise.all([service.save(savedExample()), service.save(savedExample('Another title'))]);
+  assert.notEqual(a.id, b.id);
+  const reopened = await collection.create(storage).list();
+  assert.equal(reopened.length, 2);
+  assert.deepEqual(reopened.find(item => item.id === a.id).questions, a.questions);
+  assert.ok(!JSON.stringify(state).includes('private-user'));
+  assert.ok(!Object.hasOwn(a.questions[0], 'completed'));
+  await service.remove(a.id);
+  assert.deepEqual((await service.list()).map(item => item.id), [b.id]);
+  await assert.rejects(service.save({ ...savedExample(), questions: [] }));
+});
+test('Target CSV preserves exact rows, quotes embedded text, blanks unknown metrics, and neutralizes formulas', () => {
+  const target = savedExample('=HYPERLINK("x"),\nnext');
+  target.questions[0].frequency = null;
+  const csv = collection.csv(target);
+  const rows = core.parseCSV(csv.replace(/^\uFEFF/, ''));
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1][3], "'" + target.questions[0].title);
+  assert.equal(rows[1][5], 'Array; Hash Table');
+  assert.equal(rows[1][7], '');
+  assert.equal(rows[1][9], 'https://leetcode.com/problems/two-sum/');
+});

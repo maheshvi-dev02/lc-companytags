@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Company Lens for LeetCode",
-  "version": "1.6.16",
+  "version": "1.6.17",
   "description": "See company logos and frequency scores in a compact LeetCode bar. Search companies and problems from the toolbar.",
   "permissions": [
     "storage",
@@ -76,6 +76,7 @@
       "seed.js",
       "sync.js",
       "completion.js",
+      "target-collection.js",
       "background.js"
     ]
   },
