@@ -440,6 +440,31 @@
         groupTopic: typeof groupTopic === 'string' ? groupTopic.trim() : groupTopic });
       return validated;
     }
+    function validateCompletionFilter(validated, verifiedSnapshot, requireSnapshot) {
+      const completionFilter = validated.completionFilter === undefined ? 'all' : validated.completionFilter;
+      if (!core.COMPLETION_FILTERS.includes(completionFilter)) throw new Error('Invalid completion filter.');
+      if (requireSnapshot && completionFilter !== 'all') {
+        if (!verifiedSnapshot || typeof verifiedSnapshot !== 'object' || Array.isArray(verifiedSnapshot) ||
+            typeof verifiedSnapshot.state !== 'string' || !verifiedSnapshot.state ||
+            (verifiedSnapshot.state === 'ready' && (!verifiedSnapshot.completed ||
+             typeof verifiedSnapshot.completed !== 'object' || Array.isArray(verifiedSnapshot.completed)))) {
+          throw new Error('A verified LeetCode completion snapshot is required.');
+        }
+      }
+      return Object.assign(validated, { completionFilter });
+    }
+    function validateProblemSearchOptions(searchOptions) {
+      return validateCompletionFilter(topicOptions(queryOptions(searchOptions, 50, 'searchProblems', 'relevance')));
+    }
+    function validatePracticeOptions(practiceOptions) {
+      const validated = validateCompletionFilter(topicOptions(queryOptions(practiceOptions, 20, 'practiceQuestions', 'frequency-desc')));
+      if (typeof validated.company !== 'string' || !validated.company || validated.company.length > 200) throw new Error('Invalid company name.');
+      if (validated.topic !== undefined && validated.topic !== '' &&
+          (typeof validated.topic !== 'string' || validated.topic.length > 200)) throw new Error('Invalid topic filter.');
+      if (validated.excludeSlug !== undefined && validated.excludeSlug !== '' &&
+          (typeof validated.excludeSlug !== 'string' || !core.SLUG_PATTERN.test(validated.excludeSlug))) throw new Error('Invalid excluded problem slug.');
+      return validated;
+    }
     return {
       initialize, startAutomatic, refresh: () => start({ manual: true }), resume: () => start(),
       async getStatus() { await initialize(); return Object.assign({}, state.lctStatus, dataStatus()); },
@@ -454,25 +479,20 @@
         return core.problemForSlug(state.lctData, slug);
       },
       async windowAvailable(window) { await initialize(); return core.windowAvailable(state.lctData, selectedWindow(window)); },
-      async searchProblems(searchOptions) {
-        const validated = topicOptions(queryOptions(searchOptions, 50, 'searchProblems', 'relevance'));
+      async searchProblems(searchOptions, verifiedSnapshot) {
+        const validated = validateCompletionFilter(validateProblemSearchOptions(searchOptions), verifiedSnapshot, true);
         await initialize();
-        return core.searchProblems(state.lctData, validated);
+        return core.searchProblems(state.lctData, validated, verifiedSnapshot);
       },
       async searchCompanies(searchOptions) {
         const validated = queryOptions(searchOptions, 50, 'searchCompanies', 'name-asc');
         await initialize();
         return core.searchCompanies(state.lctData, validated);
       },
-      async getPractice(practiceOptions) {
-        const validated = topicOptions(queryOptions(practiceOptions, 20, 'practiceQuestions', 'frequency-desc'));
-        if (typeof validated.company !== 'string' || !validated.company || validated.company.length > 200) throw new Error('Invalid company name.');
-        if (validated.topic !== undefined && validated.topic !== '' &&
-            (typeof validated.topic !== 'string' || validated.topic.length > 200)) throw new Error('Invalid topic filter.');
-        if (validated.excludeSlug !== undefined && validated.excludeSlug !== '' &&
-            (typeof validated.excludeSlug !== 'string' || !core.SLUG_PATTERN.test(validated.excludeSlug))) throw new Error('Invalid excluded problem slug.');
+      async getPractice(practiceOptions, verifiedSnapshot) {
+        const validated = validateCompletionFilter(validatePracticeOptions(practiceOptions), verifiedSnapshot, true);
         await initialize();
-        return core.practiceQuestions(state.lctData, validated);
+        return core.practiceQuestions(state.lctData, validated, verifiedSnapshot);
       },
       async waitForIdle() { if (launching) await launching; if (running) await running; }
     };

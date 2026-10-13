@@ -64,6 +64,53 @@
         ' { userStatus { isSignedIn username } ' + aliases.join(' ') + ' }' };
   }
 
+  function buildSnapshotQuery() {
+    return { operationName: 'CompanyLensCompletionCatalog', variables: {},
+      query: 'query CompanyLensCompletionCatalog { userStatus { isSignedIn username } allQuestions { titleSlug status } }' };
+  }
+
+  function parseSnapshotResponse(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+        (raw.errors !== undefined && (!Array.isArray(raw.errors) || raw.errors.length))) return unavailableBridge();
+    const data = raw.data, user = data && typeof data === 'object' && !Array.isArray(data) && data.userStatus;
+    if (!user || typeof user !== 'object' || Array.isArray(user) || typeof user.isSignedIn !== 'boolean') return unavailableBridge();
+    if (!user.isSignedIn) return { state: 'signed-out', username: null, completed: {} };
+    if (!validUsername(user.username) || !Array.isArray(data.allQuestions) || !data.allQuestions.length || data.allQuestions.length > 25000) return unavailableBridge();
+    const completed = {};
+    for (const question of data.allQuestions) {
+      if (!question || typeof question !== 'object' || Array.isArray(question) || typeof question.titleSlug !== 'string' ||
+          question.titleSlug.length > 200 || !core.SLUG_PATTERN.test(question.titleSlug)) continue;
+      let value = null;
+      if (Object.hasOwn(question, 'status')) {
+        if (question.status === null) value = false;
+        else if (typeof question.status === 'string') {
+          const status = question.status.toLowerCase();
+          if (status === 'ac') value = true;
+          else if (['notac', 'not_started', 'tried'].includes(status)) value = false;
+        }
+      }
+      const slug = question.titleSlug;
+      completed[slug] = Object.hasOwn(completed, slug) && completed[slug] !== value ? null : value;
+    }
+    return { state: 'ready', username: user.username, completed };
+  }
+
+  function isInterfaceSender(sender, runtime) {
+    if (isExplorerSender(sender, runtime)) return true;
+    if (!sender || typeof sender.url !== 'string') return false;
+    try {
+      const page = new URL(sender.url);
+      if (page.pathname !== '/popup.html') return false;
+      page.pathname = '/explore.html';
+      return isExplorerSender({ ...sender, url: page.href }, runtime);
+    } catch (_) { return false; }
+  }
+
+  function validateRefresh(value) {
+    if (value !== undefined && typeof value !== 'boolean') throw new Error('Invalid completion refresh option.');
+    return value === true;
+  }
+
   function validUsername(value) {
     return typeof value === 'string' && value.length > 0 && value.length <= 200 && value === value.trim();
   }
@@ -110,6 +157,11 @@
     const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : RESPONSE_TIMEOUT_MS;
     const overallTimeoutMs = Number.isFinite(options.overallTimeoutMs) && options.overallTimeoutMs > 0 ? options.overallTimeoutMs : OVERALL_TIMEOUT_MS;
     let requestQueue = Promise.resolve();
+    const now = typeof options.now === 'function' ? options.now : Date.now;
+    const snapshotTTL = Number.isFinite(options.snapshotTTL) && options.snapshotTTL > 0 ? options.snapshotTTL : 60000;
+    let snapshotCache = null, snapshotFlight = null, identityFlight = null, activeSnapshotKey = null;
+    let snapshotEpoch = 0, revisionCounter = 0;
+    const revisionPrefix = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
 
     function bounded(promise, duration) {
       return new Promise((resolve, reject) => {
@@ -119,7 +171,7 @@
       });
     }
 
-    function request(tab, slugs, deadline) {
+    function requestMessage(tab, message, deadline) {
       return new Promise((resolve, reject) => {
         let settled = false;
         const finish = (callback, value) => {
@@ -135,7 +187,7 @@
             finish(reject, new Error('Completion request timed out.'));
             return null;
           }
-          return tabs.sendMessage(tab.id, { type: 'LCT_COMPLETION_QUERY', slugs }, { frameId: 0 });
+          return tabs.sendMessage(tab.id, message, { frameId: 0 });
         });
         // A caller timeout never unlocks the actual transport. Wait for the
         // browser message to settle, and skip queued callers that expired.
@@ -155,6 +207,109 @@
       return eligible[0] || null;
     }
 
+    function contextKey(tab) {
+      return JSON.stringify([officialOrigin(tab.url), tab.id, typeof tab.cookieStoreId === 'string' ? tab.cookieStoreId : null,
+        tab.incognito === true]);
+    }
+
+    function sessionKeyForTab(tab, username) {
+      return JSON.stringify([officialOrigin(tab.url), tab.id, typeof tab.cookieStoreId === 'string' ? tab.cookieStoreId : null,
+        tab.incognito === true, username]);
+    }
+
+    function invalidateSnapshot() {
+      snapshotEpoch++;
+      snapshotCache = null;
+      snapshotFlight = null;
+      activeSnapshotKey = null;
+    }
+
+    function snapshotFailure(state, site) {
+      const failed = result(state, site);
+      delete failed.ok;
+      return Object.freeze({ ...failed, revision: null, completed: Object.freeze({}) });
+    }
+
+    async function probeIdentity(tab, deadline) {
+      const key = contextKey(tab);
+      if (!identityFlight || identityFlight.key !== key) {
+        const flight = { key, promise: requestMessage(tab, { type: 'LCT_COMPLETION_QUERY', slugs: [] }, deadline) };
+        identityFlight = flight;
+        flight.promise.finally(() => { if (identityFlight === flight) identityFlight = null; }).catch(() => {});
+      }
+      return bounded(identityFlight.promise, deadline - Date.now());
+    }
+
+    async function getSnapshot(sender, controls = {}) {
+      if (!controls || typeof controls !== 'object' || Array.isArray(controls)) throw new Error('Invalid completion refresh option.');
+      const force = validateRefresh(controls.force);
+      if (controls.deadlineAt !== undefined && (typeof controls.deadlineAt !== 'number' || !Number.isFinite(controls.deadlineAt))) {
+        throw new Error('Invalid completion deadline.');
+      }
+      const deadline = Math.min(Date.now() + overallTimeoutMs, controls.deadlineAt === undefined ? Infinity : controls.deadlineAt);
+      if (Date.now() >= deadline) { invalidateSnapshot(); return snapshotFailure('unavailable', null); }
+      let tab;
+      try { tab = chooseTab(await bounded(tabs.query({ url: MATCHES.slice() }), deadline - Date.now()), sender); }
+      catch (_) { invalidateSnapshot(); return snapshotFailure('unavailable', null); }
+      if (!tab) { invalidateSnapshot(); return snapshotFailure('no-tab', null); }
+      const site = officialOrigin(tab.url);
+      let identity;
+      try { identity = await probeIdentity(tab, deadline); }
+      catch (_) { invalidateSnapshot(); return snapshotFailure('unavailable', site); }
+      if (identity?.ok === true && identity.site === site && identity.state === 'signed-out') {
+        invalidateSnapshot(); return snapshotFailure('signed-out', site);
+      }
+      if (Date.now() >= deadline || !identity || identity.ok !== true || identity.site !== site ||
+          identity.state !== 'ready' || !validUsername(identity.username)) {
+        invalidateSnapshot(); return snapshotFailure('unavailable', site);
+      }
+      const key = sessionKeyForTab(tab, identity.username);
+      if (activeSnapshotKey !== key) {
+        invalidateSnapshot();
+        activeSnapshotKey = key;
+      }
+      const age = snapshotCache ? now() - Date.parse(snapshotCache.checkedAt) : Infinity;
+      if (!force && snapshotCache?.sessionKey === key && age >= 0 && age < snapshotTTL) return snapshotCache;
+      // Parallel group requests may all ask for a refresh. Reuse their one
+      // pending catalog read rather than invalidating the same-account flight.
+      if (snapshotFlight?.key === key && snapshotFlight.epoch === snapshotEpoch) {
+        try { return await bounded(snapshotFlight.promise, deadline - Date.now()); }
+        catch (_) { return snapshotFailure('unavailable', site); }
+      }
+      snapshotCache = null;
+      const epoch = ++snapshotEpoch;
+      const flight = { key, epoch, promise: null };
+      flight.promise = (async () => {
+        let reply;
+        try { reply = await requestMessage(tab, { type: 'LCT_COMPLETION_SNAPSHOT_QUERY' }, deadline); }
+        catch (_) {
+          if (snapshotEpoch === epoch) invalidateSnapshot();
+          return snapshotFailure('unavailable', site);
+        }
+        if (Date.now() >= deadline || snapshotEpoch !== epoch || activeSnapshotKey !== key) return snapshotFailure('unavailable', site);
+        if (reply?.ok === true && reply.site === site && reply.state === 'signed-out') {
+          invalidateSnapshot(); return snapshotFailure('signed-out', site);
+        }
+        if (!reply || reply.ok !== true || reply.site !== site || reply.state !== 'ready' || reply.username !== identity.username ||
+            !reply.completed || typeof reply.completed !== 'object' || Array.isArray(reply.completed) || Object.keys(reply.completed).length > 25000) {
+          invalidateSnapshot(); return snapshotFailure('unavailable', site);
+        }
+        const completed = {};
+        for (const [slug, value] of Object.entries(reply.completed)) {
+          if (slug.length > 200 || !core.SLUG_PATTERN.test(slug)) continue;
+          completed[slug] = value === true || value === false ? value : null;
+        }
+        const snapshot = Object.freeze({ state: 'ready', sessionKey: key, site,
+          revision: revisionPrefix + '-' + (++revisionCounter), checkedAt: new Date(now()).toISOString(),
+          completed: Object.freeze(completed) });
+        snapshotCache = snapshot;
+        return snapshot;
+      })();
+      snapshotFlight = flight;
+      flight.promise.finally(() => { if (snapshotFlight === flight) snapshotFlight = null; }).catch(() => {});
+      return flight.promise;
+    }
+
     async function get(slugs, sender) {
       const requested = validateSlugs(slugs);
       const deadline = Date.now() + overallTimeoutMs;
@@ -170,14 +325,13 @@
       for (const chunk of chunks) {
         if (Date.now() >= deadline) return result('unavailable', site);
         let reply;
-        try { reply = await request(tab, chunk, deadline); }
+        try { reply = await requestMessage(tab, { type: 'LCT_COMPLETION_QUERY', slugs: chunk }, deadline); }
         catch (_) { return result('unavailable', site); }
         if (Date.now() >= deadline || !reply || reply.ok !== true || reply.site !== site) return result('unavailable', site);
         if (reply.state === 'signed-out') return result('signed-out', site);
         if (reply.state !== 'ready' || !validUsername(reply.username) || !reply.completed ||
             typeof reply.completed !== 'object' || Array.isArray(reply.completed)) return result('unavailable', site);
-        const key = JSON.stringify([site, tab.id, typeof tab.cookieStoreId === 'string' ? tab.cookieStoreId : null,
-          tab.incognito === true, reply.username]);
+        const key = sessionKeyForTab(tab, reply.username);
         if (sessionKey !== null && key !== sessionKey) return result('unavailable', site);
         sessionKey = key;
         for (const slug of chunk) {
@@ -188,9 +342,9 @@
       return { ok: true, state: 'ready', sessionKey, site, completed };
     }
 
-    return { get };
+    return { get, getSnapshot };
   }
 
   return { ORIGINS, BATCH_SIZE, FETCH_TIMEOUT_MS, RESPONSE_TIMEOUT_MS, OVERALL_TIMEOUT_MS, validateSlugs, officialOrigin, isExplorerSender,
-    isBackgroundSender, buildQuery, parseBridgeResponse, createCompletionService };
+    isBackgroundSender, isInterfaceSender, validateRefresh, buildQuery, buildSnapshotQuery, parseBridgeResponse, parseSnapshotResponse, createCompletionService };
 });

@@ -28,6 +28,7 @@
     sortCompanies: Object.freeze(['frequency-desc', 'frequency-asc', 'name-asc', 'name-desc', 'questions-desc', 'questions-asc'])
   });
   const DIFFICULTY_ORDER = Object.freeze({ Easy: 0, Medium: 1, Hard: 2 });
+  const COMPLETION_FILTERS = Object.freeze(['all', 'solved', 'not-solved']);
 
   function getProblemSlug(value) {
     try {
@@ -427,13 +428,36 @@
     return compareText(a, b) || (a < b ? -1 : a > b ? 1 : 0);
   }
 
-  function searchProblems(data, options = {}) {
+  function completionSelection(options, verifiedSnapshot) {
+    const filter = options.completionFilter === undefined ? 'all' : options.completionFilter;
+    if (!COMPLETION_FILTERS.includes(filter)) throw new Error('Invalid completion filter.');
+    if (filter === 'all') return { filter, ready: true, completed: null };
+    if (!verifiedSnapshot || typeof verifiedSnapshot !== 'object' || Array.isArray(verifiedSnapshot) ||
+        typeof verifiedSnapshot.state !== 'string' || !verifiedSnapshot.state) {
+      throw new Error('A verified LeetCode completion snapshot is required.');
+    }
+    if (verifiedSnapshot.state !== 'ready') return { filter, ready: false, completed: null };
+    if (!verifiedSnapshot.completed || typeof verifiedSnapshot.completed !== 'object' || Array.isArray(verifiedSnapshot.completed)) {
+      throw new Error('A verified LeetCode completion snapshot is required.');
+    }
+    return { filter, ready: true, completed: verifiedSnapshot.completed };
+  }
+
+  function completionForSlug(selection, slug) {
+    if (!selection.completed || !Object.prototype.hasOwnProperty.call(selection.completed, slug)) return null;
+    const completed = selection.completed[slug];
+    return typeof completed === 'boolean' ? completed : null;
+  }
+
+  function searchProblems(data, options = {}, verifiedSnapshot) {
+    const completion = completionSelection(options, verifiedSnapshot);
     const window = options.window || 'all';
     const available = searchAvailability(data, window);
     const { offset, limit } = pagination(options, 50);
     const sourceRevision = data && typeof data.commit === 'string' && SHA_PATTERN.test(data.commit) ? data.commit : null;
     const empty = { problems: [], total: 0, topics: [], topicGroups: [], offset, limit, hasMore: false,
       available, windowAvailable: available, sourceRevision };
+    if (completion.filter !== 'all') Object.assign(empty, { total: completion.ready ? 0 : null, completionUnknownCount: completion.ready ? 0 : null });
     if (!available) return empty;
     const { query, terms } = queryTerms(options.query);
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
@@ -469,11 +493,19 @@
     // Derive the catalog from the complete selected window before applying any
     // filters. Reuse its deterministic labels in every row and group.
     const topics = Array.from(catalog.values()).sort(compareTopicLabels);
+    if (!completion.ready) return Object.assign(empty, { topics });
     const groups = new Map(), problems = [];
+    let completionUnknownCount = 0;
     for (const { problem, topicKeys } of candidates) {
       if ((difficulty && (problem.difficulty || '').toLowerCase() !== difficulty) || !matchesProblem(problem, terms)) continue;
       if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((topic) => topicKeys.has(topic)) :
         selectedTopics.some((topic) => topicKeys.has(topic)))) continue;
+      if (completion.filter !== 'all') {
+        const completed = completionForSlug(completion, problem.slug);
+        if (completed === null) { completionUnknownCount += 1; continue; }
+        if (completed !== (completion.filter === 'solved')) continue;
+        problem.completed = completed;
+      }
       problem.topics = Array.from(topicKeys, (key) => catalog.get(key)).sort(compareTopicLabels);
       // Count each unique matching problem once per source topic, before the
       // selected group and pagination narrow the returned rows.
@@ -485,8 +517,10 @@
       .sort((a, b) => a.topic === null ? (b.topic === null ? 0 : 1) : b.topic === null ? -1 : compareTopicLabels(a.topic, b.topic));
     problems.sort((a, b) => compareProblemRows(a, b, sort, query));
     const page = problems.slice(offset, offset + limit);
-    return { problems: page, total: problems.length, topics, topicGroups, offset, limit, hasMore: offset + page.length < problems.length,
+    const result = { problems: page, total: problems.length, topics, topicGroups, offset, limit, hasMore: offset + page.length < problems.length,
       available: true, windowAvailable: true, sourceRevision };
+    if (completion.filter !== 'all') result.completionUnknownCount = completionUnknownCount;
+    return result;
   }
 
   function searchCompanies(data, options = {}) {
@@ -514,13 +548,15 @@
       available: true, windowAvailable: true };
   }
 
-  function practiceQuestions(data, options = {}) {
+  function practiceQuestions(data, options = {}, verifiedSnapshot) {
+    const completion = completionSelection(options, verifiedSnapshot);
     const window = options.window || 'all';
     const available = searchAvailability(data, window);
     const { offset, limit } = pagination(options, 20);
     const sourceRevision = data && typeof data.commit === 'string' && SHA_PATTERN.test(data.commit) ? data.commit : null;
     const empty = { questions: [], total: 0, topics: [], topicGroups: [], offset, limit, hasMore: false,
       available, windowAvailable: available, sourceRevision };
+    if (completion.filter !== 'all') Object.assign(empty, { total: completion.ready ? 0 : null, completionUnknownCount: completion.ready ? 0 : null });
     if (!available || typeof options.company !== 'string') return empty;
     const path = options.company + '/' + WINDOW_FILES[window];
     const file = data.files && Object.prototype.hasOwnProperty.call(data.files, path) && data.files[path];
@@ -539,6 +575,7 @@
     // Keep the complete company-window catalog available while filters narrow
     // the rows. Company topics never inherit another company's source tags.
     const topics = Array.from(catalog.values()).sort(compareTopicLabels);
+    if (!completion.ready) return Object.assign(empty, { topics, sourceUrl: sourceFileURL(data.commit, path) });
     const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
     const topic = typeof options.topic === 'string' ? options.topic.toLowerCase() : '';
     const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
@@ -547,12 +584,18 @@
     const groupTopic = typeof options.groupTopic === 'string' ? options.groupTopic.trim().toLowerCase() : options.groupTopic;
     const { terms } = queryTerms(options.query);
     const sort = selectedSort(options.sort, 'practiceQuestions', 'frequency-desc');
-    const filtered = [], groups = new Map();
+    const filtered = [], groups = new Map(), completionUnknownSlugs = new Set();
     for (const { record, topicKeys } of candidates) {
       if (record.slug === options.excludeSlug || (difficulty && (record.difficulty || '').toLowerCase() !== difficulty) ||
           (topic && !record.topics.some((value) => value.toLowerCase() === topic)) || !matchesProblem(record, terms)) continue;
       if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((value) => topicKeys.has(value)) :
         selectedTopics.some((value) => topicKeys.has(value)))) continue;
+      let completed = null;
+      if (completion.filter !== 'all') {
+        completed = completionForSlug(completion, record.slug);
+        if (completed === null) { completionUnknownSlugs.add(record.slug); continue; }
+        if (completed !== (completion.filter === 'solved')) continue;
+      }
       for (const key of topicKeys.size ? topicKeys : [null]) {
         if (!groups.has(key)) groups.set(key, new Set());
         groups.get(key).add(record.slug);
@@ -561,17 +604,19 @@
       filtered.push(Object.assign({}, record, { topics: Array.from(topicKeys, (key) => catalog.get(key)).sort(compareTopicLabels),
         acceptanceRate: problemForSlug(data, record.slug)?.acceptanceRate ?? null,
         companyCount: matchingCompanyRecords(data, record.slug, window).length,
-        url: 'https://leetcode.com/problems/' + record.slug + '/' }));
+        url: 'https://leetcode.com/problems/' + record.slug + '/' }, completion.filter === 'all' ? {} : { completed }));
     }
     const topicGroups = Array.from(groups, ([key, slugs]) => ({ topic: key === null ? null : catalog.get(key), total: slugs.size }))
       .sort((a, b) => a.topic === null ? (b.topic === null ? 0 : 1) : b.topic === null ? -1 : compareTopicLabels(a.topic, b.topic));
     filtered.sort((a, b) => compareProblemRows(a, b, sort));
     const questions = filtered.slice(offset, offset + limit);
-    return { questions, total: filtered.length, topics, topicGroups, offset, limit, hasMore: offset + questions.length < filtered.length,
+    const result = { questions, total: filtered.length, topics, topicGroups, offset, limit, hasMore: offset + questions.length < filtered.length,
       available: true, windowAvailable: true, sourceUrl: sourceFileURL(data.commit, path), sourceRevision };
+    if (completion.filter !== 'all') result.completionUnknownCount = completionUnknownSlugs.size;
+    return result;
   }
 
-  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, getProblemSlug, formatProblemTitle,
+  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, COMPLETION_FILTERS, getProblemSlug, formatProblemTitle,
     parseCSV, parseCompanyCSV, parseCompanyRecords, sortCompanies, selectCompanyFiles, selectWindowFiles, encodedPath, sourceFileURL, rawFileURL,
     validAcceptanceRate, formatAcceptanceRate, hasAcceptanceData, problemForSlug, reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
 });

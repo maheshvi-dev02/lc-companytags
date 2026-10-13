@@ -127,3 +127,11 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .practice-tools { margin:0 0 8px; }
 .practice-tools .practice-summary { margin:0; }
 .practice-tools .sort-filter { display:flex; flex:none; }
+
+/* Personal progress keeps the title and its informational check together. */
+.question-title-line { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.question-title-line .current-problem { margin-left:0; }
+.practice-completion-status { margin:0 0 8px; color:var(--muted); font-size:var(--font-caption); overflow-wrap:anywhere; }
+.completion-indicator { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex:0 0 16px; color:#15803d; }
+.completion-indicator svg { display:block; width:16px; height:16px; }
+@media(prefers-color-scheme:dark) { .completion-indicator { color:#4ade80; } }

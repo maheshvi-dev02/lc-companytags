@@ -19,7 +19,7 @@ function bridgeReply(requested, { state = 'ready', username = 'mahesh', value = 
   return { ok: true, state, username, site, completed: Object.fromEntries(requested.map((slug, index) =>
     [slug, typeof value === 'function' ? value(slug, index) : value])) };
 }
-function harness({ available = [tab()], handler, timeoutMs = 1000, overallTimeoutMs } = {}) {
+function harness({ available = [tab()], handler, timeoutMs = 1000, overallTimeoutMs, snapshotTTL, now } = {}) {
   const handle = handler || ((id, message) => bridgeReply(message.slugs, { site: new URL(available.find((candidate) => candidate.id === id).url).origin }));
   const calls = { queries: [], messages: [], active: 0, maxActive: 0 };
   const tabs = {
@@ -31,7 +31,7 @@ function harness({ available = [tab()], handler, timeoutMs = 1000, overallTimeou
       finally { calls.active--; }
     }
   };
-  return { calls, service: completion.createCompletionService({ tabs, runtime, timeoutMs, overallTimeoutMs }) };
+  return { calls, service: completion.createCompletionService({ tabs, runtime, timeoutMs, overallTimeoutMs, snapshotTTL, now }) };
 }
 function deferred() {
   let resolve, reject;
@@ -425,4 +425,193 @@ test('the overall deadline covers the whole chunk sequence and skips all remaini
   assert.equal(calls.messages.length, 2, 'An expired read must never dispatch its final chunk.');
   assertNoValues(result, 'unavailable');
   assert.equal((await service.get(['two-sum'], sender())).state, 'ready');
+});
+
+
+function catalogRaw(questions, { signedIn = true, username = 'test-user', errors } = {}) {
+  return { data: { userStatus: { isSignedIn: signedIn, username }, allQuestions: questions }, ...(errors === undefined ? {} : { errors }) };
+}
+
+test('the bulk catalog operation is fixed and requests only identity, slugs, and completion status', () => {
+  assert.deepEqual(completion.buildSnapshotQuery(), {
+    operationName: 'CompanyLensCompletionCatalog', variables: {},
+    query: 'query CompanyLensCompletionCatalog { userStatus { isSignedIn username } allQuestions { titleSlug status } }'
+  });
+  assert.doesNotMatch(completion.buildSnapshotQuery().query, /mutation|submission|solution|cookie|token|csrf|code/i);
+});
+
+test('signed-in bulk catalog recognizes only verified solved and not-solved values, leaving missing or unknown data unknown', () => {
+  const raw = catalogRaw([
+    { titleSlug: 'accepted', status: 'ac' }, { titleSlug: 'accepted-upper', status: 'AC' },
+    { titleSlug: 'attempted', status: 'notac' }, { titleSlug: 'not-started', status: 'NOT_STARTED' },
+    { titleSlug: 'tried', status: 'TRIED' }, { titleSlug: 'null-status', status: null },
+    { titleSlug: 'unknown', status: 'UNRECOGNIZED' }, { titleSlug: 'missing-status' },
+    { titleSlug: 'numeric-status', status: 1 }, { titleSlug: 'constructor', status: 'ac' },
+    { titleSlug: 'Invalid-Slug', status: 'ac' }, { titleSlug: '__proto__', status: 'ac' }, null
+  ]);
+  const result = completion.parseSnapshotResponse(raw);
+  assert.equal(result.state, 'ready');
+  assert.deepEqual(result.completed, { accepted: true, 'accepted-upper': true, attempted: false, 'not-started': false,
+    tried: false, 'null-status': false, unknown: null, 'missing-status': null, 'numeric-status': null, constructor: true });
+  assert.equal(Object.hasOwn(result.completed, 'absent-question'), false, 'Absent rows are unknown, never inferred not solved.');
+  assert.equal(Object.hasOwn(result.completed, '__proto__'), false);
+});
+
+test('conflicting duplicate bulk rows remain unknown regardless of their order', () => {
+  for (const values of [['ac', 'notac'], ['notac', 'ac'], ['ac', null], [null, 'ac'], ['ac', 'unexpected', 'ac']]) {
+    const result = completion.parseSnapshotResponse(catalogRaw(values.map(status => ({ titleSlug: 'two-sum', status }))));
+    assert.equal(result.completed['two-sum'], null);
+  }
+  assert.equal(completion.parseSnapshotResponse(catalogRaw([{ titleSlug: 'two-sum', status: 'ac' },
+    { titleSlug: 'two-sum', status: 'AC' }])).completed['two-sum'], true);
+});
+
+test('anonymous or failed catalogs expose no account states and never turn anonymous defaults into not solved', () => {
+  const questions = [{ titleSlug: 'two-sum', status: null }, { titleSlug: 'valid-parentheses', status: 'NOT_STARTED' }];
+  assertNoValues(completion.parseSnapshotResponse(catalogRaw(questions, { signedIn: false, username: 'ignored-user' })), 'signed-out');
+  for (const raw of [null, [], {}, { data: {} }, catalogRaw(questions, { username: '' }),
+    catalogRaw(questions, { errors: [{ message: 'PRIVATE_DETAIL' }] }), catalogRaw(null), catalogRaw([]),
+    catalogRaw(Array(25001).fill({ titleSlug: 'two-sum', status: 'ac' }))]) {
+    const result = completion.parseSnapshotResponse(raw);
+    assertNoValues(result, 'unavailable');
+    assert.equal(JSON.stringify(result).includes('PRIVATE_DETAIL'), false);
+  }
+});
+
+function snapshotHarness({ timeoutMs, overallTimeoutMs, now, available = [tab()], handler } = {}) {
+  const state = { username: 'alpha-user', signedIn: true, completed: { 'two-sum': true, 'valid-parentheses': false }, fail: false };
+  const fixture = harness({ available, timeoutMs, overallTimeoutMs, now, handler: async (id, message, options, index) => {
+    if (handler) return handler(id, message, options, index, state);
+    const site = new URL(available.find(item => item.id === id).url).origin;
+    if (state.fail) throw new Error('PRIVATE_DETAIL');
+    return { ok: true, site, state: state.signedIn ? 'ready' : 'signed-out', username: state.signedIn ? state.username : null,
+      completed: message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' ? { ...state.completed } : {} };
+  } });
+  return { ...fixture, state };
+}
+
+const catalogCalls = fixture => fixture.calls.messages.filter(call => call.message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY');
+const probeCalls = fixture => fixture.calls.messages.filter(call => call.message.type === 'LCT_COMPLETION_QUERY');
+
+test('snapshot reuse checks identity on every request without downloading the catalog again and keeps immutable revision data', async () => {
+  const fixture = snapshotHarness();
+  const first = await fixture.service.getSnapshot(sender());
+  assert.equal(first.state, 'ready');
+  assert.equal(typeof first.revision, 'string');
+  assert.ok(first.revision);
+  assert.equal(Number.isFinite(Date.parse(first.checkedAt)), true);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.completed), true);
+  assert.deepEqual(first.completed, fixture.state.completed);
+  const second = await fixture.service.getSnapshot(sender());
+  assert.equal(second, first, 'All pages share one immutable snapshot until it changes.');
+  assert.equal(probeCalls(fixture).length, 2);
+  assert.equal(catalogCalls(fixture).length, 1);
+  assert.deepEqual(catalogCalls(fixture)[0].message, { type: 'LCT_COMPLETION_SNAPSHOT_QUERY' });
+  assert.deepEqual(catalogCalls(fixture)[0].options, { frameId: 0 });
+  const visible = await fixture.service.get(['two-sum'], sender());
+  assert.equal(visible.sessionKey, first.sessionKey, 'Visible checks and filtered queries use the same account fingerprint.');
+});
+
+test('force and expiration replace the catalog revision while an ordinary page retains its frozen membership', async () => {
+  let clock = Date.parse('2026-10-13T12:00:00Z');
+  const fixture = snapshotHarness({ now: () => clock });
+  const first = await fixture.service.getSnapshot(sender());
+  fixture.state.completed['valid-parentheses'] = true;
+  const cached = await fixture.service.getSnapshot(sender());
+  assert.equal(cached.completed['valid-parentheses'], false);
+  assert.equal(cached.revision, first.revision);
+  const forced = await fixture.service.getSnapshot(sender(), { force: true });
+  assert.equal(forced.completed['valid-parentheses'], true);
+  assert.notEqual(forced.revision, first.revision);
+  clock += 60001;
+  const expired = await fixture.service.getSnapshot(sender());
+  assert.notEqual(expired.revision, forced.revision);
+  assert.equal(catalogCalls(fixture).length, 3);
+  assert.equal(first.completed['valid-parentheses'], false);
+});
+
+test('parallel topic pages coalesce their identity probe and catalog read', async () => {
+  const gate = deferred();
+  const fixture = snapshotHarness({ handler: async (_id, message, _options, _index, state) => {
+    if (message.type === 'LCT_COMPLETION_QUERY') await gate.promise;
+    return { ok: true, site: 'https://leetcode.com', state: 'ready', username: state.username,
+      completed: message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' ? { ...state.completed } : {} };
+  } });
+  const requests = Array.from({ length: 3 }, () => fixture.service.getSnapshot(sender(), { force: true }));
+  await until(() => fixture.calls.messages.length === 1);
+  gate.resolve();
+  const results = await Promise.all(requests);
+  assert.equal(probeCalls(fixture).length, 1);
+  assert.equal(catalogCalls(fixture).length, 1);
+  assert.equal(new Set(results.map(result => result.revision)).size, 1);
+  assert.equal(fixture.calls.maxActive, 1);
+});
+
+test('changed account, sign-out, and failures clear snapshots instead of returning old progress', async () => {
+  const fixture = snapshotHarness();
+  const alpha = await fixture.service.getSnapshot(sender());
+  fixture.state.username = 'beta-user';
+  fixture.state.completed = { 'two-sum': false };
+  const beta = await fixture.service.getSnapshot(sender());
+  assert.notEqual(beta.sessionKey, alpha.sessionKey);
+  assert.equal(beta.completed['two-sum'], false);
+  fixture.state.signedIn = false;
+  assertNoValues(await fixture.service.getSnapshot(sender()), 'signed-out');
+  fixture.state.signedIn = true;
+  fixture.state.fail = true;
+  assertNoValues(await fixture.service.getSnapshot(sender()), 'unavailable');
+  fixture.state.fail = false;
+  const recovered = await fixture.service.getSnapshot(sender());
+  assert.notEqual(recovered.revision, beta.revision);
+  assert.equal(catalogCalls(fixture).length, 3);
+});
+
+test('a catalog account/site mismatch cannot publish a snapshot from a different session', async () => {
+  for (const change of [{ username: 'another-account' }, { site: 'https://leetcode.cn' }]) {
+    const fixture = snapshotHarness({ handler: async (_id, message) => ({ ok: true, state: 'ready', site: 'https://leetcode.com',
+      username: 'alpha-user', completed: message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' ? { 'two-sum': true } : {},
+      ...(message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' ? change : {}) }) });
+    assertNoValues(await fixture.service.getSnapshot(sender()), 'unavailable');
+  }
+});
+
+test('snapshot deadlines discard late catalogs and keep the real transport serialized until settlement', async () => {
+  const gate = deferred();
+  const fixture = snapshotHarness({ timeoutMs: 20, overallTimeoutMs: 50, handler: async (_id, message, _options, index) => {
+    if (message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' && index === 1) await gate.promise;
+    return { ok: true, state: 'ready', site: 'https://leetcode.com', username: 'alpha-user',
+      completed: message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' ? { 'two-sum': true } : {} };
+  } });
+  assertNoValues(await fixture.service.getSnapshot(sender()), 'unavailable');
+  const messagesAtTimeout = fixture.calls.messages.length;
+  assertNoValues(await fixture.service.getSnapshot(sender()), 'unavailable');
+  assert.equal(fixture.calls.messages.length, messagesAtTimeout, 'No new real query overlaps the stalled catalog.');
+  gate.resolve();
+  await until(() => fixture.calls.active === 0);
+  const recovered = await fixture.service.getSnapshot(sender());
+  assert.equal(recovered.state, 'ready');
+  assert.equal(catalogCalls(fixture).length, 2, 'The late result was discarded, requiring a fresh catalog.');
+  assert.equal(fixture.calls.maxActive, 1);
+});
+
+test('snapshot force options are validated before tab access', async () => {
+  const fixture = snapshotHarness();
+  for (const value of [null, false, 0, [], 'force']) await assert.rejects(fixture.service.getSnapshot(sender(), value), /refresh/i);
+  for (const force of [null, 0, '', [], {}]) await assert.rejects(fixture.service.getSnapshot(sender(), { force }), /refresh/i);
+  assert.equal(fixture.calls.queries.length, 0);
+  assert.equal(fixture.calls.messages.length, 0);
+});
+
+
+test('an inherited completion deadline is validated and prevents expired account dispatch', async () => {
+  const fixture = snapshotHarness();
+  for (const deadlineAt of [null, 'soon', NaN, Infinity, false]) {
+    await assert.rejects(fixture.service.getSnapshot(sender(), { deadlineAt }), /deadline/i);
+  }
+  assert.deepEqual(fixture.calls.queries, []);
+  const expired = await fixture.service.getSnapshot(sender(), { deadlineAt: Date.now() - 1 });
+  assertNoValues(expired, 'unavailable');
+  assert.deepEqual(fixture.calls.queries, []);
+  assert.deepEqual(fixture.calls.messages, []);
 });

@@ -49,7 +49,9 @@ export function createCompletionFixture({ html }) {
     const query = body?.query;
     const aliases = typeof query === 'string' ? [...query.matchAll(/([A-Za-z][A-Za-z0-9_]*)\s*:\s*question\s*\(\s*titleSlug\s*:\s*\$(\w+)\s*\)/g)] : [];
     const variables = body?.variables || {};
-    const valid = typeof query === 'string' && /\buserStatus\b/.test(query) && !/\b(?:mutation|subscription|__schema|__type)\b/.test(query) &&
+    const catalog = body?.operationName === 'CompanyLensCompletionCatalog' && typeof query === 'string' &&
+      query.replace(/\s+/g, ' ').trim() === 'query CompanyLensCompletionCatalog { userStatus { isSignedIn username } allQuestions { titleSlug status } }' && Object.keys(variables).length === 0;
+    const valid = catalog || typeof query === 'string' && /\buserStatus\b/.test(query) && !/\b(?:allQuestions|mutation|subscription|__schema|__type)\b/.test(query) &&
       Object.keys(variables).every(key => /^s\d+$/.test(key) && typeof variables[key] === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(variables[key])) &&
       aliases.every(match => Object.hasOwn(variables, match[2])) && aliases.length <= 25;
     if (!valid) {
@@ -58,15 +60,17 @@ export function createCompletionFixture({ html }) {
     }
     const account = fixture.state.account, failure = fixture.state.failure;
     const slugs = aliases.map(match => variables[match[2]]);
-    const call = { account, slugs, site: url.origin, variables, query, method: request.method(), failure };
+    const call = { account, slugs, catalog, site: url.origin, variables, query, method: request.method(), failure };
     fixture.calls.push(call);
     const data = { userStatus: { isSignedIn: Boolean(account), username: account } };
+    if (catalog) data.allQuestions = [...fixture.state.statuses].filter(([key]) => key.startsWith(`${account}:`))
+      .filter(([, status]) => status !== '__missing__').map(([key, status]) => ({ titleSlug: key.slice(String(account).length + 1), status }));
     for (const match of aliases) {
       const slug = variables[match[2]], status = fixture.status(slug, account);
       if (status === '__missing__') continue;
       data[match[1]] = { titleSlug: slug, status };
     }
-    if (fixture.state.holdNext && aliases.length) {
+    if (fixture.state.holdNext && (catalog || aliases.length)) {
       fixture.state.holdNext = false;
       await new Promise(resolve => {
         const entry = { call, release: () => { fixture.pending.splice(fixture.pending.indexOf(entry), 1); resolve(); } };

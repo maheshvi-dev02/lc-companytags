@@ -16,7 +16,8 @@
   const sortNames = { problems: 'Sort problems', companies: 'Sort companies', companyQuestions: 'Sort company questions', problemCompanies: 'Sort problem companies' };
   let sorts = { ...sortDefaults };
   let sortSave = Promise.resolve();
-  const problemViewDefaults = { difficulty: '', topics: [], topicMatch: 'any', view: 'list' };
+  const completionFilters = ['all', 'solved', 'not-solved'];
+  const problemViewDefaults = { difficulty: '', topics: [], topicMatch: 'any', completionFilter: 'all', view: 'list' };
   let problemView = { ...problemViewDefaults, topics: [] };
   let problemViewSave = Promise.resolve();
   let problemViewDirty = false;
@@ -29,6 +30,8 @@
   const topicGroups = new Map();
   let groupsContext = '';
   let groupsRevision = null;
+  let groupsCompletionFingerprint = null;
+  let groupsCompletionFilter = 'all';
   let groupSequence = 0;
   let groupRunning = 0;
   const groupQueue = [];
@@ -40,11 +43,12 @@
     (!params.has('window') || Object.hasOwn(core.WINDOW_FILES, params.get('window'))) &&
     (!params.has('difficulty') || ['', 'Easy', 'Medium', 'Hard'].includes(params.get('difficulty'))) &&
     (!params.has('topic') || params.get('topic').length <= 200) &&
-    (!params.has('sort') || core.SORT_OPTIONS.practiceQuestions.includes(params.get('sort')));
+    (!params.has('sort') || core.SORT_OPTIONS.practiceQuestions.includes(params.get('sort'))) &&
+    (!params.has('completionFilter') || completionFilters.includes(params.get('completionFilter')));
   const problemRoute = !params.has('company') && typeof requestedSlug === 'string' && requestedSlug.length <= 200 && requestedSlug === requestedSlug.trim() && core.SLUG_PATTERN.test(requestedSlug);
   let pendingDetail = companyRoute ? { kind: 'company', name: requestedCompany, title: requestedCompany,
     window: params.get('window'), sort: params.get('sort'),
-    filters: { difficulty: params.get('difficulty') || '', topic: params.get('topic') || '', query: '' }
+    filters: { difficulty: params.get('difficulty') || '', topic: params.get('topic') || '', query: '', completionFilter: params.get('completionFilter') || 'all' }
   } : problemRoute ? { kind: 'problem', slug: requestedSlug, title: core.formatProblemTitle(requestedSlug) } : null;
   let mode = problemRoute ? 'problems' : params.get('mode') === 'companies' ? 'companies' : 'problems';
   const queries = { problems: '', companies: '' };
@@ -58,6 +62,8 @@
   const completionTTL = 60_000;
   const completionCache = new Map();
   let completionSession = null;
+  let completionSnapshotFingerprint = null;
+  let filteredCompletionEpoch = 0;
   let completionSite = null;
   let completionState = 'checking';
   let completionEpoch = 0;
@@ -76,10 +82,12 @@
   const version = () => `${mode}|${windowKey()}|${status.commit || ''}`;
   const count = value => Number(value || 0).toLocaleString();
   const detailSortKey = frame => frame.kind === 'company' ? 'companyQuestions' : 'problemCompanies';
-  const problemContext = () => JSON.stringify([windowKey(), queries.problems, sorts.problems, problemView.difficulty, problemView.topics.map(topic => topic.toLocaleLowerCase()).sort(), problemView.topicMatch]);
+  const problemContext = () => JSON.stringify([windowKey(), queries.problems, sorts.problems, problemView.difficulty, problemView.topics.map(topic => topic.toLocaleLowerCase()).sort(), problemView.topicMatch, problemView.completionFilter,
+    problemView.completionFilter === 'all' ? null : completionFingerprint(list.completion)]);
   const grouped = () => mode === 'problems' && problemView.view === 'topics';
   const listVersion = () => JSON.stringify([version(), queries[mode], sorts[mode], mode === 'problems' ? problemContext() : null, mode === 'problems' ? problemView.view : null]);
-  const detailVersion = frame => JSON.stringify([version(), frame.kind, frame.slug || frame.name, frame.sort, frame.filters]);
+  const detailVersion = frame => JSON.stringify([version(), frame.kind, frame.slug || frame.name, frame.sort, frame.filters,
+    frame.kind === 'company' && frame.filters.completionFilter !== 'all' ? completionFingerprint(frame.completion) : null]);
   const invalidate = () => {
     closeSelectMenu();
     closeAcceptanceHelp();
@@ -145,7 +153,7 @@
   const closeSelectMenu = returnFocus => selectMenus.close(returnFocus);
   const syncSelectControl = select => selectMenus.sync(select);
   function enhanceSelects() {
-    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'problem-difficulty-select', 'topic-match-select', 'detail-topic-match-select'],
+    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'problem-difficulty-select', 'topic-match-select', 'detail-topic-match-select', 'problem-status-select', 'detail-status-select'],
       { iconIds: ['sort-select', 'detail-sort-select'] });
   }
   function validatedProblemView(value) {
@@ -156,7 +164,7 @@
       seen.add(topic.trim().toLocaleLowerCase()); return true;
     }).slice(0, 256).map(topic => topic.trim());
     return { difficulty: ['', 'Easy', 'Medium', 'Hard'].includes(stored.difficulty) ? stored.difficulty : '',
-      topics, topicMatch: stored.topicMatch === 'all' ? 'all' : 'any', view: stored.view === 'topics' ? 'topics' : 'list' };
+      topics, topicMatch: stored.topicMatch === 'all' ? 'all' : 'any', completionFilter: completionFilters.includes(stored.completionFilter) ? stored.completionFilter : 'all', view: stored.view === 'topics' ? 'topics' : 'list' };
   }
   function saveProblemView() {
     problemViewDirty = true;
@@ -256,6 +264,7 @@
     $('problem-filters').hidden = mode !== 'problems' || Boolean(activeDetail());
     $('problem-difficulty-select').value = problemView.difficulty;
     $('topic-match-select').value = problemView.topicMatch;
+    $('problem-status-select').value = problemView.completionFilter; syncSelectControl($('problem-status-select'));
     syncSelectControl($('problem-difficulty-select')); syncSelectControl($('topic-match-select'));
     renderTopicSelection();
     $('problem-view-list').setAttribute('aria-pressed', String(problemView.view === 'list'));
@@ -266,15 +275,16 @@
   }
   const scopeGroups = frame => frame ? frame.topicGroups : topicGroups;
   const scopeContext = frame => frame ? JSON.stringify([frame.name, windowKey(), frame.filters.query, frame.sort, frame.filters.difficulty,
-    frame.filters.topics.map(topic => topic.toLocaleLowerCase()).sort(), frame.filters.topicMatch]) : problemContext();
+    frame.filters.topics.map(topic => topic.toLocaleLowerCase()).sort(), frame.filters.topicMatch, frame.filters.completionFilter,
+    frame.filters.completionFilter === 'all' ? null : completionFingerprint(frame.completion)]) : problemContext();
   const scopeGrouped = frame => frame ? frame.kind === 'company' && frame.filters.view === 'topics' : grouped();
   const scopeActive = frame => frame ? frame === activeDetail() && scopeGrouped(frame) : grouped() && !activeDetail();
   const scopeElement = (frame, suffix) => $((frame ? 'detail-' : '') + suffix);
   function resetTopicGroups(frame = null) {
     for (let index = groupQueue.length - 1; index >= 0; index--) if (groupQueue[index].frame === frame) groupQueue.splice(index, 1);
     scopeGroups(frame).clear();
-    if (frame) { frame.groupsContext = ''; frame.groupsRevision = null; }
-    else { groupsContext = ''; groupsRevision = null; }
+    if (frame) { frame.groupsContext = ''; frame.groupsRevision = null; frame.groupsCompletionFingerprint = null; }
+    else { groupsContext = ''; groupsRevision = null; groupsCompletionFingerprint = null; groupsCompletionFilter = 'all'; }
     if (!frame || detailGroupOwner === frame) scopeElement(frame, 'topic-groups').replaceChildren();
     renderTopicGroupProgress(frame);
   }
@@ -287,11 +297,13 @@
   }
   function baseProblemRequest() {
     return { type: 'LCT_SEARCH_PROBLEMS', query: queries.problems, window: windowKey(), sort: sorts.problems,
-      difficulty: problemView.difficulty, topics: [...problemView.topics], topicMatch: problemView.topicMatch };
+      difficulty: problemView.difficulty, topics: [...problemView.topics], topicMatch: problemView.topicMatch, completionFilter: problemView.completionFilter,
+      ...(problemView.completionFilter !== 'all' && list.refreshCompletion ? { refreshCompletion: true } : {}) };
   }
   function baseCompanyRequest(frame) {
     return { type: 'LCT_PRACTICE', company: frame.name, window: windowKey(), sort: frame.sort, query: frame.filters.query,
-      difficulty: frame.filters.difficulty, topics: [...frame.filters.topics], topicMatch: frame.filters.topicMatch };
+      difficulty: frame.filters.difficulty, topics: [...frame.filters.topics], topicMatch: frame.filters.topicMatch, completionFilter: frame.filters.completionFilter,
+      ...(frame.filters.completionFilter !== 'all' && frame.refreshCompletion ? { refreshCompletion: true } : {}) };
   }
   function companyFiltersChanged(frame, debounce = false) {
     if (frame !== activeDetail() || frame.kind !== 'company') return;
@@ -441,6 +453,91 @@
     scheduleCompletionScan();
   }
 
+  function completionFingerprint(meta) {
+    return meta?.state === 'ready' && typeof meta.sessionKey === 'string' && meta.sessionKey &&
+      typeof meta.revision === 'string' && meta.revision ? JSON.stringify([meta.sessionKey, meta.revision, meta.site || null]) : null;
+  }
+  function readyCompletion(meta) {
+    return Boolean(completionFingerprint(meta) && completionSiteLabel(meta.site));
+  }
+  function normalizedCompletion(meta) {
+    const value = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
+    const state = ['ready', 'signed-out', 'no-tab', 'unavailable', 'checking'].includes(value.state) ? value.state : 'unavailable';
+    return { ...value, state: state === 'ready' && !readyCompletion(value) ? 'unavailable' : state,
+      unknownCount: Number.isInteger(value.unknownCount) && value.unknownCount >= 0 ? value.unknownCount : 0 };
+  }
+  function completionHint(meta) {
+    return meta?.state === 'signed-out' ? 'Sign in to LeetCode to use this status filter.'
+      : meta?.state === 'no-tab' ? 'Open a signed-in LeetCode tab to use this status filter.'
+      : meta?.state === 'checking' ? 'Checking status for this filter…'
+      : 'Could not check this status filter. Refresh your LeetCode tab and return here to retry.';
+  }
+  function scopeCompletionFilter(frame = null) {
+    return frame ? frame.filters.completionFilter : problemView.completionFilter;
+  }
+  function activeFilteredOwner() {
+    const frame = activeDetail();
+    if (frame) return frame.kind === 'company' && frame.filters.completionFilter !== 'all' ? frame : null;
+    return mode === 'problems' && problemView.completionFilter !== 'all' ? list : null;
+  }
+  function clearFilteredCompletionResults({ except = null, meta = { state: 'checking' }, force = false } = {}) {
+    filteredCompletionEpoch++;
+    const ownerMeta = normalizedCompletion(meta);
+    for (let index = groupQueue.length - 1; index >= 0; index--) {
+      const task = groupQueue[index];
+      if (task.message.completionFilter !== 'all' && (task.frame || list) !== except) groupQueue.splice(index, 1);
+    }
+    if ((list.ownerMode === 'problems' && list.completionFilter !== 'all') && list !== except) {
+      list.rows = []; list.total = null; list.hasMore = false; list.loading = false; list.error = ''; list.version = null;
+      list.completion = ownerMeta; list.refreshCompletion = force;
+      renderListRows([]);
+    }
+    if (groupsCompletionFilter !== 'all' && list !== except) resetTopicGroups();
+    for (const frame of stack) {
+      if (frame.kind !== 'company' || frame.filters.completionFilter === 'all' || frame === except) continue;
+      frame.rows = []; frame.total = null; frame.hasMore = false; frame.loading = false; frame.error = ''; frame.version = null;
+      frame.completion = ownerMeta; frame.refreshCompletion = force; resetTopicGroups(frame);
+      if (frame === activeDetail()) renderDetailRows([]);
+    }
+    if (!activeDetail()) renderListSummary(); else if (activeDetail()?.kind === 'company') renderDetailSummary();
+  }
+  function seedFilteredCompletion(owner, meta, rows) {
+    const fingerprint = completionFingerprint(meta);
+    const changed = (completionSession && completionSession !== meta.sessionKey) ||
+      (completionSnapshotFingerprint && completionSnapshotFingerprint !== fingerprint);
+    if (changed) clearFilteredCompletionResults({ except: owner });
+    // Supersede older visible-row checks before using the verified immutable
+    // snapshot. Its private status fields never enter the source dataset.
+    if (completionSnapshotFingerprint !== fingerprint || completionSession !== meta.sessionKey || completionState !== 'ready') {
+      completionEpoch++; completionCache.clear();
+    }
+    completionSnapshotFingerprint = fingerprint;
+    completionSession = meta.sessionKey; completionSite = meta.site; completionState = 'ready';
+    completionRefreshedAt = Date.now(); completionBlocked = false; completionIdentityNeeded = false;
+    for (const row of rows) if (typeof row?.slug === 'string') completionCache.set(row.slug, row.completed === true ? true : row.completed === false ? false : null);
+    paintCompletionIndicators(); renderCompletionStatus();
+  }
+  function settleFilteredUnavailable(owner, result = {}) {
+    const meta = normalizedCompletion(result.completion || { state: 'unavailable' });
+    clearFilteredCompletionResults({ meta });
+    completionEpoch++; completionSnapshotFingerprint = null; completionNeedsScan = false; completionIdentityNeeded = false;
+    completionBlocked = true; clearCompletionState(meta.state, meta.site || null);
+    const sourceResult = { ...result, topics: Array.isArray(result.topics) ? result.topics : owner === list ? topicCatalog : owner.topics, completion: meta };
+    owner.completion = meta; owner.total = null; owner.rows = []; owner.hasMore = false; owner.loading = false; owner.error = '';
+    if (result.available !== undefined) owner.available = result.available !== false;
+    if (result.sourceRevision !== undefined) owner.sourceRevision = sourceRevision(result);
+    if (owner === list) {
+      if (list.ownerMode === 'problems') { syncTopicGroups(sourceResult, null); renderListRows([]); list.version = listVersion(); }
+      renderListSummary();
+    } else if (owner === activeDetail()) {
+      if (result.sourceUrl !== undefined) owner.sourceUrl = typeof result.sourceUrl === 'string' ? result.sourceUrl : null;
+      syncTopicGroups(sourceResult, owner); renderDetailRows([]);
+      owner.version = detailVersion(owner); renderDetailShell(); renderDetailSummary();
+    }
+  }
+  function completionRowsMatch(rows, filter) {
+    return rows.every(row => row && row.completed === (filter === 'solved'));
+  }
   function completionSiteLabel(site) {
     return ['https://leetcode.com', 'https://www.leetcode.com'].includes(site) ? 'LeetCode.com'
       : ['https://leetcode.cn', 'https://www.leetcode.cn'].includes(site) ? 'LeetCode.cn' : null;
@@ -453,7 +550,9 @@
       : completionState === 'signed-out' ? 'Sign in to LeetCode to show completed problems.'
       : completionState === 'no-tab' ? 'Open a signed-in LeetCode tab to show completed problems.'
       : completionState === 'checking' ? 'Checking completed status…' : 'Could not check completed status. Refresh your LeetCode tab and return here to retry.';
-    if (status.textContent !== text) status.textContent = text;
+    const unknown = activeFilteredOwner()?.completion?.unknownCount || 0;
+    const message = text + (completionState === 'ready' && unknown > 0 ? ' · ' + count(unknown) + (unknown === 1 ? ' unknown status excluded' : ' unknown statuses excluded') : '');
+    if (status.textContent !== message) status.textContent = message;
   }
   function paintCompletionIndicators() {
     for (const row of document.querySelectorAll('.question-row[data-slug]')) {
@@ -475,16 +574,20 @@
     completionCache.clear(); completionSession = null; completionSite = site; completionState = state;
     paintCompletionIndicators(); renderCompletionStatus();
   }
-  function refreshCompletionStatus() {
-    completionEpoch++; completionRefreshedAt = Date.now();
+  function refreshCompletionStatus(forceSnapshot = true) {
+    completionEpoch++; completionRefreshedAt = Date.now(); completionSnapshotFingerprint = null;
     completionBlocked = false; completionIdentityNeeded = true; completionNeedsScan = true;
-    clearCompletionState(); scheduleCompletionScan();
+    clearCompletionState();
+    clearFilteredCompletionResults({ force: forceSnapshot === true });
+    const owner = activeFilteredOwner();
+    if (owner) {
+      owner.refreshCompletion = forceSnapshot === true;
+      if (owner === list) void loadList(); else void loadDetail();
+    } else scheduleCompletionScan();
   }
   function scheduleCompletionScan() {
-    if (Date.now() - completionRefreshedAt >= completionTTL) {
-      completionEpoch++; completionRefreshedAt = Date.now(); completionBlocked = false; completionIdentityNeeded = true;
-      clearCompletionState();
-    }
+    if (activeFilteredOwner()) return;
+    if (Date.now() - completionRefreshedAt >= completionTTL) { refreshCompletionStatus(); return; }
     completionNeedsScan = true;
     if (completionScheduled || document.hidden || completionBlocked) return;
     completionScheduled = true;
@@ -494,20 +597,22 @@
     });
   }
   async function runCompletionPass() {
-    if (completionRunning || document.hidden || completionBlocked) return;
+    if (completionRunning || document.hidden || completionBlocked || activeFilteredOwner()) return;
     completionRunning = true;
     const epoch = completionEpoch;
     try {
-      while (epoch === completionEpoch && !document.hidden && !completionBlocked) {
+      while (epoch === completionEpoch && !document.hidden && !completionBlocked && !activeFilteredOwner()) {
         completionNeedsScan = false;
         const slugs = visibleCompletionSlugs().filter(slug => !completionCache.has(slug)).slice(0, 100);
         if (!slugs.length && !completionIdentityNeeded) break;
         const result = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs });
-        if (epoch !== completionEpoch) break;
+        if (epoch !== completionEpoch || activeFilteredOwner()) break;
         if (!result?.ok || !['ready', 'signed-out', 'no-tab', 'unavailable'].includes(result.state)) {
           throw new Error('Completed status unavailable');
         }
         if (result.state !== 'ready') {
+          clearFilteredCompletionResults({ meta: { state: result.state, site: result.site } });
+          completionSnapshotFingerprint = null;
           clearCompletionState(result.state, result.site || null);
           completionBlocked = true; completionNeedsScan = false; completionIdentityNeeded = false;
           break;
@@ -528,6 +633,7 @@
       }
     } catch (_) {
       if (epoch === completionEpoch) {
+        clearFilteredCompletionResults({ meta: { state: 'unavailable' } }); completionSnapshotFingerprint = null;
         clearCompletionState('unavailable'); completionBlocked = true; completionNeedsScan = false; completionIdentityNeeded = false;
       }
     } finally {
@@ -684,11 +790,13 @@
   }
   function syncTopicGroups(result, frame = null) {
     const context = scopeContext(frame), revision = sourceRevision(result);
+    const filter = scopeCompletionFilter(frame), accountFingerprint = filter === 'all' ? null : completionFingerprint(result.completion);
     const previousContext = frame ? frame.groupsContext : groupsContext;
     const previousRevision = frame ? frame.groupsRevision : groupsRevision;
-    if (previousContext && (previousContext !== context || previousRevision !== revision)) resetTopicGroups(frame);
-    if (frame) { frame.groupsContext = context; frame.groupsRevision = revision; }
-    else { groupsContext = context; groupsRevision = revision; }
+    const previousAccount = frame ? frame.groupsCompletionFingerprint : groupsCompletionFingerprint;
+    if (previousContext && (previousContext !== context || previousRevision !== revision || previousAccount !== accountFingerprint)) resetTopicGroups(frame);
+    if (frame) { frame.groupsContext = context; frame.groupsRevision = revision; frame.groupsCompletionFingerprint = accountFingerprint; }
+    else { groupsContext = context; groupsRevision = revision; groupsCompletionFingerprint = accountFingerprint; groupsCompletionFilter = filter; }
     const groups = scopeGroups(frame);
     const catalog = new Map();
     for (const topic of Array.isArray(result.topics) ? result.topics : []) {
@@ -705,7 +813,7 @@
     // Absent selected headings have zero matches; their selections stay visible
     // so an unknown or no-longer-present topic can be removed deliberately.
     const selection = frame ? frame.filters.topics : problemView.topics;
-    const selected = result.available === false ? [] : selection.length ? selection.map(topic => metadata.get(topicGroupKey(topic)) ||
+    const selected = result.available === false || (filter !== 'all' && !readyCompletion(result.completion)) ? [] : selection.length ? selection.map(topic => metadata.get(topicGroupKey(topic)) ||
       { topic: catalog.get(topic.toLocaleLowerCase()) || topic, total: 0 }) : [...metadata.values()];
     selected.sort((a, b) => a.topic === null ? 1 : b.topic === null ? -1 : a.topic.localeCompare(b.topic, undefined, { sensitivity: 'base' }));
     const next = new Map();
@@ -731,14 +839,14 @@
     if (!scopeActive(frame) || !group.open || !group.total || group.loading || group.queued ||
         (append && !group.hasMore) || (frame ? frame.groupsContext : groupsContext) !== scopeContext(frame)) return;
     group.queued = true; group.error = '';
-    const task = { frame, group, append, request: ++group.request, stamp: generation, context: scopeContext(frame), message: frame ? baseCompanyRequest(frame) : baseProblemRequest() };
+    const task = { frame, group, append, filteredStamp: filteredCompletionEpoch, request: ++group.request, stamp: generation, context: scopeContext(frame), message: frame ? baseCompanyRequest(frame) : baseProblemRequest() };
     const retryFocused = document.activeElement === group.dom.retry;
     groupQueue.push(task); renderTopicGroupState(group);
     if (retryFocused && group.dom.retry.hidden) group.dom.list.focus({ preventScroll: true });
     pumpTopicGroups();
   }
   function currentGroupTask(task) {
-    return task.stamp === generation && task.request === task.group.request &&
+    return task.stamp === generation && (task.message.completionFilter === 'all' || task.filteredStamp === filteredCompletionEpoch) && task.request === task.group.request &&
       scopeGroups(task.frame).get(topicGroupKey(task.group.topic)) === task.group &&
       task.context === scopeContext(task.frame) && scopeActive(task.frame);
   }
@@ -768,6 +876,12 @@
       const result = await api.runtime.sendMessage({ ...task.message, groupTopic: group.topic, offset, limit: 20 });
       if (!currentGroupTask(task)) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load this topic. Try again.');
+      if (task.message.completionFilter !== 'all') {
+        if (!readyCompletion(result.completion)) { settleFilteredUnavailable(frame || list, result); return; }
+        if (completionFingerprint(result.completion) !== (frame ? frame.groupsCompletionFingerprint : groupsCompletionFingerprint)) {
+          refreshCompletionStatus(false); return;
+        }
+      }
       if (sourceRevision(result) !== (frame ? frame.groupsRevision : groupsRevision)) {
         status = result.status || status; restartProblemResults(frame); return;
       }
@@ -782,14 +896,19 @@
       if (!Number.isInteger(total) || total < offset + rows.length || total !== group.total || invalid ||
           (result.offset !== undefined && result.offset !== offset) || Boolean(result.hasMore) !== (offset + rows.length < total) ||
           (!rows.length && total > offset)) throw new Error('Could not continue this topic list. Try again.');
+      if (task.message.completionFilter !== 'all' && !completionRowsMatch(rows, task.message.completionFilter)) throw new Error('Problem status is unknown.');
       const focused = [group.dom.more, group.dom.retry].includes(document.activeElement);
       group.rows = task.append ? group.rows.concat(rows) : rows;
+      if (task.message.completionFilter !== 'all') seedFilteredCompletion(frame || list, result.completion, rows);
       group.total = total; group.hasMore = Boolean(result.hasMore); group.revision = frame ? frame.groupsRevision : groupsRevision;
       if (task.append) group.dom.list.append(...rows.map(row => problemRow(row, Boolean(frame))));
       else group.dom.list.replaceChildren(...rows.map(row => problemRow(row, Boolean(frame))));
       if (focused && !group.hasMore) group.dom.list.focus({ preventScroll: true });
     } catch (cause) {
-      if (currentGroupTask(task)) group.error = cause.message || 'Could not load this topic. Try again.';
+      if (currentGroupTask(task)) {
+        if (task.message.completionFilter !== 'all') settleFilteredUnavailable(frame || list);
+        else group.error = cause.message || 'Could not load this topic. Try again.';
+      }
     } finally {
       if (currentGroupTask(task)) {
         const focused = document.activeElement;
@@ -808,42 +927,55 @@
   function renderListSummary() {
     $('results').setAttribute('aria-busy', String(list.loading));
     $('topic-groups').setAttribute('aria-busy', String(list.loading));
-    const filtered = queries[mode].trim() || (mode === 'problems' && (problemView.difficulty || problemView.topics.length));
+    const filteredStatus = mode === 'problems' && problemView.completionFilter !== 'all';
+    const accountUnavailable = filteredStatus && !readyCompletion(list.completion);
+    const filtered = queries[mode].trim() || (mode === 'problems' && (problemView.difficulty || problemView.topics.length || filteredStatus));
     const appearances = Array.from(topicGroups.values()).reduce((sum, group) => sum + group.total, 0);
-    $('result-summary').textContent = list.loading ? 'Loading saved ' + mode + '…' : grouped()
-      ? count(list.total) + ' unique problems · ' + count(topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
+    $('result-summary').textContent = list.loading ? 'Loading saved ' + mode + '…' : accountUnavailable ? completionHint(list.completion)
+      : grouped() ? count(list.total) + ' unique problems · ' + count(topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
       : count(list.rows.length) + ' of ' + count(list.total) + ' ' + mode + (filtered ? ' matching your filters' : '');
-    const message = list.error || (!list.loading && !list.available ? unavailable() : !list.loading && !list.total ? 'No ' + mode + ' match your filters in this time window.' : '');
-    $('search-message').textContent = message;
-    $('search-message').hidden = !message;
+    const message = list.error || (!list.loading && accountUnavailable ? completionHint(list.completion)
+      : !list.loading && !list.available ? unavailable() : !list.loading && !list.total ? 'No ' + mode + ' match your filters in this time window.' : '');
+    $('search-message').textContent = message; $('search-message').hidden = !message;
     $('search-message').toggleAttribute('data-error', Boolean(list.error));
-    $('search-retry').hidden = !list.error; $('search-retry').disabled = list.loading;
-    $('load-more').hidden = grouped() || !list.hasMore;
-    $('load-more').disabled = list.loading;
-    $('expand-topic-groups').disabled = $('collapse-topic-groups').disabled = list.loading || !topicGroups.size;
+    $('search-retry').hidden = !list.error && !(accountUnavailable && list.completion?.state === 'unavailable');
+    $('search-retry').disabled = list.loading;
+    $('load-more').hidden = grouped() || accountUnavailable || !list.hasMore; $('load-more').disabled = list.loading;
+    $('expand-topic-groups').disabled = $('collapse-topic-groups').disabled = list.loading || accountUnavailable || !topicGroups.size;
     $('result-order').textContent = orderLabel(mode, sorts[mode]);
     const unavailableFilters = mode === 'problems' && !list.loading && list.version !== null && !list.available;
     $('problem-difficulty-select').disabled = unavailableFilters; syncSelectControl($('problem-difficulty-select'));
     $('topic-match-select').disabled = unavailableFilters; syncSelectControl($('topic-match-select'));
     $('topic-picker-trigger').disabled = unavailableFilters;
+    // Account failures must leave All problems available.
+    $('problem-status-select').disabled = false; syncSelectControl($('problem-status-select'));
   }
   async function loadList(append = false) {
     if (activeDetail() || (append && (list.loading || !list.hasMore || grouped()))) return;
     if (append && list.version !== listVersion()) append = false;
     const id = ++listRequest, stamp = generation;
     const requestedMode = mode, requestedWindow = windowKey(), requestedSort = sorts[requestedMode];
+    const filter = requestedMode === 'problems' ? problemView.completionFilter : 'all';
+    let filteredStamp = filteredCompletionEpoch;
     const context = requestedMode === 'problems' ? problemContext() : null;
     const offset = append ? list.rows.length : 0;
-    if (!append) { list.rows = []; list.total = 0; list.hasMore = false; list.version = null; renderListRows([]); }
+    list.ownerMode = requestedMode; list.completionFilter = filter;
+    if (!append) { list.rows = []; list.total = filter === 'all' ? 0 : null; list.hasMore = false; list.version = null; renderListRows([]); }
     list.loading = true; list.error = ''; renderListSummary();
     try {
       const message = requestedMode === 'problems' ? baseProblemRequest()
         : { type: 'LCT_SEARCH_COMPANIES', query: queries.companies, window: requestedWindow, sort: requestedSort };
+      if (requestedMode === 'problems') list.refreshCompletion = false;
       const result = await api.runtime.sendMessage({ ...message, offset, limit: grouped() ? 1 : 50 });
-      if (id !== listRequest || stamp !== generation || activeDetail() || requestedMode !== mode || (context && context !== problemContext())) return;
+      if (id !== listRequest || stamp !== generation || activeDetail() || requestedMode !== mode ||
+          (filter !== 'all' && filteredStamp !== filteredCompletionEpoch) || (context && context !== problemContext())) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not search the saved dataset. Try again.');
+      if (filter !== 'all' && !readyCompletion(result.completion)) { settleFilteredUnavailable(list, result); return; }
       const next = Array.isArray(requestedMode === 'problems' ? result.problems : result.companies)
         ? requestedMode === 'problems' ? result.problems : result.companies : [];
+      if (filter !== 'all' && append && completionFingerprint(list.completion) !== completionFingerprint(result.completion)) {
+        refreshCompletionStatus(false); return;
+      }
       if (requestedMode === 'problems' && append && list.sourceRevision !== sourceRevision(result)) {
         status = result.status || status; restartProblemResults(); return;
       }
@@ -853,21 +985,29 @@
         if (typeof key !== 'string' || known.has(key)) return true;
         known.add(key); return false;
       });
-      if (!Number.isInteger(total) || total < offset + next.length || invalid ||
+      if (result.total === null || !Number.isInteger(total) || total < offset + next.length || invalid ||
           (result.offset !== undefined && result.offset !== offset) ||
           (result.available !== false && Boolean(result.hasMore) !== (offset + next.length < total)) ||
-          (result.available !== false && !next.length && total > offset)) throw new Error('Could not continue these results. Try again.');
+          (result.available !== false && !next.length && total > offset) ||
+          (filter !== 'all' && !completionRowsMatch(next, filter))) throw new Error('Could not continue these results. Try again.');
       status = result.status || status;
+      list.completion = filter === 'all' ? null : normalizedCompletion(result.completion);
+      if (filter !== 'all') { seedFilteredCompletion(list, list.completion, next); filteredStamp = filteredCompletionEpoch; }
       list.rows = append ? list.rows.concat(next) : next; list.total = total;
       list.available = result.available !== false; list.hasMore = Boolean(result.hasMore); list.sourceRevision = sourceRevision(result);
       list.version = listVersion();
       renderListRows(next, append);
       if (requestedMode === 'problems') syncTopicGroups(result);
-      renderStatus();
+      renderStatus(); renderCompletionStatus();
     } catch (cause) {
-      if (id === listRequest && stamp === generation) list.error = cause.message || 'Could not load the saved dataset.';
+      if (id === listRequest && stamp === generation && (filter === 'all' || filteredStamp === filteredCompletionEpoch)) {
+        if (filter !== 'all') settleFilteredUnavailable(list);
+        else list.error = cause.message || 'Could not load the saved dataset.';
+      }
     } finally {
-      if (id === listRequest && stamp === generation && !activeDetail()) { list.loading = false; renderListSummary(); }
+      if (id === listRequest && stamp === generation && !activeDetail() && (filter === 'all' || filteredStamp === filteredCompletionEpoch)) {
+        list.loading = false; renderListSummary();
+      }
     }
   }
 
@@ -875,6 +1015,7 @@
     if (!frame || frame.kind !== 'company' || frame !== activeDetail()) return;
     renderTopicSelection(frame);
     $('detail-topic-match-select').value = frame.filters.topicMatch; syncSelectControl($('detail-topic-match-select'));
+    $('detail-status-select').value = frame.filters.completionFilter; syncSelectControl($('detail-status-select'));
     $('detail-view-list').setAttribute('aria-pressed', String(frame.filters.view === 'list'));
     $('detail-view-topics').setAttribute('aria-pressed', String(frame.filters.view === 'topics'));
     $('detail-results').hidden = scopeGrouped(frame);
@@ -921,28 +1062,33 @@
     const frame = activeDetail();
     if (!frame) return;
     const noun = frame.kind === 'problem' ? 'companies' : 'questions';
+    const filteredStatus = frame.kind === 'company' && frame.filters.completionFilter !== 'all';
+    const accountUnavailable = filteredStatus && !readyCompletion(frame.completion);
     const byTopic = frame.kind === 'company' && scopeGrouped(frame);
     const appearances = frame.kind === 'company' ? [...frame.topicGroups.values()].reduce((sum, group) => sum + group.total, 0) : 0;
     $('detail-results').setAttribute('aria-busy', String(frame.loading));
     $('detail-topic-groups').setAttribute('aria-busy', String(frame.loading));
-    $('detail-summary').textContent = frame.loading ? 'Loading saved ' + noun + '…' : byTopic
-      ? count(frame.total) + ' unique questions · ' + count(frame.topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
+    $('detail-summary').textContent = frame.loading ? 'Loading saved ' + noun + '…' : accountUnavailable ? completionHint(frame.completion)
+      : byTopic ? count(frame.total) + ' unique questions · ' + count(frame.topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
       : count(frame.rows.length) + ' of ' + count(frame.total) + ' ' + noun +
-        (frame.kind === 'company' && (frame.filters.query || frame.filters.topics.length || frame.filters.difficulty) ? ' matching your filters' : '');
-    const message = frame.error || (!frame.loading && !frame.available ? unavailable() : !frame.loading && !frame.total
+        (frame.kind === 'company' && (frame.filters.query || frame.filters.topics.length || frame.filters.difficulty || filteredStatus) ? ' matching your filters' : '');
+    const message = frame.error || (!frame.loading && accountUnavailable ? completionHint(frame.completion)
+      : !frame.loading && !frame.available ? unavailable() : !frame.loading && !frame.total
       ? frame.kind === 'company' ? 'No questions match these filters in this time window.' : 'No company matches in this dataset. Coverage may be incomplete.' : '');
     $('detail-message').textContent = message; $('detail-message').hidden = !message;
     $('detail-message').toggleAttribute('data-error', Boolean(frame.error));
-    $('detail-retry').hidden = !frame.error; $('detail-retry').disabled = frame.loading;
-    $('detail-load-more').hidden = frame.kind !== 'company' || byTopic || !frame.hasMore;
+    $('detail-retry').hidden = !frame.error && !(accountUnavailable && frame.completion?.state === 'unavailable');
+    $('detail-retry').disabled = frame.loading;
+    $('detail-load-more').hidden = frame.kind !== 'company' || byTopic || accountUnavailable || !frame.hasMore;
     $('detail-load-more').disabled = frame.loading;
     $('detail-order').textContent = orderLabel(detailSortKey(frame), frame.sort);
     if (frame.kind === 'company') {
-      $('expand-detail-topic-groups').disabled = $('collapse-detail-topic-groups').disabled = frame.loading || !frame.topicGroups.size;
+      $('expand-detail-topic-groups').disabled = $('collapse-detail-topic-groups').disabled = frame.loading || accountUnavailable || !frame.topicGroups.size;
       const unavailableFilters = !frame.loading && frame.version !== null && !frame.available;
       $('difficulty-select').disabled = unavailableFilters; syncSelectControl($('difficulty-select'));
       $('detail-topic-match-select').disabled = unavailableFilters; syncSelectControl($('detail-topic-match-select'));
       $('detail-topic-picker-trigger').disabled = unavailableFilters;
+      $('detail-status-select').disabled = false; syncSelectControl($('detail-status-select'));
     }
   }
   async function loadDetail(append = false) {
@@ -950,9 +1096,11 @@
     if (!frame || (append && (frame.loading || !frame.hasMore || (frame.kind === 'company' && scopeGrouped(frame))))) return;
     if (append && frame.version !== detailVersion(frame)) append = false;
     const id = ++detailRequest, stamp = generation;
+    const filter = frame.kind === 'company' ? frame.filters.completionFilter : 'all';
+    let filteredStamp = filteredCompletionEpoch;
     const offset = append ? frame.rows.length : 0;
     if (!append) {
-      frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null;
+      frame.rows = []; frame.total = filter === 'all' ? 0 : null; frame.hasMore = false; frame.version = null;
       if (frame.kind === 'problem') { frame.acceptanceRate = null; renderDetailShell(); }
       renderDetailRows([]);
     }
@@ -960,9 +1108,14 @@
     try {
       const message = frame.kind === 'problem' ? { type: 'LCT_GET', slug: frame.slug, window: windowKey() }
         : { ...baseCompanyRequest(frame), offset, limit: scopeGrouped(frame) ? 1 : 50 };
+      if (frame.kind === 'company') frame.refreshCompletion = false;
       const result = await api.runtime.sendMessage(message);
-      if (id !== detailRequest || stamp !== generation || frame !== activeDetail()) return;
+      if (id !== detailRequest || stamp !== generation || frame !== activeDetail() || (filter !== 'all' && filteredStamp !== filteredCompletionEpoch)) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load these details. Try again.');
+      if (filter !== 'all' && !readyCompletion(result.completion)) { settleFilteredUnavailable(frame, result); return; }
+      if (filter !== 'all' && append && completionFingerprint(frame.completion) !== completionFingerprint(result.completion)) {
+        refreshCompletionStatus(false); return;
+      }
       if (frame.kind === 'company' && append && frame.sourceRevision !== sourceRevision(result)) {
         status = result.status || status; restartProblemResults(frame); return;
       }
@@ -974,10 +1127,11 @@
           if (!row || typeof row.slug !== 'string' || !core.SLUG_PATTERN.test(row.slug) || known.has(row.slug)) return true;
           known.add(row.slug); return false;
         });
-        if (!Number.isInteger(total) || total < offset + next.length || invalid ||
+        if (result.total === null || !Number.isInteger(total) || total < offset + next.length || invalid ||
             (result.offset !== undefined && result.offset !== offset) ||
             (result.available !== false && Boolean(result.hasMore) !== (offset + next.length < total)) ||
-            (result.available !== false && !next.length && total > offset)) throw new Error('Could not continue these questions. Try again.');
+            (result.available !== false && !next.length && total > offset) ||
+            (filter !== 'all' && !completionRowsMatch(next, filter))) throw new Error('Could not continue these questions. Try again.');
       }
       status = result.status || status;
       if (frame.kind === 'problem') {
@@ -986,6 +1140,8 @@
         if (typeof problem?.title === 'string' && problem.title.trim()) frame.title = problem.title;
         if (typeof problem?.difficulty === 'string') frame.difficulty = problem.difficulty;
       }
+      frame.completion = filter === 'all' ? null : normalizedCompletion(result.completion);
+      if (filter !== 'all') { seedFilteredCompletion(frame, frame.completion, next); filteredStamp = filteredCompletionEpoch; }
       frame.rows = append ? frame.rows.concat(next) : next;
       frame.total = frame.kind === 'problem' ? next.length : Number(result.total) || 0;
       frame.available = result.available !== false;
@@ -995,11 +1151,16 @@
       frame.version = detailVersion(frame);
       renderDetailRows(next, append);
       if (frame.kind === 'company') syncTopicGroups(result, frame);
-      renderDetailShell(); renderStatus();
+      renderDetailShell(); renderStatus(); renderCompletionStatus();
     } catch (cause) {
-      if (id === detailRequest && stamp === generation && frame === activeDetail()) frame.error = cause.message || 'Could not load these details.';
+      if (id === detailRequest && stamp === generation && frame === activeDetail() && (filter === 'all' || filteredStamp === filteredCompletionEpoch)) {
+        if (filter !== 'all') settleFilteredUnavailable(frame);
+        else frame.error = cause.message || 'Could not load these details.';
+      }
     } finally {
-      if (id === detailRequest && stamp === generation && frame === activeDetail()) { frame.loading = false; renderDetailSummary(); }
+      if (id === detailRequest && stamp === generation && frame === activeDetail() && (filter === 'all' || filteredStamp === filteredCompletionEpoch)) {
+        frame.loading = false; renderDetailSummary();
+      }
     }
   }
 
@@ -1015,7 +1176,7 @@
     }
     stack.push({ ...value, sort: value.sort || sorts[value.kind === 'company' ? 'companyQuestions' : 'problemCompanies'],
       rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null,
-      topicGroups: new Map(), groupsContext: '', groupsRevision: null, filters });
+      topicGroups: new Map(), groupsContext: '', groupsRevision: null, groupsCompletionFingerprint: null, completion: null, refreshCompletion: false, filters });
     renderShell(); renderDetailShell();
     scheduleCompletionScan();
     $('detail-back').focus();
@@ -1077,6 +1238,11 @@
   });
   $('problem-difficulty-select').addEventListener('change', () => {
     problemView.difficulty = $('problem-difficulty-select').value; problemFiltersChanged();
+  });
+  $('problem-status-select').addEventListener('change', () => {
+    problemView.completionFilter = completionFilters.includes($('problem-status-select').value) ? $('problem-status-select').value : 'all';
+    list.completion = problemView.completionFilter === 'all' ? null : { state: 'checking' };
+    problemFiltersChanged();
   });
   $('topic-match-select').addEventListener('change', () => {
     problemView.topicMatch = $('topic-match-select').value === 'all' ? 'all' : 'any'; problemFiltersChanged();
@@ -1162,6 +1328,12 @@
     const frame = activeDetail(); if (frame?.kind !== 'company') return;
     frame.filters.topics = []; companyFiltersChanged(frame); $('detail-topic-picker-trigger').focus();
   });
+  $('detail-status-select').addEventListener('change', () => {
+    const frame = activeDetail(); if (frame?.kind !== 'company') return;
+    frame.filters.completionFilter = completionFilters.includes($('detail-status-select').value) ? $('detail-status-select').value : 'all';
+    frame.completion = frame.filters.completionFilter === 'all' ? null : { state: 'checking' };
+    companyFiltersChanged(frame);
+  });
   $('detail-topic-match-select').addEventListener('change', () => {
     const frame = activeDetail(); if (frame?.kind !== 'company') return;
     frame.filters.topicMatch = $('detail-topic-match-select').value === 'all' ? 'all' : 'any';
@@ -1175,9 +1347,9 @@
   $('sort-select').addEventListener('change', () => changeSort(mode, $('sort-select').value));
   $('detail-sort-select').addEventListener('change', () => { const frame = activeDetail(); if (frame) changeSort(detailSortKey(frame), $('detail-sort-select').value); });
   $('load-more').addEventListener('click', () => void loadList(true));
-  $('search-retry').addEventListener('click', () => void loadList());
+  $('search-retry').addEventListener('click', () => { if (problemView.completionFilter !== 'all' && mode === 'problems') list.refreshCompletion = true; void loadList(); });
   $('detail-load-more').addEventListener('click', () => void loadDetail(true));
-  $('detail-retry').addEventListener('click', () => void loadDetail());
+  $('detail-retry').addEventListener('click', () => { const frame = activeDetail(); if (frame?.kind === 'company' && frame.filters.completionFilter !== 'all') frame.refreshCompletion = true; void loadDetail(); });
   $('detail-back').addEventListener('click', back);
   function filterChanged(debounce = false) {
     const frame = activeDetail();
@@ -1222,6 +1394,7 @@
       settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
       sorts = validatedSorts(stored.lctExplorerSorts);
       if (!problemViewDirty) problemView = validatedProblemView(stored.lctExplorerProblemView);
+      if (!companyRoute && !problemRoute && mode === 'problems' && completionFilters.includes(params.get('completionFilter'))) problemView.completionFilter = params.get('completionFilter');
     } catch (_) { /* The cache request below reports a usable connection error. */ }
     // Consume the initial route once. User navigation can cancel it while the
     // preferences load; automatic storage updates cannot reopen it later.
@@ -1233,7 +1406,7 @@
     else if (activeDetail()) { renderDetailShell(); void loadDetail(); }
     else await loadList();
   }
-  window.addEventListener('focus', refreshCompletionStatus);
+  window.addEventListener('focus', () => refreshCompletionStatus());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshCompletionStatus(); });
   setInterval(() => { if (!document.hidden) refreshCompletionStatus(); }, completionTTL);
   enhanceSelects();

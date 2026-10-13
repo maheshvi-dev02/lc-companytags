@@ -40,6 +40,8 @@ The company filter in the toolbar popup searches only the current problem’s ta
 
 A small green **Completed on LeetCode** check appears beside problem titles in Explorer lists, company questions, and topic groups when your signed-in LeetCode account reports an accepted submission. Keep a signed-in LeetCode tab open in the same browser profile; refresh that tab after updating the extension. Completion is independent of company and interview time window. It is checked separately after dataset rows appear, refreshed when you return to Explorer and periodically while it is visible. If the account is signed out or cannot be checked, the extension shows a short status message and does not invent a completion result.
 
+Use **Status: All problems / Solved / Not solved** in Problems, company questions, topic groups, and popup company practice. Status combines with difficulty, topics, search, sorting, and the selected time window. Filtering applies before pagination and topic counts, so matching problems beyond the first page remain reachable. Solved includes accepted submissions; Not solved includes only problems LeetCode explicitly reports as not accepted or not attempted. Unknown statuses are excluded from both filtered views. All problems continues to use the saved dataset offline; status-filtered views require a signed-in LeetCode tab and refresh when you return to the extension. Only the display preference is saved; account progress remains in memory.
+
 Use the **filter icon** above each explorer list to change its order. The popup and explorer use the same compact icon, and its tooltip names the current sort. Companies can be ordered by name (A–Z or Z–A) or by most/fewest questions in the selected window. Problems can be ordered by search relevance, name, difficulty (easy to hard or hard to easy), or most/fewest associated companies. Company question lists also support highest/lowest frequency, and a problem’s company list supports frequency, name and question count. Counts follow the selected time window; source frequency scores and company ranks keep their original meaning. Sorting applies to all matching results before pagination, and each list’s sort preference is saved on your device. Explorer dropdowns use rounded menus that follow the light/dark theme, with keyboard navigation and click-outside dismissal.
 
 Company logos appear beside names in the inline bar, popup, explorer and company practice headings. Logos are bundled in the extension and work offline, with no calls to third-party logo services while you browse. Companies without a verified asset, or whose image cannot load, show a small initials badge. The bundled catalog includes 277 verified company logos (103 of the 115 companies listed for Two Sum in the current snapshot). Logo credits and source details are included in `extension/logos/catalog.json`.
@@ -98,6 +100,7 @@ npm run test:browser
 npm run test:topics
 npm run test:company-topics
 npm run test:completion
+npm run test:completion-filters
 npm run test:firefox
 ```
 
@@ -108,6 +111,8 @@ npm run test:firefox
 `test:company-topics` checks company-specific topic catalogs, any/all matching, original scores and ranks, grouped pagination, retry, delayed responses, and Back navigation. It then runs the global topic checks using the same offline Chromium setup and runtime overrides.
 
 `test:completion` uses isolated LeetCode HTML and read-only GraphQL fixtures through the actual content-script/background/Explorer pipeline. It verifies accepted-only markers, account changes, signed-out and unavailable states, delayed replies, paging, groups, Back navigation, and responsive layouts without submitting solutions or changing a real account. It uses the existing Playwright/Chromium runtime overrides.
+
+`test:completion-filters` verifies full-result solved/not-solved filtering before paging, topic counts, combined filters, popup practice, account changes, and unavailable statuses through the actual extension pipeline with controlled read-only LeetCode responses.
 
 `test:firefox` installs the actual temporary add-on in an isolated Firefox profile, blocks GitHub networking, and seeds deterministic fixtures. It first verifies offline results on a fresh install, then verifies the inline problem bar and packaged popup using Playwright and Mozilla's localhost debugging protocol, including all five windows, practice filters, inline placement, horizontal scrolling, and bar recreation. It needs an existing Playwright installation and compatible Firefox binary; set `PLAYWRIGHT_MODULE` and `FIREFOX_EXECUTABLE` to select them. Reports and preview screenshots are saved under `output/playwright`; fixture previews are not captures of the live LeetCode site. Nothing is installed in your normal browser profiles.
 

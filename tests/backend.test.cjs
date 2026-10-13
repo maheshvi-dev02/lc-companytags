@@ -2075,3 +2075,181 @@ test('company multi-topic and legacy parameters reject malformed requests before
   assert.equal((await fixture.service.getPractice({ company: 'Alpha', topics: [' ' + 'x'.repeat(200) + ' '] })).total, 0);
   assert.equal((await fixture.service.getPractice({ company: 'Alpha', groupTopic: ' ' + 'x'.repeat(200) + ' ' })).total, 0);
 });
+
+function completionSnapshot(completed, state = 'ready') {
+  return { state, sessionKey: state === 'ready' ? 'verified-account' : null,
+    revision: state === 'ready' ? 1 : null, site: state === 'ready' ? 'https://leetcode.com' : null, completed };
+}
+
+test('completion filters use only explicit own booleans and leave the shared source and all-results contract unchanged', () => {
+  const { data } = topicExplorerFixture();
+  const original = structuredClone(data);
+  const completed = Object.assign(Object.create({ 'tree-puzzle': true }), {
+    'shared-problem': true, 'array-only': false, 'array-two': null, 'two-dimensional': 'ac',
+    'no-topics': 1, 'graph-puzzle': undefined
+  });
+  const snapshot = completionSnapshot(completed);
+  const baseline = core.searchProblems(data, { sort: 'name-asc' });
+  for (const [completionFilter, slug, value] of [['solved', 'shared-problem', true], ['not-solved', 'array-only', false]]) {
+    const found = core.searchProblems(data, { completionFilter, sort: 'name-asc' }, snapshot);
+    assert.equal(found.total, 1);
+    assert.deepEqual(found.problems.map((problem) => [problem.slug, problem.completed]), [[slug, value]]);
+    assert.equal(found.completionUnknownCount, 5, 'Missing, inherited and non-boolean states are unknown rather than not solved.');
+    assert.deepEqual(found.topics, baseline.topics);
+  }
+  assert.deepEqual(core.searchProblems(data, { sort: 'name-asc', completionFilter: 'all', completed, completionStates: completed }, snapshot), baseline);
+  assert.equal(baseline.problems.some((problem) => Object.hasOwn(problem, 'completed')), false);
+  const companyBaseline = core.practiceQuestions(data, { company: 'Alpha' });
+  assert.deepEqual(core.practiceQuestions(data, { company: 'Alpha', completionFilter: 'all', completed, completionStates: completed }, snapshot), companyBaseline);
+  assert.equal(companyBaseline.questions.some((problem) => Object.hasOwn(problem, 'completed')), false);
+  const solved = core.practiceQuestions(data, { company: 'Alpha', completionFilter: 'solved' }, snapshot);
+  assert.deepEqual(solved.questions.map((problem) => [problem.slug, problem.rank, problem.frequency]), [['shared-problem', 1, 100]]);
+  assert.deepEqual(structuredClone(data), original, 'Personal status never changes stored source records, catalogs, ranks, or frequencies.');
+  assert.equal(completed['array-two'], null);
+  assert.equal(completed['two-dimensional'], 'ac');
+  solved.questions[0].topics.push('Injected');
+  assert.deepEqual(structuredClone(data), original);
+});
+
+test('solved filtering precedes global pagination and company pages while retaining source rank and score', async () => {
+  const { service, data, source } = globalExplorerFixture();
+  const snapshot = completionSnapshot({
+    'exercise-061': true, 'exercise-123': true, 'exercise-150': true,
+    'exercise-002': false, 'exercise-052': false, 'exercise-152': false
+  });
+  const all = await service.searchProblems({ query: 'exercise', sort: 'name-asc' });
+  assert.equal(all.total, 153);
+  assert.equal(all.problems.length, 50);
+  assert.equal(all.problems.some((problem) => problem.slug === 'exercise-061'), false);
+  const solved = await service.searchProblems({ query: 'exercise', completionFilter: 'solved', sort: 'name-asc', limit: 1 }, snapshot);
+  assert.equal(solved.total, 3);
+  assert.equal(solved.completionUnknownCount, 147);
+  assert.equal(solved.hasMore, true);
+  assert.deepEqual(solved.problems.map((problem) => [problem.slug, problem.completed]), [['exercise-061', true]]);
+  const later = await service.searchProblems({ query: 'exercise', completionFilter: 'solved', sort: 'name-asc', offset: 2, limit: 1 }, snapshot);
+  assert.deepEqual(later.problems.map((problem) => problem.slug), ['exercise-150']);
+  assert.equal(later.total, 3);
+  assert.equal(later.hasMore, false);
+  assert.deepEqual(later.topicGroups, solved.topicGroups);
+  const company = 'Zeta Practice';
+  const companyAll = await service.getPractice({ company });
+  assert.equal(companyAll.questions.length, 20);
+  assert.equal(companyAll.questions.some((problem) => problem.slug === 'exercise-061'), false);
+  const companySolved = await service.getPractice({ company, completionFilter: 'solved', offset: 1, limit: 1 }, snapshot);
+  assert.equal(companySolved.total, 3);
+  assert.equal(companySolved.completionUnknownCount, 147);
+  assert.deepEqual(companySolved.questions.map((problem) => [problem.slug, problem.rank, problem.frequency]), [['exercise-123', 123, 39]]);
+  const notSolved = await service.getPractice({ company, completionFilter: 'not-solved', sort: 'name-asc', limit: 100 }, snapshot);
+  assert.deepEqual(notSolved.questions.map((problem) => [problem.slug, problem.completed]), [
+    ['exercise-002', false], ['exercise-052', false], ['exercise-152', false]
+  ]);
+  assert.equal(notSolved.total, 3);
+  assert.equal(notSolved.hasMore, false);
+  assert.deepEqual(core.practiceQuestions(data, { company }), companyAll);
+  assert.equal(source.calls.length, 0);
+});
+
+test('completion filter counts compose with difficulty, topics, text and groups before group paging', async () => {
+  const { service } = topicExplorerFixture();
+  const snapshot = completionSnapshot({ 'shared-problem': true, 'array-only': false, 'array-two': true,
+    'two-dimensional': null, 'no-topics': true, 'graph-puzzle': false });
+  const global = await service.searchProblems({ completionFilter: 'solved', query: 'puzzle', topics: ['Array', '2D Array'], limit: 1 }, snapshot);
+  assert.equal(global.total, 2);
+  assert.equal(global.completionUnknownCount, 1);
+  assert.deepEqual(lowerGroups(global.topicGroups), [['2d array', 1], ['array', 2], ['hash table', 1]]);
+  const globalGroup = await service.searchProblems({ completionFilter: 'solved', query: 'puzzle', topics: ['Array', '2D Array'], groupTopic: 'HASH TABLE', limit: 1 }, snapshot);
+  assert.equal(globalGroup.total, 1);
+  assert.deepEqual(globalGroup.problems.map((problem) => problem.slug), ['shared-problem']);
+  assert.equal(globalGroup.completionUnknownCount, 1, 'Unknown count covers the entire base-filter set before narrowing to a group.');
+  assert.deepEqual(globalGroup.topicGroups, global.topicGroups);
+  const company = await service.getPractice({ company: 'Alpha', completionFilter: 'solved', topics: ['Array', '2D Array'], topicMatch: 'all',
+    query: 'puzzle', difficulty: 'medium', groupTopic: '2D Array' }, snapshot);
+  assert.deepEqual(company.questions.map((problem) => [problem.slug, problem.rank]), [['array-two', 3]]);
+  assert.equal(company.total, 1);
+  assert.equal(company.completionUnknownCount, 0);
+  assert.deepEqual(lowerGroups(company.topicGroups), [['2d array', 1], ['array', 1]]);
+  assert.deepEqual(lowerTopics(company.topics), ['2d array', 'array', 'graph', 'tree']);
+  const excluded = await service.getPractice({ company: 'Alpha', completionFilter: 'solved', topics: ['Array'], excludeSlug: 'shared-problem' }, snapshot);
+  assert.deepEqual(excluded.questions.map((problem) => problem.slug), ['array-two']);
+  assert.deepEqual(lowerGroups(excluded.topicGroups), [['2d array', 1], ['array', 1]]);
+  const untagged = await service.getPractice({ company: 'Alpha', completionFilter: 'solved', groupTopic: null }, snapshot);
+  assert.deepEqual(untagged.questions.map((problem) => problem.slug), ['no-topics']);
+  assert.deepEqual(lowerGroups(untagged.topicGroups), [['2d array', 1], ['array', 2], [null, 1]]);
+  assert.equal(untagged.completionUnknownCount, 2);
+  const empty = await service.searchProblems({ completionFilter: 'not-solved', difficulty: 'hard' }, snapshot);
+  assert.equal(empty.total, 0);
+  assert.deepEqual(empty.problems, []);
+  assert.deepEqual(empty.topicGroups, []);
+  assert.equal(empty.completionUnknownCount, 1);
+});
+
+test('unavailable completion snapshots retain source catalogs and availability without claiming zero matches', async () => {
+  const { service } = topicExplorerFixture();
+  const all = await service.searchProblems();
+  const practiceAll = await service.getPractice({ company: 'Alpha' });
+  for (const state of ['checking', 'signed-out', 'no-tab', 'unavailable']) {
+    const snapshot = completionSnapshot({}, state);
+    for (const completionFilter of ['solved', 'not-solved']) {
+      const found = await service.searchProblems({ completionFilter, groupTopic: 'Array' }, snapshot);
+      assert.equal(found.total, null, state);
+      assert.equal(found.completionUnknownCount, null);
+      assert.equal(found.available, true);
+      assert.equal(found.windowAvailable, true);
+      assert.equal(found.sourceRevision, all.sourceRevision);
+      assert.deepEqual(found.topics, all.topics);
+      assert.deepEqual(found.problems, []);
+      assert.deepEqual(found.topicGroups, []);
+      assert.equal(found.hasMore, false);
+      const practice = await service.getPractice({ company: 'Alpha', completionFilter }, snapshot);
+      assert.equal(practice.total, null);
+      assert.equal(practice.completionUnknownCount, null);
+      assert.equal(practice.available, true);
+      assert.equal(practice.sourceRevision, practiceAll.sourceRevision);
+      assert.equal(practice.sourceUrl, practiceAll.sourceUrl);
+      assert.deepEqual(practice.topics, practiceAll.topics);
+      assert.deepEqual(practice.questions, []);
+      assert.deepEqual(practice.topicGroups, []);
+      const noWindow = await service.searchProblems({ completionFilter, window: '3m' }, snapshot);
+      assert.equal(noWindow.available, false);
+      assert.equal(noWindow.total, null);
+      assert.deepEqual(noWindow.topics, []);
+    }
+  }
+  const knownEmpty = await service.searchProblems({ completionFilter: 'solved' }, completionSnapshot({}));
+  assert.equal(knownEmpty.total, 0);
+  assert.equal(knownEmpty.completionUnknownCount, 7, 'An authenticated but incomplete map reports excluded unknown problems.');
+});
+
+test('invalid completion requests and caller-supplied progress maps are rejected before storage or data work', async () => {
+  const source = sourceFixture();
+  const storage = memoryStorage();
+  let reads = 0;
+  const get = storage.get;
+  storage.get = async (...args) => { reads += 1; return get(...args); };
+  const service = makeService(storage, source);
+  for (const completionFilter of [null, false, 0, '', 'ALL', 'unsolved', 'ac', [], {}]) {
+    await assert.rejects(service.searchProblems({ completionFilter }), /completion/i);
+    await assert.rejects(service.getPractice({ company: 'Alpha', completionFilter }), /completion/i);
+    assert.throws(() => core.searchProblems(null, { completionFilter }), /completion/i);
+    assert.throws(() => core.practiceQuestions(null, { company: 'Alpha', completionFilter }), /completion/i);
+  }
+  const fakeMaps = { completed: { 'shared-problem': true }, completionStates: { 'shared-problem': true } };
+  for (const completionFilter of ['solved', 'not-solved']) {
+    for (const snapshot of [undefined, null, false, [], {}, { state: '' }, { state: 'ready' }, { state: 'ready', completed: null }, { state: 'ready', completed: [] }]) {
+      await assert.rejects(service.searchProblems({ completionFilter, ...fakeMaps }, snapshot), /verified.*snapshot/i);
+      await assert.rejects(service.getPractice({ company: 'Alpha', completionFilter, ...fakeMaps }, snapshot), /verified.*snapshot/i);
+    }
+    assert.throws(() => core.searchProblems(null, { completionFilter, ...fakeMaps }), /verified.*snapshot/i);
+    assert.throws(() => core.practiceQuestions(null, { company: 'Alpha', completionFilter, ...fakeMaps }), /verified.*snapshot/i);
+  }
+  assert.equal(reads, 0);
+  assert.equal(storage.writes.length, 0);
+  assert.equal(source.calls.length, 0);
+  const fixture = topicExplorerFixture();
+  const options = { completionFilter: 'solved', topics: ['  Array  '], ...fakeMaps };
+  const original = structuredClone(options);
+  const trusted = completionSnapshot({ 'shared-problem': false, 'array-only': true });
+  const result = await fixture.service.searchProblems(options, trusted);
+  assert.deepEqual(result.problems.map((problem) => problem.slug), ['array-only'], 'Only the background supplied snapshot can determine matches.');
+  assert.deepEqual(options, original);
+});

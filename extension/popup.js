@@ -26,6 +26,10 @@
   let practiceLoadingAll = false;
   let practiceHasMore = false;
   let practiceRevision = null;
+  let practiceCompletion = null;
+  let practiceCompletionRevision = null;
+  let practiceRefreshScheduled = false;
+  const completionTTL = 60_000;
   let practiceNeedsRetry = false;
   let practiceError = '';
   let practiceRequestId = 0;
@@ -192,6 +196,8 @@
   let practiceSortSave = Promise.resolve();
   const validPracticeSort = value => practiceSortOptions.some(([key]) => key === value) ? value : 'frequency-desc';
   const practiceOrderLabel = () => practiceSortOptions.find(([key]) => key === practiceSort)[1];
+  const practiceCompletionFilter = () => ['solved', 'not-solved'].includes($('practice-status-select').value)
+    ? $('practice-status-select').value : 'all';
   function syncPracticeSort() {
     $('practice-sort-select').value = practiceSort;
     selectMenus.sync($('practice-sort-select'));
@@ -426,7 +432,7 @@
   }
 
   function practiceContext() {
-    return JSON.stringify([practiceCompany, selectedWindow(), $('difficulty-select').value, $('topic-input').value.trim(), practiceSort, slug]);
+    return JSON.stringify([practiceCompany, selectedWindow(), $('difficulty-select').value, $('topic-input').value.trim(), practiceSort, practiceCompletionFilter(), slug]);
   }
 
   function clearPracticeQuestions() {
@@ -435,6 +441,8 @@
     practiceAvailable = false;
     practiceHasMore = false;
     practiceRevision = null;
+    practiceCompletion = null;
+    practiceCompletionRevision = null;
     practiceNeedsRetry = false;
     practiceError = '';
     renderPracticeRows([]);
@@ -443,11 +451,13 @@
   function renderPracticeSummary() {
     if (!practiceCompany) return;
     const summary = $('practice-summary');
-    const count = `${practiceQuestions.length} of ${practiceTotal} questions`;
+    const count = Number.isInteger(practiceTotal) ? `${practiceQuestions.length} of ${practiceTotal} questions` : '';
+    renderPracticeCompletionStatus();
     if (practiceError) summary.textContent = `${practiceQuestions.length ? count + ' · ' : ''}${practiceError}`;
     else if (practiceLoading) summary.textContent = practiceQuestions.length
       ? `${count} · ${practiceLoadingAll ? 'Loading all questions…' : 'Loading more…'}` : 'Loading practice questions…';
     else if (!practiceAvailable) summary.textContent = status.phase === 'syncing' ? 'Practice questions are syncing for this window.' : 'Practice questions are not downloaded for this window. Refresh the dataset.';
+    else if (practiceCompletionFilter() !== 'all' && practiceCompletion?.state !== 'ready') summary.textContent = 'Completion status unavailable.';
     else if (!practiceTotal) summary.textContent = 'No questions match these filters in this time window.';
     else {
       const order = practiceSort === 'frequency-desc' && !practiceQuestions.some(question => Number.isFinite(question.frequency) && question.frequency >= 0)
@@ -461,7 +471,8 @@
     $('practice-pagination').hidden = !practiceHasMore && !practiceNeedsRetry;
     more.disabled = all.disabled = retry.disabled = practiceLoading;
     more.textContent = practiceLoading && !practiceLoadingAll ? 'Loading…' : 'Load more';
-    all.textContent = practiceLoadingAll ? 'Loading all…' : `Show all ${practiceTotal} questions`;
+    all.textContent = practiceLoadingAll ? 'Loading all…' : `Show all ${practiceTotal ?? ''} questions`;
+    retry.textContent = practiceCompletionFilter() !== 'all' && practiceCompletion?.state !== 'ready' ? 'Retry status' : 'Reload questions';
     $('practice-questions').setAttribute('aria-label', practiceCompany + ' questions sorted by ' + practiceOrderLabel().toLocaleLowerCase());
     $('practice-questions').setAttribute('aria-busy', String(practiceLoading));
     $('practice-pagination').setAttribute('aria-busy', String(practiceLoading));
@@ -472,6 +483,39 @@
     } else if (focusedControl && retry.hidden && practiceHasMore && !practiceLoading) {
       more.focus({ preventScroll: true });
     }
+  }
+
+  function renderPracticeCompletionStatus() {
+    const line = $('practice-completion-status');
+    line.hidden = practiceCompletionFilter() === 'all';
+    if (line.hidden) { line.textContent = ''; return; }
+    const state = practiceLoading && !practiceCompletion ? 'checking' : practiceCompletion?.state;
+    line.dataset.state = state || 'unavailable';
+    const unknown = Number.isInteger(practiceCompletion?.unknownCount) && practiceCompletion.unknownCount > 0
+      ? practiceCompletion.unknownCount : 0;
+    line.textContent = state === 'checking' ? 'Checking LeetCode completion status…'
+      : state === 'signed-out' ? 'Sign in to LeetCode, then retry. All problems remains available.'
+      : state === 'no-tab' ? 'Open a signed-in LeetCode tab, then retry. All problems remains available.'
+      : state === 'ready' ? (unknown ? `${unknown} ${unknown === 1 ? 'problem has' : 'problems have'} unknown status and ${unknown === 1 ? 'is' : 'are'} excluded from this filter.` : '')
+      : 'Could not check completion status. Refresh your LeetCode tab, then retry. All problems remains available.';
+    line.hidden ||= !line.textContent;
+  }
+
+  function completionIndicator() {
+    const indicator = document.createElement('span');
+    indicator.className = 'completion-indicator';
+    indicator.title = 'Completed on LeetCode';
+    indicator.setAttribute('role', 'img');
+    indicator.setAttribute('aria-label', 'Completed on LeetCode');
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const [name, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+      'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' })) icon.setAttribute(name, value);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '9');
+    const check = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    check.setAttribute('d', 'm7.5 12 3 3 6-6');
+    icon.append(circle, check); indicator.append(icon);
+    return indicator;
   }
 
   function renderPracticeRows(questions, append = false) {
@@ -487,12 +531,16 @@
       const title = document.createElement('span');
       title.className = 'question-title';
       title.textContent = question.title;
-      link.append(title);
+      const titleLine = document.createElement('span');
+      titleLine.className = 'question-title-line';
+      titleLine.append(title);
+      if (question.completed === true) titleLine.append(completionIndicator());
+      link.append(titleLine);
       if (question.slug === slug) {
         const current = document.createElement('span');
         current.className = 'current-problem';
         current.textContent = 'Current problem';
-        link.append(current);
+        titleLine.append(current);
       }
       const score = Number.isFinite(question.frequency) && question.frequency >= 0 ? String(question.frequency) : 'unavailable';
       const rank = Number.isInteger(question.rank) && question.rank > 0 ? `company rank #${question.rank}` : 'rank unavailable';
@@ -537,7 +585,7 @@
     const context = practiceContext();
     const request = { type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: practiceCompany,
       window: selectedWindow(), difficulty: $('difficulty-select').value,
-      topic: $('topic-input').value.trim(), sort: practiceSort };
+      topic: $('topic-input').value.trim(), sort: practiceSort, completionFilter: practiceCompletionFilter() };
     selectMenus.close();
     closeCompanySort();
     practiceOpening = true;
@@ -561,12 +609,14 @@
     if (!practiceCompany) return;
     syncPracticeSort();
     selectMenus.sync($('difficulty-select'));
+    selectMenus.sync($('practice-status-select'));
     $('practice-title').textContent = practiceCompany;
     $('practice-heading').replaceChildren(logos.createBadge(practiceCompany), $('practice-title'));
     renderPracticeSummary();
   }
 
   function practiceSourceRevision(result) {
+    if (typeof result.sourceRevision === 'string' && result.sourceRevision) return result.sourceRevision;
     // The source link is made from the actual data revision. It is more reliable
     // than status, which can be sampled immediately before a dataset publication.
     if (typeof result.sourceUrl === 'string') {
@@ -585,13 +635,20 @@
     return cause;
   }
 
-  async function loadPractice({ append = false, all = false } = {}) {
+  function completionFingerprint(completion) {
+    if (completion?.state !== 'ready' || typeof completion.sessionKey !== 'string' || !completion.sessionKey ||
+        typeof completion.revision !== 'string' || !completion.revision ||
+        !['https://leetcode.com', 'https://www.leetcode.com', 'https://leetcode.cn', 'https://www.leetcode.cn'].includes(completion.site)) return null;
+    return JSON.stringify([completion.sessionKey, completion.revision, completion.site]);
+  }
+
+  async function loadPractice({ append = false, all = false, refreshCompletion = false } = {}) {
     if (!practiceCompany || (append && (practiceLoading || !practiceHasMore))) return;
     clearTimeout(topicTimer);
     selectMenus.close();
     const id = ++practiceRequestId;
     const context = practiceContext();
-    const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), sort: practiceSort };
+    const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), sort: practiceSort, completionFilter: practiceCompletionFilter() };
     if ($('difficulty-select').value) request.difficulty = $('difficulty-select').value;
     if ($('topic-input').value.trim()) request.topic = $('topic-input').value.trim();
     const current = () => id === practiceRequestId && Boolean(practiceCompany) && context === practiceContext();
@@ -601,15 +658,35 @@
     practiceNeedsRetry = false;
     practiceError = '';
     renderPractice();
+    let restarted = false;
     try {
-      do {
+      while (current()) {
         const offset = practiceQuestions.length;
-        const result = await api.runtime.sendMessage({ ...request, offset, limit: all ? 100 : 20 });
+        const result = await api.runtime.sendMessage({ ...request, offset, limit: all ? 100 : 20,
+          ...(request.completionFilter !== 'all' && refreshCompletion && offset === 0 ? { refreshCompletion: true } : {}) });
+        refreshCompletion = false;
         if (!current()) return;
         if (!result?.ok) throw new Error(result?.error || 'Could not load practice questions. Try again.');
         const revision = practiceSourceRevision(result);
-        if (offset > 0 && (!practiceRevision || !revision || revision !== practiceRevision)) {
-          throw practiceRestart('The dataset changed. Reload questions to use one revision.');
+        const filtered = request.completionFilter !== 'all';
+        const nextCompletionRevision = filtered ? completionFingerprint(result.completion) : null;
+        if (filtered && result.completion?.state !== 'ready') {
+          clearPracticeQuestions();
+          practiceCompletion = result.completion || { state: 'unavailable' };
+          practiceTotal = null;
+          practiceAvailable = result.available !== false;
+          practiceNeedsRetry = true;
+          break;
+        }
+        if (filtered && !nextCompletionRevision) throw practiceRestart('Completion status changed. Reload questions to check your current account.');
+        if (offset > 0 && ((!practiceRevision || !revision || revision !== practiceRevision) ||
+            (filtered && nextCompletionRevision !== practiceCompletionRevision))) {
+          if (restarted) throw practiceRestart('This question list changed again. Reload questions to use the latest status.');
+          restarted = true;
+          clearPracticeQuestions();
+          practiceLoading = true; practiceLoadingAll = all;
+          renderPracticeSummary();
+          continue;
         }
         if (offset > 0 && result.available === false) {
           throw practiceRestart('This time window changed. Reload questions to check its availability.');
@@ -620,7 +697,8 @@
         const seen = new Set();
         const invalidQuestion = questions.some(question => {
           if (!question || typeof question.slug !== 'string' || !core.SLUG_PATTERN.test(question.slug) ||
-              known.has(question.slug) || seen.has(question.slug)) return true;
+              known.has(question.slug) || seen.has(question.slug) || (filtered &&
+                question.completed !== (request.completionFilter === 'solved'))) return true;
           seen.add(question.slug);
           return false;
         });
@@ -637,13 +715,22 @@
         practiceAvailable = result.available !== false;
         practiceHasMore = Boolean(result.hasMore) && practiceQuestions.length < practiceTotal;
         practiceRevision = revision;
+        practiceCompletion = filtered ? result.completion : null;
+        practiceCompletionRevision = nextCompletionRevision;
         renderPracticeRows(questions, offset > 0);
         renderPracticeSummary();
         // Each page advances the offset; an empty or rejected page stops above.
-      } while (all && practiceHasMore && current());
+        if (!all || !practiceHasMore) break;
+      }
     } catch (cause) {
       if (!current()) return;
-      if (cause.restartPractice) clearPracticeQuestions();
+      if (request.completionFilter !== 'all') {
+        const available = practiceAvailable;
+        clearPracticeQuestions();
+        practiceAvailable = available;
+        practiceTotal = null;
+        practiceCompletion = { state: 'unavailable' };
+      } else if (cause.restartPractice) clearPracticeQuestions();
       practiceError = cause.message || 'Could not load practice questions. Try again.';
       practiceNeedsRetry = practiceQuestions.length === 0;
     } finally {
@@ -653,6 +740,21 @@
         renderPracticeSummary();
       }
     }
+  }
+
+  function refreshPracticeCompletion() {
+    if (!practiceCompany || practiceCompletionFilter() === 'all' || document.hidden || practiceRefreshScheduled) return;
+    // Invalidate the displayed account snapshot before any asynchronous request.
+    practiceRequestId++;
+    practiceLoading = false; practiceLoadingAll = false;
+    clearPracticeQuestions();
+    practiceLoading = true;
+    renderPracticeSummary();
+    practiceRefreshScheduled = true;
+    Promise.resolve().then(() => {
+      practiceRefreshScheduled = false;
+      if (practiceCompany && practiceCompletionFilter() !== 'all' && !document.hidden) void loadPractice({ refreshCompletion: true });
+    });
   }
 
   async function load() {
@@ -707,15 +809,17 @@
     practiceLoading = false;
     practiceLoadingAll = false;
     clearTimeout(topicTimer);
+    clearPracticeQuestions();
     render();
     const returnButton = Array.from($('companies').querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
     (returnButton || $('window-select-trigger')).focus();
   });
   $('difficulty-select').addEventListener('change', () => void loadPractice());
   $('practice-sort-select').addEventListener('change', changePracticeSort);
+  $('practice-status-select').addEventListener('change', () => void loadPractice());
   $('practice-load-more').addEventListener('click', () => void loadPractice({ append: true }));
   $('practice-show-all').addEventListener('click', () => void loadPractice({ append: true, all: true }));
-  $('practice-retry').addEventListener('click', () => void loadPractice());
+  $('practice-retry').addEventListener('click', () => void loadPractice({ refreshCompletion: true }));
   $('topic-input').addEventListener('input', () => {
     clearTimeout(topicTimer);
     practiceRequestId++;
@@ -786,6 +890,10 @@
     resetWindow();
   });
 
+  window.addEventListener('focus', refreshPracticeCompletion);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPracticeCompletion(); });
+  setInterval(refreshPracticeCompletion, completionTTL);
+
   async function start() {
     try {
       const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctPopupCompanySort', 'lctPopupPracticeSort']);
@@ -807,7 +915,7 @@
     await load();
   }
   setupCompanySort();
-  selectMenus.enhance(['window-select', 'difficulty-select', 'practice-sort-select'], { iconIds: ['practice-sort-select'] });
+  selectMenus.enhance(['window-select', 'difficulty-select', 'practice-status-select', 'practice-sort-select'], { iconIds: ['practice-sort-select'] });
   syncPracticeSort();
   void start();
 })();

@@ -1,6 +1,6 @@
 {
   "name": "leetcode-company-tags",
-  "version": "1.6.13",
+  "version": "1.6.14",
   "private": true,
   "description": "Live company tags for LeetCode from liquidslr's public GitHub dataset",
   "scripts": {
@@ -10,6 +10,7 @@
     "test:topics": "node scripts/problem-topics-smoke.mjs",
     "test:company-topics": "node scripts/company-topics-smoke.mjs",
     "test:completion": "node scripts/completion-smoke.mjs",
+    "test:completion-filters": "node scripts/completion-filters-smoke.mjs",
     "test:firefox": "node scripts/firefox-smoke.mjs",
     "verify:live": "node scripts/verify-live.mjs",
     "snapshot": "node scripts/snapshot.mjs"

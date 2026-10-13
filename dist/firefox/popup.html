@@ -48,12 +48,14 @@
         <div id="practice-heading" class="company-heading"><h2 id="practice-title"></h2></div>
         <div class="practice-filters">
           <label>Difficulty<select id="difficulty-select" aria-label="Difficulty"><option value="">All difficulties</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select></label>
+          <label>Status<select id="practice-status-select" aria-label="Problem status"><option value="all">All problems</option><option value="solved">Solved</option><option value="not-solved">Not solved</option></select></label>
           <label>Topic<input id="topic-input" type="search" aria-label="Topic filter" placeholder="e.g. Array"></label>
         </div>
         <div class="practice-tools list-tools">
           <p id="practice-summary" class="practice-summary" role="status"></p>
           <label class="sort-filter" for="practice-sort-select"><select id="practice-sort-select" aria-label="Sort company questions"><option value="frequency-desc">Highest frequency</option><option value="frequency-asc">Lowest frequency</option><option value="name-asc">Title A–Z</option><option value="name-desc">Title Z–A</option><option value="difficulty-asc">Easy → hard</option><option value="difficulty-desc">Hard → easy</option><option value="companies-desc">Most companies</option><option value="companies-asc">Fewest companies</option></select></label>
         </div>
+        <p id="practice-completion-status" class="practice-completion-status" role="status" aria-live="polite" hidden></p>
         <ul id="practice-questions" class="practice-questions" aria-label="Practice questions sorted by frequency" tabindex="0"></ul>
         <div id="practice-pagination" class="practice-pagination" hidden>
           <button id="practice-load-more" type="button" aria-controls="practice-questions" hidden>Load more</button>

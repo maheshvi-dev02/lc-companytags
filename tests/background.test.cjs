@@ -7,8 +7,8 @@ const vm = require('node:vm');
 const source = readFileSync(path.join(__dirname, '../extension/background.js'), 'utf8');
 const EXTENSION_ID = 'company-lens-test';
 
-function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, chrome = false, createTab, queryTabs, completionReply } = {}) {
-  const calls = { queriedTabs: [], completionMessages: [], createdTabs: [], openPopup: [], initialize: 0, automatic: 0, lookup: 0, storage: 0, fetch: 0, tabs: 0 };
+function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, chrome = false, createTab, queryTabs, completionReply, querySource, completionDeadlineMs } = {}) {
+  const calls = { queriedTabs: [], completionMessages: [], sourceQueries: [], status: 0, createdTabs: [], openPopup: [], initialize: 0, automatic: 0, lookup: 0, storage: 0, fetch: 0, tabs: 0 };
   let listener;
   const fail = (name) => () => { calls[name] += 1; throw new Error('Unexpected ' + name + ' work.'); };
   const api = {
@@ -37,17 +37,24 @@ function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, 
       return openPopup(options);
     } : openPopup
   };
+  const sourceQuery = async (options, snapshot) => {
+    calls.sourceQueries.push({ options: structuredClone(options), snapshot });
+    if (!querySource) throw new Error('Unexpected source query.');
+    return querySource(options, snapshot);
+  };
   const context = {
     [chrome ? 'chrome' : 'browser']: api,
     LCTSync: { DAY: 24 * 60 * 60 * 1000, createSyncService: () => ({
       initialize: fail('initialize'), startAutomatic: fail('automatic'),
-      getStatus: fail('initialize'), refresh: fail('initialize'), resume: fail('initialize')
+      getStatus: querySource ? async () => { calls.status++; return { phase: 'ready', hasData: true }; } : fail('initialize'),
+      searchProblems: sourceQuery, getPractice: sourceQuery, refresh: fail('initialize'), resume: fail('initialize')
     }) },
     LCTCore: require('../extension/core.js'),
-    LCTCompletion: require('../extension/completion.js'),
+    LCTCompletion: { ...require('../extension/completion.js'),
+      ...(completionDeadlineMs === undefined ? {} : { OVERALL_TIMEOUT_MS: completionDeadlineMs }) },
     LCTLookup: { readStatus: fail('lookup'), readProblem: fail('lookup') },
     LCTSeed: { loadBundledSnapshot: fail('storage') },
-    fetch: fail('fetch'), URL, URLSearchParams, console: { error() {} }
+    fetch: fail('fetch'), URL, URLSearchParams, setTimeout, clearTimeout, console: { error() {} }
   };
   vm.runInNewContext(source, context, { filename: 'background.js' });
   assert.equal(typeof listener, 'function');
@@ -393,10 +400,10 @@ function bridgeHarness({ href = 'https://leetcode.com/problems/two-sum/', fetchR
   assert.equal(typeof listener, 'function');
   return {
     calls, context,
-    dispatch(slugs, sender = { id: EXTENSION_ID, url: 'chrome-extension://' + EXTENSION_ID + '/background.js' }) {
+    dispatch(slugs, sender = { id: EXTENSION_ID, url: 'chrome-extension://' + EXTENSION_ID + '/background.js' }, type = 'LCT_COMPLETION_QUERY') {
       let respond;
       const response = new Promise((resolve) => { respond = resolve; });
-      const accepted = listener({ type: 'LCT_COMPLETION_QUERY', slugs }, sender, result => respond(structuredClone(result)));
+      const accepted = listener({ type, slugs }, sender, result => respond(structuredClone(result)));
       return { accepted, response };
     }
   };
@@ -494,4 +501,281 @@ test('content bridge serializes real fetches and aborts an expired request befor
     assert.deepEqual(result.completed, {});
   }
   assert.equal(fixture.calls.every(({ options }) => options.signal.aborted), true);
+});
+
+
+function filteredSource(options, snapshot) {
+  if (options.completionFilter !== undefined && !['all', 'solved', 'not-solved'].includes(options.completionFilter)) throw new Error('Invalid completion filter.');
+  if (options.query !== undefined && typeof options.query !== 'string') throw new Error('Invalid search query.');
+  const field = options.type === 'LCT_PRACTICE' ? 'questions' : 'problems';
+  const candidates = ['two-sum', 'valid-parentheses', 'missing-from-catalog'];
+  const response = { [field]: [], topics: ['Array', 'Stack'], topicGroups: [], total: 3,
+    available: true, windowAvailable: true, sourceRevision: 'a'.repeat(40), hasMore: false };
+  if (options.completionFilter === undefined || options.completionFilter === 'all') {
+    response[field] = candidates.map(slug => ({ slug }));
+    return response;
+  }
+  if (snapshot.state !== 'ready') return { ...response, total: null, completionUnknownCount: null };
+  const wanted = options.completionFilter === 'solved';
+  let unknown = 0;
+  for (const slug of candidates) {
+    const value = Object.hasOwn(snapshot.completed, slug) ? snapshot.completed[slug] : null;
+    if (value !== true && value !== false) unknown++;
+    else if (value === wanted) response[field].push({ slug, completed: value });
+  }
+  return { ...response, total: response[field].length, completionUnknownCount: unknown };
+}
+function snapshotReply(_id, message, _options) {
+  return { ok: true, state: 'ready', site: 'https://leetcode.com', username: 'test-user',
+    completed: message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY' ? { 'two-sum': true, 'valid-parentheses': false } : {} };
+}
+function popupSender(overrides = {}) {
+  return { id: EXTENSION_ID, url: 'chrome-extension://' + EXTENSION_ID + '/popup.html?practice=1',
+    origin: 'chrome-extension://' + EXTENSION_ID, ...overrides };
+}
+function statusTab(overrides = {}) {
+  return { id: 51, windowId: 7, incognito: false, active: true, lastAccessed: 100,
+    url: 'https://leetcode.com/problems/two-sum/', ...overrides };
+}
+
+test('All filters preserve source results without private tab, account, or catalog work', async () => {
+  for (const type of ['LCT_SEARCH_PROBLEMS', 'LCT_PRACTICE']) for (const completionFilter of [undefined, 'all']) {
+    const fixture = harness({ querySource: filteredSource });
+    const message = { type, company: 'Alpha', completionFilter, refreshCompletion: true, completed: { 'two-sum': true } };
+    const response = await fixture.dispatch(message, sender()).response;
+    assert.equal(response.ok, true);
+    assert.equal(response.total, 3);
+    assert.equal(Object.hasOwn(response, 'completion'), false);
+    assert.equal(fixture.calls.sourceQueries.length, 1);
+    assert.equal(fixture.calls.sourceQueries[0].snapshot, undefined);
+    assert.deepEqual(fixture.calls.queriedTabs, []);
+    assert.deepEqual(fixture.calls.completionMessages, []);
+    noDataWork(fixture.calls);
+  }
+});
+
+test('refresh options and full source preflight reject malformed queries before account work', async () => {
+  const fixture = harness({ querySource: filteredSource });
+  for (const refreshCompletion of [null, 0, 'true', [], {}]) {
+    const response = await fixture.dispatch({ type: 'LCT_SEARCH_PROBLEMS', completionFilter: 'solved', refreshCompletion }, explorerSender()).response;
+    assert.equal(response.ok, false);
+    assert.match(response.error, /completion refresh/i);
+  }
+  assert.equal(fixture.calls.sourceQueries.length, 0, 'Refresh validation must happen before storage-backed source validation.');
+  for (const message of [
+    { type: 'LCT_SEARCH_PROBLEMS', completionFilter: 'unsolved' },
+    { type: 'LCT_SEARCH_PROBLEMS', completionFilter: 'solved', query: [] },
+    { type: 'LCT_PRACTICE', completionFilter: 'not-solved', company: 'Alpha', query: false }
+  ]) {
+    assert.equal((await fixture.dispatch(message, explorerSender()).response).ok, false);
+  }
+  assert.equal(fixture.calls.sourceQueries.length, 3);
+  assert.ok(fixture.calls.sourceQueries.every(call => call.snapshot.state === 'checking'));
+  assert.deepEqual(fixture.calls.queriedTabs, []);
+  assert.deepEqual(fixture.calls.completionMessages, []);
+  noDataWork(fixture.calls);
+});
+
+test('filtered results authorize only the exact local Explorer or popup before private/source access', () => {
+  const fixture = harness({ querySource: filteredSource });
+  for (const caller of [
+    sender(), explorerSender({ id: 'other' }), explorerSender({ url: 'chrome-extension://other/explore.html' }),
+    explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/folder/explore.html' }),
+    popupSender({ url: 'https://leetcode.com/popup.html', origin: 'https://leetcode.com' }),
+    popupSender({ origin: 'https://example.com' }), popupSender({ url: undefined })
+  ]) for (const type of ['LCT_SEARCH_PROBLEMS', 'LCT_PRACTICE']) {
+    assert.equal(fixture.dispatch({ type, company: 'Alpha', completionFilter: 'solved' }, caller).accepted, false);
+  }
+  assert.equal(fixture.calls.sourceQueries.length, 0);
+  assert.deepEqual(fixture.calls.queriedTabs, []);
+  noDataWork(fixture.calls);
+});
+
+test('unavailable company data keeps source metadata and skips all private account work', async () => {
+  const fixture = harness({ querySource: (options, snapshot) => ({ ...filteredSource(options, snapshot),
+    available: false, windowAvailable: false, topics: ['Array'] }) });
+  const response = await fixture.dispatch({ type: 'LCT_SEARCH_PROBLEMS', completionFilter: 'not-solved', window: '3m' }, explorerSender()).response;
+  assert.equal(response.ok, true);
+  assert.equal(response.available, false);
+  assert.equal(response.total, null);
+  assert.deepEqual(response.topics, ['Array']);
+  assert.deepEqual(response.problems, []);
+  assert.equal(response.completion.state, 'unavailable');
+  assert.equal(response.completion.unknownCount, null);
+  assert.equal(response.completion.sessionKey, null);
+  assert.deepEqual(fixture.calls.queriedTabs, []);
+  assert.equal(fixture.calls.sourceQueries.length, 1);
+});
+
+test('filtered routes inject only verified snapshots and publish metadata without the full personal map', async () => {
+  for (const type of ['LCT_SEARCH_PROBLEMS', 'LCT_PRACTICE']) {
+    const fixture = harness({ querySource: filteredSource, queryTabs: () => [statusTab()], completionReply: snapshotReply });
+    const callerMap = { 'two-sum': false, 'valid-parentheses': true, 'unrelated-private-question': true };
+    const response = await fixture.dispatch({ type, company: 'Alpha', completionFilter: 'solved', completed: callerMap,
+      sessionKey: 'forged', windowId: 999 }, explorerSender()).response;
+    assert.equal(response.ok, true);
+    assert.deepEqual(response[type === 'LCT_PRACTICE' ? 'questions' : 'problems'], [{ slug: 'two-sum', completed: true }]);
+    assert.equal(response.total, 1);
+    assert.equal(response.completion.state, 'ready');
+    assert.equal(response.completion.unknownCount, 1);
+    assert.match(response.completion.revision, /\S/);
+    assert.equal(Number.isFinite(Date.parse(response.completion.checkedAt)), true);
+    assert.equal(response.completion.site, 'https://leetcode.com');
+    assert.equal(Object.hasOwn(response.completion, 'completed'), false);
+    assert.equal(Object.hasOwn(response.completion, 'username'), false);
+    assert.equal(JSON.stringify(response).includes('unrelated-private-question'), false);
+    const [preflight, published] = fixture.calls.sourceQueries;
+    assert.equal(preflight.snapshot.state, 'checking');
+    assert.equal(published.snapshot.state, 'ready');
+    assert.notDeepEqual(published.snapshot.completed, callerMap);
+    assert.equal(Object.isFrozen(published.snapshot.completed), true);
+    assert.deepEqual(fixture.calls.completionMessages.map(call => call.message), [
+      { type: 'LCT_COMPLETION_QUERY', slugs: [] }, { type: 'LCT_COMPLETION_SNAPSHOT_QUERY' }
+    ]);
+    noDataWork(fixture.calls);
+  }
+});
+
+test('filtered pages verify identity each time, reuse the same snapshot, and force a new revision only on refresh', async () => {
+  const fixture = harness({ querySource: filteredSource, queryTabs: () => [statusTab()], completionReply: snapshotReply });
+  const base = { type: 'LCT_SEARCH_PROBLEMS', completionFilter: 'solved' };
+  const first = await fixture.dispatch(base, explorerSender()).response;
+  const page = await fixture.dispatch({ ...base, offset: 50 }, explorerSender()).response;
+  assert.equal(page.completion.revision, first.completion.revision);
+  assert.equal(page.completion.sessionKey, first.completion.sessionKey);
+  assert.equal(fixture.calls.completionMessages.filter(call => call.message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY').length, 1);
+  assert.equal(fixture.calls.completionMessages.filter(call => call.message.type === 'LCT_COMPLETION_QUERY').length, 2);
+  const fresh = await fixture.dispatch({ ...base, refreshCompletion: true }, explorerSender()).response;
+  assert.notEqual(fresh.completion.revision, first.completion.revision);
+  assert.equal(fixture.calls.completionMessages.filter(call => call.message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY').length, 2);
+});
+
+test('signed-out and missing-account routes retain a null total rather than claiming zero not-solved matches', async () => {
+  for (const state of ['signed-out', 'no-tab', 'unavailable']) {
+    const fixture = harness({ querySource: filteredSource,
+      queryTabs: () => state === 'no-tab' ? [] : [statusTab()],
+      completionReply: () => ({ ok: true, state, site: 'https://leetcode.com', username: null, completed: {} }) });
+    const response = await fixture.dispatch({ type: 'LCT_PRACTICE', company: 'Alpha', completionFilter: 'not-solved' }, explorerSender()).response;
+    assert.equal(response.ok, true);
+    assert.equal(response.total, null);
+    assert.equal(response.available, true);
+    assert.deepEqual(response.questions, []);
+    assert.deepEqual(response.topicGroups, []);
+    assert.deepEqual(response.topics, ['Array', 'Stack']);
+    assert.equal(response.completion.state, state);
+    assert.equal(response.completion.sessionKey, null);
+    assert.equal(response.completion.revision, null);
+    assert.equal(response.completion.unknownCount, null);
+  }
+});
+
+test('popup filtering uses trusted current-window and private-mode metadata even when active-tab host details are unavailable', async () => {
+  for (const incognito of [false, true]) {
+    const active = { id: 91, windowId: 42, incognito }; // URL is unavailable without that host's permission.
+    const candidates = [statusTab({ id: 51, windowId: 7 }), statusTab({ id: 52, windowId: 42, incognito: true }),
+      statusTab({ id: 53, windowId: 42, incognito: false })];
+    const fixture = harness({ querySource: filteredSource, completionReply: snapshotReply,
+      queryTabs: options => options.active ? [active] : candidates });
+    const response = await fixture.dispatch({ type: 'LCT_PRACTICE', company: 'Alpha', completionFilter: 'solved',
+      windowId: 7, incognito: !incognito }, popupSender()).response;
+    assert.equal(response.completion.state, 'ready');
+    assert.deepEqual(fixture.calls.queriedTabs[0], { active: true, lastFocusedWindow: true });
+    assert.equal(fixture.calls.completionMessages[0].id, incognito ? 52 : 53);
+    assert.equal(JSON.parse(response.completion.sessionKey)[3], incognito);
+  }
+});
+
+test('missing, invalid, or rejected popup window metadata fails explicitly without guessing another account context', async () => {
+  for (const active of [[], [{ id: 1 }], [{ id: 1, windowId: 7 }], [{ id: 1, windowId: 7, incognito: 'false' }],
+    [{ id: -1, windowId: 7, incognito: false }], new Error('PRIVATE_LOOKUP_DETAIL')]) {
+    const fixture = harness({ querySource: filteredSource, queryTabs: options => {
+      if (options.active) { if (active instanceof Error) throw active; return active; }
+      throw new Error('Must not query unrelated account tabs after losing popup context.');
+    } });
+    const response = await fixture.dispatch({ type: 'LCT_PRACTICE', company: 'Alpha', completionFilter: 'solved' }, popupSender()).response;
+    assert.equal(response.total, null);
+    assert.equal(response.completion.state, 'unavailable');
+    assert.equal(response.completion.sessionKey, null);
+    assert.equal(fixture.calls.queriedTabs.length, 1);
+    assert.deepEqual(fixture.calls.completionMessages, []);
+    assert.equal(JSON.stringify(response).includes('PRIVATE_LOOKUP_DETAIL'), false);
+  }
+});
+
+test('company practice deep links preserve valid completion filters and reject invalid or non-company context', async () => {
+  const fixture = harness({ createTab: () => Promise.resolve({ id: 21 }) });
+  for (const completionFilter of ['all', 'solved', 'not-solved']) {
+    const response = await fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: 'Alpha', completionFilter }, popupSender()).response;
+    assert.equal(response.ok, true);
+    assert.equal(new URL(fixture.calls.createdTabs.at(-1).url).searchParams.get('completionFilter'), completionFilter);
+  }
+  const count = fixture.calls.createdTabs.length;
+  for (const completionFilter of ['', 'unsolved', null, false, [], {}]) {
+    assert.equal((await fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: 'Alpha', completionFilter }, popupSender()).response).ok, false);
+  }
+  assert.equal((await fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'problems', completionFilter: 'solved' }, popupSender()).response).ok, false);
+  assert.equal(fixture.calls.createdTabs.length, count);
+});
+
+test('catalog content bridge emits only the fixed account-status operation on the official current origin', async () => {
+  for (const href of ['https://leetcode.com/problems/two-sum/', 'https://leetcode.cn/problemset/']) {
+    const fixture = bridgeHarness({ href, fetchReply: async () => ({ ok: true, json: async () => ({ data: {
+      userStatus: { isSignedIn: true, username: 'test-user' }, allQuestions: [
+        { titleSlug: 'two-sum', status: 'AC' }, { titleSlug: 'valid-parentheses', status: null },
+        { titleSlug: 'unknown-question', status: 'unexpected' }
+      ], secret: 'PRIVATE_TOKEN_DATA' } }) }) });
+    const response = await fixture.dispatch(['ignored-caller-slug'], undefined, 'LCT_COMPLETION_SNAPSHOT_QUERY').response;
+    assert.deepEqual(response.completed, { 'two-sum': true, 'valid-parentheses': false, 'unknown-question': null });
+    assert.equal(response.site, new URL(href).origin);
+    assert.equal(JSON.stringify(response).includes('PRIVATE_TOKEN_DATA'), false);
+    const [{ url, options }] = fixture.calls;
+    assert.equal(url, new URL(href).origin + '/graphql/');
+    const payload = JSON.parse(options.body);
+    assert.deepEqual(payload, require('../extension/completion.js').buildSnapshotQuery());
+    assert.doesNotMatch(payload.query, /mutation|submission|solution|cookie|token|csrf|code/i);
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.cache, 'no-store');
+  }
+});
+
+test('catalog bridge denies page callers and clears anonymous or cross-origin account results', async () => {
+  const denied = bridgeHarness();
+  for (const caller of [explorerSender(), popupSender(), sender(), { id: 'other' }]) {
+    assert.equal(denied.dispatch([], caller, 'LCT_COMPLETION_SNAPSHOT_QUERY').accepted, false);
+  }
+  assert.equal(denied.calls.length, 0);
+  for (const fetchReply of [
+    async () => ({ ok: true, json: async () => ({ data: { userStatus: { isSignedIn: false, username: 'private-user' },
+      allQuestions: [{ titleSlug: 'two-sum', status: null }] } }) }),
+    async (_url, _options, context) => ({ ok: true, json: async () => {
+      context.location.href = 'https://leetcode.cn/';
+      return { data: { userStatus: { isSignedIn: true, username: 'private-user' }, allQuestions: [{ titleSlug: 'two-sum', status: 'ac' }] } };
+    } })
+  ]) {
+    const fixture = bridgeHarness({ fetchReply });
+    const response = await fixture.dispatch([], undefined, 'LCT_COMPLETION_SNAPSHOT_QUERY').response;
+    assert.ok(['signed-out', 'unavailable'].includes(response.state));
+    assert.equal(response.username, null);
+    assert.deepEqual(response.completed, {});
+  }
+});
+
+
+test('one completion deadline includes popup context lookup and expired context never dispatches an account request', async () => {
+  let finish;
+  const active = new Promise(resolve => { finish = resolve; });
+  const fixture = harness({ querySource: filteredSource, completionDeadlineMs: 15,
+    queryTabs: options => options.active ? active : [statusTab()] });
+  const started = Date.now();
+  const response = await fixture.dispatch({ type: 'LCT_PRACTICE', company: 'Alpha', completionFilter: 'solved' }, popupSender()).response;
+  assert.equal(response.completion.state, 'unavailable');
+  assert.equal(response.total, null);
+  assert.ok(Date.now() - started < 250, 'A timed-out popup context must not start a fresh 20-second account budget.');
+  assert.equal(fixture.calls.queriedTabs.length, 1);
+  assert.deepEqual(fixture.calls.completionMessages, []);
+  finish([{ id: 1, windowId: 7, incognito: false }]);
+  await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(fixture.calls.queriedTabs.length, 1, 'Late context metadata cannot revive a timed-out account request.');
+  assert.deepEqual(fixture.calls.completionMessages, []);
 });
