@@ -1,6 +1,6 @@
 {
   "name": "leetcode-company-tags",
-  "version": "1.6.21",
+  "version": "1.6.22",
   "private": true,
   "description": "Live company tags for LeetCode from liquidslr's public GitHub dataset",
   "scripts": {

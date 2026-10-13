@@ -23,7 +23,7 @@
     <button id="target-generate" type="button" class="target-submit">Pick a problem</button>
     <p id="target-message" class="target-message" role="status" aria-live="polite">Choose optional filters, then pick a problem.</p>
     <details id="target-coverage" class="target-coverage" hidden><summary id="target-coverage-title"></summary><p id="target-coverage-topics"></p></details>
-    <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><button id="target-edit" type="button" hidden>Edit collection</button><span id="target-saved-status" role="status"></span></div>
+    <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><span id="target-saved-status" role="status"></span></div>
     <details id="target-collection" class="target-collection"><summary id="target-collection-title">Saved targets</summary><p id="target-collection-empty" class="target-help">Company prep lists are saved here automatically.</p><ul id="target-collection-list"></ul></details>
     <ul id="target-results" class="target-results" aria-label="Target problems" tabindex="-1"></ul>`;
   if (popup) document.querySelector('.problem').after(panel); else $('detail-view').after(panel);
@@ -148,7 +148,7 @@
     finally { if (id === generation) { $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); if (editState && editing === editState) { editBusy = null; renderEditor(); } } }
   }
   function renderActions() {
-    $('target-actions').hidden = !lastResult?.questions?.length;
+    $('target-actions').hidden = !lastResult?.questions?.length || Boolean(currentSaved) || Boolean(editing);
     $('target-save').disabled = saving || Boolean(currentSaved);
     $('target-download').disabled = !lastResult?.questions?.length;
     $('target-save').textContent = saving ? 'Saving…' : 'Save to collection';
@@ -158,7 +158,6 @@
       const active = tile.dataset.targetId === currentSaved?.id; tile.toggleAttribute('data-active', active);
       tile.querySelector('.target-saved-open').setAttribute('aria-current', String(active));
     }
-    $('target-edit').hidden = !currentSaved || Boolean(editing);
     $('target-saved-status').textContent = currentSaved ? 'Saved · ' + currentSaved.name : '';
   }
   function targetSnapshot() { return { ...lastResult, context: lastContext }; }
@@ -291,7 +290,6 @@
   $('target-rename').addEventListener('click', () => { if (editing && !editBusy) void commitEdit(editing, $('target-name').value.trim()); });
   $('target-update').addEventListener('click', () => { if (editing && !editBusy) void generate(editing); });
   $('target-cancel').addEventListener('click', () => { if (editing && editBusy !== 'save') { const entry = savedTargets.find(target => target.id === editing.entry.id) || editing.entry; openSaved(entry); } });
-  $('target-edit').addEventListener('click', () => { if (currentSaved) startEdit(currentSaved, 'edit'); });
   $('target-download').addEventListener('click', () => download(targetSnapshot()));
   $('target-save').addEventListener('click', () => void saveCurrent());
   function show(active) {

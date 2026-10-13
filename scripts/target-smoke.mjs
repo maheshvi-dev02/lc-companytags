@@ -71,7 +71,8 @@ try {
   assert.ok(await page.locator('.target-reason').count() >= 3);
   await page.waitForFunction(() => /^Saved · /.test(document.querySelector('#target-saved-status').textContent));
   const expectedLinks = await page.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href));
-  const downloaded = page.waitForEvent('download'); await page.locator('#target-download').click();
+  await page.locator('#target-collection').evaluate(node => { node.open = true; });
+  const downloaded = page.waitForEvent('download'); await page.locator('.target-saved-entry[data-active] [data-collection-action="CSV"]').click();
   const csvDownload = await downloaded; await csvDownload.saveAs(path.join(output, 'target-export.csv'));
   const csvRows = core.parseCSV((await readFile(path.join(output, 'target-export.csv'), 'utf8')).replace(/^\uFEFF/, ''));
   assert.equal(csvRows.length, 21); assert.deepEqual(csvRows.slice(1).map(row => row[9]), expectedLinks);
@@ -97,7 +98,7 @@ try {
   assert.equal(new URL(expanded.url()).searchParams.get('mode'), 'target');
   await expanded.waitForFunction(() => document.querySelectorAll('.target-question').length === 20);
   report.checks.push('Popup restores prep settings, expands Target, and Browse still works');
-  await popup.locator('#target-edit').click();
+  await popup.locator('#target-collection').evaluate(node => { node.open = true; }); await popup.locator('.target-saved-entry[data-active] [data-collection-action="Edit"]').click();
   await popup.locator('#target-name').fill('Microsoft warmup');
   await popup.locator('#target-rename').click();
   await popup.waitForFunction(() => document.querySelector('#target-saved-status').textContent === 'Saved · Microsoft warmup');
@@ -111,7 +112,7 @@ try {
   await expanded.locator('#target-rename').click();
   await expanded.waitForFunction(() => document.querySelector('#target-saved-status').textContent === 'Saved · Microsoft next week');
   assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), expectedLinks);
-  await expanded.locator('#target-edit').click();
+  await expanded.locator('#target-collection').evaluate(node => { node.open = true; }); await expanded.locator('.target-saved-entry[data-active] [data-collection-action="Edit"]').click();
   await choose(expanded, 'target-difficulty', 'Medium');
   await choose(expanded, 'target-count', '12 questions');
   await expanded.locator('#target-update').click();
@@ -121,7 +122,7 @@ try {
   assert.equal(targets.length, 2);
   assert.deepEqual(targets.find(row => row.name === 'Microsoft warmup').questions.map(row => 'https://leetcode.com/problems/' + row.slug + '/'), expectedLinks);
   const beforeCancel = await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href));
-  await expanded.locator('#target-edit').click(); await choose(expanded, 'target-difficulty', 'Hard'); await expanded.locator('#target-cancel').click();
+  await expanded.locator('#target-collection').evaluate(node => { node.open = true; }); await expanded.locator('.target-saved-entry[data-active] [data-collection-action="Edit"]').click(); await choose(expanded, 'target-difficulty', 'Hard'); await expanded.locator('#target-cancel').click();
   assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), beforeCancel);
   await expanded.locator('#target-collection').evaluate(node => { node.open = true; });
   await expanded.locator('.target-saved-entry').filter({ has: expanded.locator('h3', { hasText: /^Microsoft next week$/ }) }).locator('[data-collection-action="Remove"]').click();
