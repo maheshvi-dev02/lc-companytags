@@ -31,7 +31,13 @@ try {
   const page = await context.newPage();
   await page.goto(base + '/explore.html?mode=target');
   await page.locator('#target-company option[value="Microsoft"]').waitFor({ state: 'attached' });
-  const choose = async (p, id, value) => { await p.locator('#' + id + '-trigger').click(); await p.locator('#' + id + '-menu [role="option"]').filter({ hasText: value }).filter({ hasText: new RegExp('^' + value + '$') }).click(); };
+  const choose = async (p, id, value) => {
+    const trigger = p.locator('#' + id + '-trigger');
+    await trigger.scrollIntoViewIfNeeded();
+    await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await trigger.click();
+    await p.locator('#' + id + '-menu [role="option"]').filter({ hasText: value }).filter({ hasText: new RegExp('^' + value + '$') }).click();
+  };
   await choose(page, 'target-company', 'Microsoft');
   await choose(page, 'target-difficulty', 'Medium');
   await choose(page, 'target-topic', 'Array');
