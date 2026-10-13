@@ -1,8 +1,8 @@
-/* global LCTCore, LCTSync, LCTSeed, LCTLookup */
+/* global LCTCore, LCTSync, LCTSeed, LCTLookup, LCTCompletion */
 'use strict';
 
 if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
-  importScripts('core.js', 'archive.js', 'seed.js', 'lookup.js', 'sync.js');
+  importScripts('core.js', 'archive.js', 'seed.js', 'lookup.js', 'sync.js', 'completion.js');
 }
 
 (function () {
@@ -19,6 +19,9 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
     },
     onError: (error) => console.error('LeetCode Company Tags storage/snapshot error:', error.message)
   });
+
+  const completionService = LCTCompletion.createCompletionService({ tabs: api.tabs, runtime: api.runtime,
+    incognito: api.extension?.inIncognitoContext === true });
 
   async function boot(force = false) {
     if (!(await api.alarms.get(DAILY_ALARM))) {
@@ -45,7 +48,8 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!sender || sender.id !== api.runtime.id) return false;
     if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
-      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP'].includes(message.type)) return false;
+      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION'].includes(message.type)) return false;
+    if (message.type === 'LCT_COMPLETION' && !LCTCompletion.isExplorerSender(sender, api.runtime)) return false;
     if (message.type === 'LCT_OPEN_POPUP') {
       // Use browser-supplied sender details, never a window or origin from the
       // message. Only our content script on an authorized LeetCode page may
@@ -58,6 +62,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         !Number.isInteger(sender.tab?.windowId) || sender.tab.windowId < 0) return false;
     }
     (async () => {
+      if (message.type === 'LCT_COMPLETION') return completionService.get(message.slugs, sender);
       if (message.type === 'LCT_OPEN_POPUP') {
         if (typeof api.action?.openPopup !== 'function') {
           throw new Error('This browser cannot open the toolbar popup from the page. Click Company Lens in the browser toolbar.');

@@ -149,3 +149,12 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .detail-filters .selected-topic-tools { margin-top:0; }
 @media(max-width:900px) { .detail-filters { grid-template-columns:1fr 1fr; } }
 @media(max-width:540px) { .detail-filters { grid-template-columns:1fr; } }
+
+/* Completion belongs to the signed-in LeetCode account, separate from dataset metrics. */
+.completion-status { max-width:1080px; margin:0 auto; padding:0 32px 16px; color:var(--muted); font-size:var(--font-caption); }
+.problem-title-line { display:flex; align-items:center; gap:6px; }
+.problem-title-line h3 { min-width:0; }
+.completion-indicator { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex:0 0 16px; color:#15803d; }
+.completion-indicator svg { display:block; width:16px; height:16px; }
+@media(max-width:700px) { .completion-status { padding:0 20px 14px; } }
+@media(prefers-color-scheme:dark) { .completion-indicator { color:#4ade80; } }

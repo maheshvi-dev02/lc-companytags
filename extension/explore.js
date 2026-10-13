@@ -55,6 +55,18 @@
   let generation = 0;
   let listRequest = 0;
   let detailRequest = 0;
+  const completionTTL = 60_000;
+  const completionCache = new Map();
+  let completionSession = null;
+  let completionSite = null;
+  let completionState = 'checking';
+  let completionEpoch = 0;
+  let completionRefreshedAt = 0;
+  let completionIdentityNeeded = true;
+  let completionNeedsScan = false;
+  let completionScheduled = false;
+  let completionRunning = false;
+  let completionBlocked = false;
   let searchTimer;
   let questionTimer;
   let list = { rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', version: null };
@@ -426,13 +438,127 @@
     $('results').setAttribute('aria-label', mode === 'problems' ? 'Problem search results' : 'Company search results');
     $('load-more').textContent = `Load more ${mode}`;
     renderSortControls(); renderProblemControls();
+    scheduleCompletionScan();
+  }
+
+  function completionSiteLabel(site) {
+    return ['https://leetcode.com', 'https://www.leetcode.com'].includes(site) ? 'LeetCode.com'
+      : ['https://leetcode.cn', 'https://www.leetcode.cn'].includes(site) ? 'LeetCode.cn' : null;
+  }
+  function renderCompletionStatus() {
+    const status = $('completion-status');
+    status.dataset.state = completionState;
+    const label = completionSiteLabel(completionSite);
+    const text = completionState === 'ready' && label ? 'Completed status from ' + label
+      : completionState === 'signed-out' ? 'Sign in to LeetCode to show completed problems.'
+      : completionState === 'no-tab' ? 'Open a signed-in LeetCode tab to show completed problems.'
+      : completionState === 'checking' ? 'Checking completed status…' : 'Could not check completed status. Refresh your LeetCode tab and return here to retry.';
+    if (status.textContent !== text) status.textContent = text;
+  }
+  function paintCompletionIndicators() {
+    for (const row of document.querySelectorAll('.question-row[data-slug]')) {
+      const indicator = row.querySelector('.completion-indicator');
+      if (indicator) indicator.hidden = !(completionState === 'ready' && completionSession && completionCache.get(row.dataset.slug) === true);
+    }
+  }
+  function visibleCompletionSlugs() {
+    const slugs = new Set();
+    for (const row of document.querySelectorAll('.question-row[data-slug]')) {
+      const slug = row.dataset.slug;
+      if (typeof slug !== 'string' || slug.length > 200 || slug !== slug.trim() || !core.SLUG_PATTERN.test(slug) ||
+          !row.getClientRects().length || getComputedStyle(row).visibility === 'hidden') continue;
+      slugs.add(slug);
+    }
+    return [...slugs];
+  }
+  function clearCompletionState(state = 'checking', site = null) {
+    completionCache.clear(); completionSession = null; completionSite = site; completionState = state;
+    paintCompletionIndicators(); renderCompletionStatus();
+  }
+  function refreshCompletionStatus() {
+    completionEpoch++; completionRefreshedAt = Date.now();
+    completionBlocked = false; completionIdentityNeeded = true; completionNeedsScan = true;
+    clearCompletionState(); scheduleCompletionScan();
+  }
+  function scheduleCompletionScan() {
+    if (Date.now() - completionRefreshedAt >= completionTTL) {
+      completionEpoch++; completionRefreshedAt = Date.now(); completionBlocked = false; completionIdentityNeeded = true;
+      clearCompletionState();
+    }
+    completionNeedsScan = true;
+    if (completionScheduled || document.hidden || completionBlocked) return;
+    completionScheduled = true;
+    Promise.resolve().then(() => {
+      completionScheduled = false;
+      if (!completionRunning && !document.hidden && !completionBlocked) void runCompletionPass();
+    });
+  }
+  async function runCompletionPass() {
+    if (completionRunning || document.hidden || completionBlocked) return;
+    completionRunning = true;
+    const epoch = completionEpoch;
+    try {
+      while (epoch === completionEpoch && !document.hidden && !completionBlocked) {
+        completionNeedsScan = false;
+        const slugs = visibleCompletionSlugs().filter(slug => !completionCache.has(slug)).slice(0, 100);
+        if (!slugs.length && !completionIdentityNeeded) break;
+        const result = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs });
+        if (epoch !== completionEpoch) break;
+        if (!result?.ok || !['ready', 'signed-out', 'no-tab', 'unavailable'].includes(result.state)) {
+          throw new Error('Completed status unavailable');
+        }
+        if (result.state !== 'ready') {
+          clearCompletionState(result.state, result.site || null);
+          completionBlocked = true; completionNeedsScan = false; completionIdentityNeeded = false;
+          break;
+        }
+        if (typeof result.sessionKey !== 'string' || !result.sessionKey || !completionSiteLabel(result.site)) {
+          throw new Error('Completed account unavailable');
+        }
+        // Every backend batch verifies the account. A changed identity must
+        // restart the latest pass, rather than combine checks from two users.
+        if (completionSession && (completionSession !== result.sessionKey || completionSite !== result.site)) {
+          refreshCompletionStatus(); break;
+        }
+        completionSession = result.sessionKey; completionSite = result.site; completionState = 'ready';
+        completionIdentityNeeded = false;
+        const completed = result.completed && typeof result.completed === 'object' && !Array.isArray(result.completed) ? result.completed : {};
+        for (const slug of slugs) completionCache.set(slug, completed[slug] === true ? true : completed[slug] === false ? false : null);
+        paintCompletionIndicators(); renderCompletionStatus();
+      }
+    } catch (_) {
+      if (epoch === completionEpoch) {
+        clearCompletionState('unavailable'); completionBlocked = true; completionNeedsScan = false; completionIdentityNeeded = false;
+      }
+    } finally {
+      completionRunning = false;
+      if (completionNeedsScan && !document.hidden && !completionBlocked) scheduleCompletionScan();
+    }
+  }
+  function completionIndicator(slug) {
+    const indicator = node('span', 'completion-indicator');
+    indicator.title = 'Completed on LeetCode'; indicator.setAttribute('role', 'img');
+    indicator.setAttribute('aria-label', 'Completed on LeetCode');
+    indicator.hidden = !(completionState === 'ready' && completionSession && completionCache.get(slug) === true);
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('fill', 'none'); icon.setAttribute('stroke', 'currentColor');
+    icon.setAttribute('stroke-width', '1.75'); icon.setAttribute('stroke-linecap', 'round'); icon.setAttribute('stroke-linejoin', 'round');
+    icon.setAttribute('aria-hidden', 'true'); icon.setAttribute('focusable', 'false');
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '9');
+    const check = document.createElementNS('http://www.w3.org/2000/svg', 'path'); check.setAttribute('d', 'm7.5 12 3 3 6-6');
+    icon.append(circle, check); indicator.append(icon);
+    return indicator;
   }
 
   function problemRow(problem, companyView = false) {
+    scheduleCompletionScan();
     const row = node('li', 'result-row question-row');
     row.dataset.slug = problem.slug;
     const info = node('div', 'result-info');
-    info.append(node('h3', companyView ? 'question-title' : 'result-title', problem.title || core.formatProblemTitle(problem.slug)));
+    const title = node('div', 'problem-title-line');
+    title.append(node('h3', companyView ? 'question-title' : 'result-title', problem.title || core.formatProblemTitle(problem.slug)), completionIndicator(problem.slug));
+    info.append(title);
     if (companyView) {
       const score = Number.isFinite(problem.frequency) && problem.frequency >= 0 ? String(problem.frequency) : 'unavailable';
       const rank = Number.isInteger(problem.rank) && problem.rank > 0 ? `company rank #${problem.rank}` : 'rank unavailable';
@@ -515,6 +641,7 @@
     dom.more.disabled = dom.retry.disabled = busy;
     dom.more.textContent = busy ? 'Loading…' : 'Load more';
     renderTopicGroupProgress(frame);
+    scheduleCompletionScan();
   }
   function createTopicGroupCard(group, frame = null) {
     group.frame = frame;
@@ -890,6 +1017,7 @@
       rows: [], total: 0, hasMore: false, available: false, loading: false, error: '', topics: [], version: null,
       topicGroups: new Map(), groupsContext: '', groupsRevision: null, filters });
     renderShell(); renderDetailShell();
+    scheduleCompletionScan();
     $('detail-back').focus();
     void loadDetail();
   }
@@ -1105,6 +1233,9 @@
     else if (activeDetail()) { renderDetailShell(); void loadDetail(); }
     else await loadList();
   }
+  window.addEventListener('focus', refreshCompletionStatus);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshCompletionStatus(); });
+  setInterval(() => { if (!document.hidden) refreshCompletionStatus(); }, completionTTL);
   enhanceSelects();
   void start();
 })();

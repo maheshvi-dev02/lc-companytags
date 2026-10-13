@@ -7,8 +7,8 @@ const vm = require('node:vm');
 const source = readFileSync(path.join(__dirname, '../extension/background.js'), 'utf8');
 const EXTENSION_ID = 'company-lens-test';
 
-function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, chrome = false, createTab } = {}) {
-  const calls = { createdTabs: [], openPopup: [], initialize: 0, automatic: 0, lookup: 0, storage: 0, fetch: 0, tabs: 0 };
+function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, chrome = false, createTab, queryTabs, completionReply } = {}) {
+  const calls = { queriedTabs: [], completionMessages: [], createdTabs: [], openPopup: [], initialize: 0, automatic: 0, lookup: 0, storage: 0, fetch: 0, tabs: 0 };
   let listener;
   const fail = (name) => () => { calls[name] += 1; throw new Error('Unexpected ' + name + ' work.'); };
   const api = {
@@ -21,7 +21,15 @@ function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, 
     // when initialization has not begun and no cache/network work can finish.
     alarms: { get: () => new Promise(() => {}), create() {}, clear() {}, onAlarm: { addListener() {} } },
     storage: { local: { get: fail('storage') } },
-    tabs: { create: createTab ? (options) => { calls.tabs++; calls.createdTabs.push(structuredClone(options)); return createTab(options); } : fail('tabs') }
+    tabs: {
+      create: createTab ? (options) => { calls.tabs++; calls.createdTabs.push(structuredClone(options)); return createTab(options); } : fail('tabs'),
+      query: async (options) => { calls.queriedTabs.push(structuredClone(options)); return queryTabs ? queryTabs(options) : []; },
+      sendMessage: async (id, message, options) => {
+        calls.completionMessages.push({ id, message: structuredClone(message), options: structuredClone(options) });
+        return completionReply ? completionReply(id, message, options) : { ok: true, site: 'https://leetcode.com', state: 'ready',
+          username: 'test-user', completed: Object.fromEntries(message.slugs.map(slug => [slug, true])) };
+      }
+    }
   };
   if (actionAvailable) api.action = {
     openPopup: typeof openPopup === 'function' ? (options) => {
@@ -36,6 +44,7 @@ function harness({ openPopup = () => Promise.resolve(), actionAvailable = true, 
       getStatus: fail('initialize'), refresh: fail('initialize'), resume: fail('initialize')
     }) },
     LCTCore: require('../extension/core.js'),
+    LCTCompletion: require('../extension/completion.js'),
     LCTLookup: { readStatus: fail('lookup'), readProblem: fail('lookup') },
     LCTSeed: { loadBundledSnapshot: fail('storage') },
     fetch: fail('fetch'), URL, URLSearchParams, console: { error() {} }
@@ -294,4 +303,195 @@ test('invalid or ambiguous company practice routes cannot create a tab or touch 
   assert.deepEqual(fixture.calls.createdTabs, []);
   assert.deepEqual(fixture.calls.openPopup, []);
   noDataWork(fixture.calls);
+});
+
+
+function explorerSender(overrides = {}) {
+  return { id: EXTENSION_ID, url: 'chrome-extension://' + EXTENSION_ID + '/explore.html?mode=companies&company=Alpha#questions',
+    origin: 'chrome-extension://' + EXTENSION_ID, tab: { id: 20, windowId: 7, incognito: false }, ...overrides };
+}
+
+test('completion routing accepts the exact Explorer page including deep links and never initializes dataset or network', async () => {
+  for (const chrome of [false, true]) {
+    const fixture = harness({ chrome, queryTabs: () => [{ id: 51, windowId: 7, url: 'https://leetcode.com/problems/two-sum/' }] });
+    const route = fixture.dispatch({ type: 'LCT_COMPLETION', slugs: ['two-sum', 'two-sum'], url: 'https://example.com/', tabId: 999 }, explorerSender());
+    assert.equal(route.accepted, true);
+    const response = await route.response;
+    assert.equal(response.ok, true);
+    assert.equal(response.state, 'ready');
+    assert.deepEqual(response.completed, { 'two-sum': true });
+    assert.equal(response.site, 'https://leetcode.com');
+    assert.deepEqual(fixture.calls.completionMessages, [{ id: 51, message: { type: 'LCT_COMPLETION_QUERY', slugs: ['two-sum'] }, options: { frameId: 0 } }]);
+    assert.equal(fixture.calls.queriedTabs.length, 1);
+    noDataWork(fixture.calls);
+  }
+});
+
+test('completion routing rejects every unrelated document before tab or account access', () => {
+  const fixture = harness();
+  const invalid = [
+    undefined,
+    explorerSender({ id: 'another-extension' }),
+    explorerSender({ url: 'https://leetcode.com/explore.html', origin: 'https://leetcode.com' }),
+    explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/popup.html' }),
+    explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/folder/explore.html' }),
+    explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/explore.html/extra' }),
+    explorerSender({ url: 'chrome-extension://another-extension/explore.html' }),
+    explorerSender({ url: 'chrome-extension://user:pass@' + EXTENSION_ID + '/explore.html' }),
+    explorerSender({ origin: 'https://example.com' }),
+    explorerSender({ url: undefined })
+  ];
+  for (const caller of invalid) {
+    const route = fixture.dispatch({ type: 'LCT_COMPLETION', slugs: ['two-sum'] }, caller);
+    assert.equal(route.accepted, false);
+    assert.deepEqual(route.replies, []);
+  }
+  assert.deepEqual(fixture.calls.queriedTabs, []);
+  assert.deepEqual(fixture.calls.completionMessages, []);
+  noDataWork(fixture.calls);
+});
+
+test('completion routing validates slug inputs before tab access and returns explicit no-tab guidance', async () => {
+  const fixture = harness();
+  for (const slugs of [undefined, null, 'two-sum', ['Two-Sum'], ['two-sum?query=x'], Array(101).fill('two-sum')]) {
+    const route = fixture.dispatch({ type: 'LCT_COMPLETION', slugs }, explorerSender());
+    const response = await route.response;
+    assert.equal(response.ok, false);
+    assert.match(response.error, /completion problem/i);
+  }
+  assert.deepEqual(fixture.calls.queriedTabs, []);
+  const empty = await fixture.dispatch({ type: 'LCT_COMPLETION', slugs: [] }, explorerSender()).response;
+  assert.equal(empty.state, 'no-tab');
+  assert.equal(empty.sessionKey, null);
+  assert.deepEqual(empty.completed, {});
+  assert.match(empty.message, /Open a signed-in LeetCode tab/);
+  assert.deepEqual(fixture.calls.completionMessages, []);
+  noDataWork(fixture.calls);
+});
+
+const bridgeSource = readFileSync(path.join(__dirname, '../extension/completion-content.js'), 'utf8');
+function bridgeHarness({ href = 'https://leetcode.com/problems/two-sum/', fetchReply, timeoutMs = 30 } = {}) {
+  const completion = require('../extension/completion.js');
+  let listener;
+  const calls = [];
+  const context = {
+    chrome: { runtime: { id: EXTENSION_ID, getURL: (file) => 'chrome-extension://' + EXTENSION_ID + '/' + file,
+      onMessage: { addListener: (handler) => { listener = handler; } } } },
+    LCTCompletion: { ...completion, FETCH_TIMEOUT_MS: timeoutMs },
+    location: { href }, URL, AbortController, setTimeout, clearTimeout,
+    // The account bridge is independent of the inline bar's lifecycle/settings.
+    __companyLensActive: true,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (fetchReply) return fetchReply(url, options, context);
+      return { ok: true, json: async () => ({ data: { userStatus: { isSignedIn: true, username: 'test-user' },
+        q0: { titleSlug: 'two-sum', status: 'ac' }, q1: { titleSlug: 'valid-parentheses', status: null } } }) };
+    }
+  };
+  Object.defineProperty(context, 'document', { get() { throw new Error('The bridge must not inspect page credentials or code.'); } });
+  vm.runInNewContext(bridgeSource, context, { filename: 'completion-content.js' });
+  assert.equal(typeof listener, 'function');
+  return {
+    calls, context,
+    dispatch(slugs, sender = { id: EXTENSION_ID, url: 'chrome-extension://' + EXTENSION_ID + '/background.js' }) {
+      let respond;
+      const response = new Promise((resolve) => { respond = resolve; });
+      const accepted = listener({ type: 'LCT_COMPLETION_QUERY', slugs }, sender, result => respond(structuredClone(result)));
+      return { accepted, response };
+    }
+  };
+}
+
+test('independent content bridge sends only fixed same-origin credentialed read-only status queries', async () => {
+  const fixture = bridgeHarness();
+  const route = fixture.dispatch(['two-sum', 'valid-parentheses', 'two-sum']);
+  assert.equal(route.accepted, true);
+  const response = await route.response;
+  assert.deepEqual(response, { ok: true, site: 'https://leetcode.com', state: 'ready', username: 'test-user',
+    completed: { 'two-sum': true, 'valid-parentheses': false } });
+  const [{ url, options }] = fixture.calls;
+  assert.equal(url, 'https://leetcode.com/graphql/');
+  assert.equal(new URL(url, 'https://unrelated.example/forged-base/').origin, 'https://leetcode.com',
+    'A document base URL cannot redirect the fixed status request.');
+  assert.equal(options.method, 'POST');
+  assert.equal(options.credentials, 'same-origin');
+  assert.equal(options.cache, 'no-store');
+  assert.equal(options.redirect, 'error');
+  assert.deepEqual({ ...options.headers }, { 'Content-Type': 'application/json' });
+  const payload = JSON.parse(options.body);
+  assert.deepEqual(payload.variables, { s0: 'two-sum', s1: 'valid-parentheses' });
+  assert.equal(payload.operationName, 'CompanyLensCompletion');
+  assert.doesNotMatch(payload.query, /mutation|submission|solution|cookie|token|csrf|code/i);
+});
+
+test('content bridge trusts only our background sender and validates identifiers before fetch', async () => {
+  const fixture = bridgeHarness();
+  for (const sender of [
+    { id: 'another-extension' },
+    { id: EXTENSION_ID, tab: { id: 1 } },
+    { id: EXTENSION_ID, url: 'https://leetcode.com/problems/two-sum/' },
+    { id: EXTENSION_ID, url: 'chrome-extension://' + EXTENSION_ID + '/explore.html' },
+    { id: EXTENSION_ID, documentId: 'document-without-url' },
+    { id: EXTENSION_ID, origin: 'https://example.com' }
+  ]) assert.equal(fixture.dispatch(['two-sum'], sender).accepted, false);
+  for (const slugs of [null, ['Two-Sum'], Array(26).fill('two-sum')]) {
+    const rejected = fixture.dispatch(slugs);
+    assert.equal(rejected.accepted, false);
+    assert.equal((await rejected.response).ok, false);
+  }
+  assert.equal(fixture.calls.length, 0);
+  const worker = fixture.dispatch([],{ id: EXTENSION_ID });
+  assert.equal(worker.accepted, true);
+  const response = await worker.response;
+  assert.equal(response.state, 'ready');
+  assert.deepEqual(response.completed, {});
+  const payload = JSON.parse(fixture.calls[0].options.body);
+  assert.deepEqual(payload.variables, {});
+  assert.doesNotMatch(payload.query, /question\(/);
+});
+
+test('content bridge stays unknown on signed-out, malformed, failed, or cross-origin responses', async () => {
+  for (const fetchReply of [
+    async () => ({ ok: true, json: async () => ({ data: { userStatus: { isSignedIn: false, username: '' }, q0: { titleSlug: 'two-sum', status: 'ac' } } }) }),
+    async () => ({ ok: true, json: async () => ({ errors: [{ message: 'PRIVATE_SERVER_DETAIL' }], data: null }) }),
+    async () => ({ ok: false, json: async () => { throw new Error('Do not parse rejected requests.'); } }),
+    async () => { throw new Error('PRIVATE_SERVER_DETAIL'); },
+    async () => ({ ok: true, json: async () => { throw new Error('PRIVATE_SERVER_DETAIL'); } }),
+    async (_url, _options, context) => { context.location.href = 'https://example.com/'; return { ok: true, json: async () => ({}) }; },
+    async (_url, _options, context) => ({ ok: true, json: async () => {
+      context.location.href = 'https://leetcode.cn/';
+      return { data: { userStatus: { isSignedIn: true, username: 'test-user' }, q0: { titleSlug: 'two-sum', status: 'ac' } } };
+    } })
+  ]) {
+    const fixture = bridgeHarness({ fetchReply });
+    const response = await fixture.dispatch(['two-sum']).response;
+    assert.ok(['signed-out', 'unavailable'].includes(response.state));
+    assert.deepEqual(response.completed, {});
+    assert.equal(response.username, null);
+    assert.equal(JSON.stringify(response).includes('PRIVATE_SERVER_DETAIL'), false);
+  }
+  const invalidOrigin = bridgeHarness({ href: 'https://example.com/' });
+  assert.equal((await invalidOrigin.dispatch(['two-sum']).response).state, 'unavailable');
+  assert.equal(invalidOrigin.calls.length, 0);
+});
+
+test('content bridge serializes real fetches and aborts an expired request before starting another', async () => {
+  let active = 0, maximum = 0;
+  const fixture = bridgeHarness({ timeoutMs: 10, fetchReply: (_url, options) => {
+    active++; maximum = Math.max(maximum, active);
+    return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => {
+      active--; reject(new Error('Aborted'));
+    }, { once: true }));
+  } });
+  const first = fixture.dispatch(['two-sum']);
+  const second = fixture.dispatch(['valid-parentheses']);
+  const results = await Promise.all([first.response, second.response]);
+  assert.equal(fixture.calls.length, 2);
+  assert.equal(maximum, 1);
+  assert.equal(active, 0);
+  for (const result of results) {
+    assert.equal(result.state, 'unavailable');
+    assert.deepEqual(result.completed, {});
+  }
+  assert.equal(fixture.calls.every(({ options }) => options.signal.aborted), true);
 });

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const files = ['core.js', 'lookup.js', 'archive.js', 'seed.js', 'sync.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'select-controls.js', 'ui.css', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
+const files = ['core.js', 'lookup.js', 'archive.js', 'seed.js', 'sync.js', 'completion.js', 'completion-content.js', 'background.js', 'logo-catalog.js', 'company-logos.js', 'content.js', 'popup.html', 'popup.js', 'select-controls.js', 'ui.css', 'popup.css', 'explore.html', 'explore.css', 'explore.js', 'icons/leetcode.svg', 'icons/README.md', 'data/snapshot.json.gz', 'data/snapshot-meta.json'];
 const snapshotBytes = await readFile(path.join(root, 'extension/data/snapshot.json.gz'));
 const snapshotMeta = JSON.parse(await readFile(path.join(root, 'extension/data/snapshot-meta.json'), 'utf8'));
 assert.equal(createHash('sha256').update(snapshotBytes).digest('hex'), snapshotMeta.sha256, 'Regenerate the bundled snapshot: checksum mismatch');
@@ -53,7 +53,7 @@ const common = {
   host_permissions: ['https://api.github.com/*', 'https://raw.githubusercontent.com/*', 'https://codeload.github.com/*', ...matches],
   action: { default_title: 'Company Lens', default_popup: 'popup.html', default_icon: {16:'icons/16.png',32:'icons/32.png'} },
   icons: {16:'icons/16.png',32:'icons/32.png',48:'icons/48.png',128:'icons/128.png'},
-  content_scripts: [{ matches, js: ['core.js', 'lookup.js', 'logo-catalog.js', 'company-logos.js', 'content.js'], run_at: 'document_idle' }],
+  content_scripts: [{ matches, js: ['core.js', 'completion.js', 'lookup.js', 'logo-catalog.js', 'company-logos.js', 'completion-content.js', 'content.js'], run_at: 'document_idle' }],
   web_accessible_resources: [{ resources: ['logos/*.svg', 'logos/*.png'], matches }],
   content_security_policy: {extension_pages: "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com"}
 };
@@ -116,8 +116,8 @@ for (const browser of ['chrome','firefox']) {
     manifest.minimum_chrome_version = '127';
     manifest.background = {service_worker:'background.js'};
   } else {
-    manifest.background = {scripts:['core.js','lookup.js','archive.js','seed.js','sync.js','background.js']};
-    manifest.browser_specific_settings = {gecko:{id:'company-lens@leetcode-tags.local',strict_min_version:'140.0',data_collection_permissions:{required:['none']}}};
+    manifest.background = {scripts:['core.js','lookup.js','archive.js','seed.js','sync.js','completion.js','background.js']};
+    manifest.browser_specific_settings = {gecko:{id:'company-lens@leetcode-tags.local',strict_min_version:'140.0',data_collection_permissions:{required:['authenticationInfo','websiteContent','websiteActivity']}}};
   }
   await writeFile(path.join(out,'manifest.json'), JSON.stringify(manifest,null,2)+'\n');
   await zip(out,path.join(root,'dist',`company-lens-${browser}.zip`));

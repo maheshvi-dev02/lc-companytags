@@ -38,6 +38,8 @@ The company filter in the toolbar popup searches only the current problem’s ta
 
 **Acceptance** appears beside difficulty in explorer and company practice question lists, and beneath the current problem title in the toolbar popup. Hover over the acceptance text for its meaning, or activate it with a click, tap, or Enter to read the explanation. This is the problem’s overall LeetCode submission acceptance rate, shared across companies. The inline company bar continues to show company logos, names and frequency.
 
+A small green **Completed on LeetCode** check appears beside problem titles in Explorer lists, company questions, and topic groups when your signed-in LeetCode account reports an accepted submission. Keep a signed-in LeetCode tab open in the same browser profile; refresh that tab after updating the extension. Completion is independent of company and interview time window. It is checked separately after dataset rows appear, refreshed when you return to Explorer and periodically while it is visible. If the account is signed out or cannot be checked, the extension shows a short status message and does not invent a completion result.
+
 Use the **filter icon** above each explorer list to change its order. The popup and explorer use the same compact icon, and its tooltip names the current sort. Companies can be ordered by name (A–Z or Z–A) or by most/fewest questions in the selected window. Problems can be ordered by search relevance, name, difficulty (easy to hard or hard to easy), or most/fewest associated companies. Company question lists also support highest/lowest frequency, and a problem’s company list supports frequency, name and question count. Counts follow the selected time window; source frequency scores and company ranks keep their original meaning. Sorting applies to all matching results before pagination, and each list’s sort preference is saved on your device. Explorer dropdowns use rounded menus that follow the light/dark theme, with keyboard navigation and click-outside dismissal.
 
 Company logos appear beside names in the inline bar, popup, explorer and company practice headings. Logos are bundled in the extension and work offline, with no calls to third-party logo services while you browse. Companies without a verified asset, or whose image cannot load, show a small initials badge. The bundled catalog includes 277 verified company logos (103 of the 115 companies listed for Two Sum in the current snapshot). Logo credits and source details are included in `extension/logos/catalog.json`.
@@ -69,10 +71,12 @@ These are public, community-maintained associations, not verified interview reco
 - **storage:** keeps the company index, sync progress, and display preferences on your device.
 - **unlimitedStorage:** allows the local cache and a pending refresh to hold all five time windows without the browser's small default extension-storage limit.
 - **alarms:** schedules daily checks and resumes interrupted downloads.
-- **LeetCode sites:** displays the inline bar and reads the problem slug from the URL. It does not read your solution, submissions, or credentials.
+- **LeetCode sites:** displays the inline bar, reads problem slugs, and uses an existing signed-in LeetCode tab to request account-specific completion statuses. It does not read submitted source code, passwords, cookie values, or session-token values.
 - **api.github.com / raw.githubusercontent.com / codeload.github.com:** downloads repository metadata, changed CSV files, and compressed repository archives. Requests are restricted in code to the named public repository, omit credentials, and do not include your current problem URL or browsing history. GitHub receives normal connection information, including your IP address.
 
-There is no analytics, application server, account, API key, paid LeetCode endpoint, or remotely executed code. CSV data is treated as data and rendered as text. A compressed copy of the public company/problem metadata is included for first-install results. The bundled snapshot records its original source commit and date; background updates fetch newer repository contents.
+There is no analytics, application server, Company Lens account, API key, paid LeetCode endpoint, or remotely executed code. An existing LeetCode sign-in is used only for completion checks. CSV data is treated as data and rendered as text. A compressed copy of the public company/problem metadata is included for first-install results. The bundled snapshot records its original source commit and date; background updates fetch newer repository contents.
+
+Completed-status requests go only to the LeetCode origin of the selected open tab. LeetCode receives the requested problem slugs, and the browser handles its normal session cookies. The extension uses the returned username in memory to keep accounts separate; the username and completion results are not written to persistent storage or sent to GitHub. Firefox declares authentication information, website content, and website activity for this feature in its built-in data disclosure; these declarations do not add new website or browser API permissions. See [Mozilla's data-consent taxonomy](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/).
 
 ## Build and test
 
@@ -93,6 +97,7 @@ npm run verify:live
 npm run test:browser
 npm run test:topics
 npm run test:company-topics
+npm run test:completion
 npm run test:firefox
 ```
 
@@ -101,6 +106,8 @@ npm run test:firefox
 `test:topics` is a focused Chromium check of the packaged Problems Explorer using the bundled snapshot with GitHub networking blocked. It verifies topic any/all matching, difficulty, complete group counts, pagination, collapse/expand, retry, delayed responses, navigation restoration, keyboard controls, and light/dark layouts at desktop and narrow widths. It uses the same `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` overrides and saves reports/screenshots under `output/playwright`.
 
 `test:company-topics` checks company-specific topic catalogs, any/all matching, original scores and ranks, grouped pagination, retry, delayed responses, and Back navigation. It then runs the global topic checks using the same offline Chromium setup and runtime overrides.
+
+`test:completion` uses isolated LeetCode HTML and read-only GraphQL fixtures through the actual content-script/background/Explorer pipeline. It verifies accepted-only markers, account changes, signed-out and unavailable states, delayed replies, paging, groups, Back navigation, and responsive layouts without submitting solutions or changing a real account. It uses the existing Playwright/Chromium runtime overrides.
 
 `test:firefox` installs the actual temporary add-on in an isolated Firefox profile, blocks GitHub networking, and seeds deterministic fixtures. It first verifies offline results on a fresh install, then verifies the inline problem bar and packaged popup using Playwright and Mozilla's localhost debugging protocol, including all five windows, practice filters, inline placement, horizontal scrolling, and bar recreation. It needs an existing Playwright installation and compatible Firefox binary; set `PLAYWRIGHT_MODULE` and `FIREFOX_EXECUTABLE` to select them. Reports and preview screenshots are saved under `output/playwright`; fixture previews are not captures of the live LeetCode site. Nothing is installed in your normal browser profiles.
 
