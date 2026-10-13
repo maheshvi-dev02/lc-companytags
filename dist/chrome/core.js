@@ -616,7 +616,53 @@
     return result;
   }
 
-  return { SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, COMPLETION_FILTERS, getProblemSlug, formatProblemTitle,
+
+  function targetQuestions(data, options = {}, verifiedSnapshot, random = Math.random) {
+    const company = options.company || '';
+    const query = company ? practiceQuestions : searchProblems;
+    const base = { ...options, sort: company ? 'frequency-desc' : 'name-asc', offset: 0, limit: 100 };
+    const first = query(data, base, verifiedSnapshot);
+    const { questions: initialQuestions, problems: initialProblems, ...metadata } = first;
+    const empty = { ...metadata, questions: [], hasMore: false, coveredTopics: [], availableTopicCount: 0 };
+    if (options.targetMode === 'catalog' || !first.available || first.total === null) return empty;
+    const candidates = [...(company ? initialQuestions : initialProblems)];
+    for (let offset = candidates.length; offset < first.total; offset += 100) {
+      const page = query(data, { ...base, offset }, verifiedSnapshot);
+      candidates.push(...(company ? page.questions : page.problems));
+    }
+    if (!candidates.length) return empty;
+    const availableTopics = new Set(candidates.flatMap(row => row.topics || []));
+    if (options.targetMode !== 'plan') {
+      const exclude = new Set(options.excludeSlugs || []);
+      let pool = candidates.filter(row => !exclude.has(row.slug));
+      if (!pool.length) {
+        const last = (options.excludeSlugs || []).at(-1);
+        pool = candidates.length > 1 ? candidates.filter(row => row.slug !== last) : candidates;
+      }
+      return { ...empty, questions: [pool[Math.floor(random() * pool.length)]], availableTopicCount: availableTopics.size };
+    }
+    const selected = [], remaining = [...candidates], covered = new Map(), difficulties = new Set();
+    const maxFrequency = Math.max(0, ...candidates.map(row => Number.isFinite(row.frequency) ? row.frequency : 0));
+    while (remaining.length && selected.length < (options.count || 20)) {
+      let best = 0, bestScore = -Infinity;
+      remaining.forEach((row, index) => {
+        const topics = row.topics || [];
+        const coverage = topics.length ? topics.reduce((sum, topic) => sum + 1 / (1 + (covered.get(topic) || 0)), 0) / topics.length : 0;
+        const frequency = maxFrequency > 0 && Number.isFinite(row.frequency) ? row.frequency / maxFrequency : 0;
+        const score = .55 * coverage + .4 * frequency + (row.difficulty && !difficulties.has(row.difficulty) ? .05 : 0);
+        if (score > bestScore) { bestScore = score; best = index; }
+      });
+      const row = remaining.splice(best, 1)[0];
+      const newTopics = (row.topics || []).filter(topic => !covered.has(topic));
+      selected.push({ ...row, newTopics });
+      for (const topic of row.topics || []) covered.set(topic, (covered.get(topic) || 0) + 1);
+      if (row.difficulty) difficulties.add(row.difficulty);
+    }
+    return { ...empty, questions: selected, availableTopicCount: availableTopics.size,
+      coveredTopics: [...covered.keys()].sort((a, b) => a.localeCompare(b)) };
+  }
+
+  return { targetQuestions, SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, COMPLETION_FILTERS, getProblemSlug, formatProblemTitle,
     parseCSV, parseCompanyCSV, parseCompanyRecords, sortCompanies, selectCompanyFiles, selectWindowFiles, encodedPath, sourceFileURL, rawFileURL,
     validAcceptanceRate, formatAcceptanceRate, hasAcceptanceData, problemForSlug, reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
 });

@@ -6,6 +6,7 @@
   <title>Company Lens</title>
   <link rel="stylesheet" href="ui.css">
   <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="target.css">
 </head>
 <body>
   <header class="header">
@@ -14,6 +15,7 @@
     <span class="edition">COMMUNITY</span>
   </header>
   <main>
+    <div class="popup-mode-tabs" role="tablist" aria-label="Company Lens view"><button id="popup-browse" type="button" role="tab" aria-selected="true">Browse</button><button id="mode-target" type="button" role="tab" aria-selected="false" aria-controls="target-view" tabindex="-1">Target</button></div>
     <button id="explore-dataset" class="explore-dataset" type="button">Explore dataset <span aria-hidden="true">↗</span></button>
     <p class="explore-hint">Search any problem or company.</p>
     <label class="setting" for="enabled">
@@ -78,5 +80,6 @@
   <script src="company-logos.js"></script>
   <script src="select-controls.js"></script>
   <script src="popup.js"></script>
+  <script src="target-ui.js"></script>
 </body>
 </html>

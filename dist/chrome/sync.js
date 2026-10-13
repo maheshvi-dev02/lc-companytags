@@ -494,6 +494,23 @@
         await initialize();
         return core.practiceQuestions(state.lctData, validated, verifiedSnapshot);
       },
+
+      async getTarget(targetOptions, verifiedSnapshot) {
+        if (!targetOptions || typeof targetOptions !== 'object' || Array.isArray(targetOptions)) throw new Error('Invalid Target options.');
+        const targetMode = targetOptions.targetMode === undefined ? 'random' : targetOptions.targetMode;
+        if (!['random', 'plan', 'catalog'].includes(targetMode)) throw new Error('Invalid Target mode.');
+        const company = targetOptions.company === undefined ? '' : targetOptions.company;
+        if (typeof company !== 'string' || company.length > 200 || company !== company.trim() || (targetMode === 'plan' && !company)) throw new Error('Choose a company for your prep list.');
+        const count = targetOptions.count === undefined ? 20 : targetOptions.count;
+        if (!Number.isInteger(count) || count < 1 || count > 50) throw new Error('Choose between 1 and 50 questions.');
+        const excludeSlugs = targetOptions.excludeSlugs === undefined ? [] : targetOptions.excludeSlugs;
+        if (!Array.isArray(excludeSlugs) || excludeSlugs.length > 100 || excludeSlugs.some(slug => typeof slug !== 'string' || slug.length > 200 || !core.SLUG_PATTERN.test(slug))) throw new Error('Invalid recent problems.');
+        const value = { ...targetOptions, company, offset: 0, limit: 100, sort: company ? 'frequency-desc' : 'name-asc' };
+        const validated = validateCompletionFilter(company ? validatePracticeOptions(value) : validateProblemSearchOptions(value), verifiedSnapshot, true);
+        if (targetMode === 'catalog' && validated.completionFilter !== 'all') throw new Error('Invalid Target catalog filter.');
+        await initialize();
+        return core.targetQuestions(state.lctData, { ...validated, targetMode, count, excludeSlugs: [...excludeSlugs] }, verifiedSnapshot);
+      },
       async waitForIdle() { if (launching) await launching; if (running) await running; }
     };
   }

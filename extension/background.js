@@ -101,9 +101,9 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!sender || sender.id !== api.runtime.id) return false;
     if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
-      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION'].includes(message.type)) return false;
+      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION', 'LCT_TARGET'].includes(message.type)) return false;
     if (message.type === 'LCT_COMPLETION' && !LCTCompletion.isExplorerSender(sender, api.runtime)) return false;
-    if (['LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS'].includes(message.type) && message.completionFilter !== undefined &&
+    if (['LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS', 'LCT_TARGET'].includes(message.type) && message.completionFilter !== undefined &&
         message.completionFilter !== 'all' && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
     if (message.type === 'LCT_OPEN_POPUP') {
       // Use browser-supplied sender details, never a window or origin from the
@@ -134,7 +134,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
       if (message.type === 'LCT_OPEN_EXPLORER') {
         const mode = message.mode === undefined ? 'problems' : message.mode;
         const query = message.query === undefined ? '' : message.query;
-        if (!['problems', 'companies'].includes(mode) || typeof query !== 'string' || query.length > 200) throw new Error('Invalid explorer selection.');
+        if (!['problems', 'companies', 'target'].includes(mode) || typeof query !== 'string' || query.length > 200) throw new Error('Invalid explorer selection.');
         const slug = message.slug;
         if (slug !== undefined && (mode !== 'problems' || typeof slug !== 'string' || slug.length > 200 || slug !== slug.trim() || !LCTCore.SLUG_PATTERN.test(slug))) throw new Error('Invalid explorer problem.');
         const company = message.company;
@@ -169,6 +169,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         const available = await service.windowAvailable(message.window);
         return { ok: true, problem: await service.getProblem(message.slug), companies, available, windowAvailable: available, status: await service.getStatus() };
       }
+      if (message.type === 'LCT_TARGET') return queryWithCompletion(message, sender, (options, snapshot) => service.getTarget(options, snapshot));
       if (message.type === 'LCT_PRACTICE') return queryWithCompletion(message, sender, (options, snapshot) => service.getPractice(options, snapshot));
       if (message.type === 'LCT_SEARCH_PROBLEMS') return queryWithCompletion(message, sender, (options, snapshot) => service.searchProblems(options, snapshot));
       if (message.type === 'LCT_SEARCH_COMPANIES') return Object.assign({ ok: true }, await service.searchCompanies(message), { status: await service.getStatus() });

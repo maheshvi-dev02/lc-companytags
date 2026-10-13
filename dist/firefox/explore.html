@@ -6,6 +6,7 @@
   <title>Explore dataset · Company Lens</title>
   <link rel="stylesheet" href="ui.css">
   <link rel="stylesheet" href="explore.css">
+  <link rel="stylesheet" href="target.css">
 </head>
 <body>
   <header class="header">
@@ -18,6 +19,7 @@
       <div class="mode-tabs" role="tablist" aria-label="Search dataset">
         <button id="mode-problems" role="tab" type="button" aria-selected="true" aria-controls="search-view">Problems</button>
         <button id="mode-companies" role="tab" type="button" aria-selected="false" aria-controls="search-view" tabindex="-1">Companies</button>
+        <button id="mode-target" role="tab" type="button" aria-selected="false" aria-controls="target-view" tabindex="-1">Target</button>
       </div>
       <label class="window-filter">Time window<select id="window-select" aria-label="Time window"><option value="all">All time</option><option value="30d">Last 30 days</option><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="older">Older than 6 months</option></select></label>
     </div>
@@ -79,5 +81,6 @@
   <script src="company-logos.js"></script>
   <script src="select-controls.js"></script>
   <script src="explore.js"></script>
+  <script src="target-ui.js"></script>
 </body>
 </html>

@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const require = createRequire(import.meta.url), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+let playwright;
+for (const candidate of [process.env.PLAYWRIGHT_MODULE, 'playwright', path.join(process.env.USERPROFILE || '', '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')].filter(Boolean)) {
+  try { playwright = require(candidate); break; } catch {}
+}
+assert.ok(playwright, 'Use the installed Playwright runtime.');
+let executablePath = process.env.CHROMIUM_EXECUTABLE;
+if (!executablePath && process.env.LOCALAPPDATA) {
+  const dir = path.join(process.env.LOCALAPPDATA, 'ms-playwright');
+  const versions = (await readdir(dir)).filter(n => /^chromium-\d+$/.test(n)).sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
+  executablePath = path.join(dir, versions[0], 'chrome-win64/chrome.exe');
+}
+const output = path.join(root, 'output/playwright'), extension = path.join(root, 'dist/chrome');
+await mkdir(output, { recursive: true });
+const report = { version: JSON.parse(await readFile(path.join(extension, 'manifest.json'))).version, checks: [], pageErrors: [] };
+let context;
+try {
+  context = await playwright.chromium.launchPersistentContext(path.join(output, 'target-profile-' + Date.now()), {
+    headless: true, channel: 'chromium', executablePath, viewport: { width: 1280, height: 900 },
+    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--no-proxy-server', '--host-resolver-rules=MAP api.github.com ~NOTFOUND, MAP raw.githubusercontent.com ~NOTFOUND, MAP codeload.github.com ~NOTFOUND'],
+  });
+  context.setDefaultTimeout(15000);
+  context.on('page', p => p.on('pageerror', e => report.pageErrors.push(e.message)));
+  const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+  const url = new URL(worker.url()), base = url.protocol + '//' + url.host;
+  const page = await context.newPage();
+  await page.goto(base + '/explore.html?mode=target');
+  await page.locator('#target-company option[value="Microsoft"]').waitFor({ state: 'attached' });
+  const choose = async (p, id, value) => { await p.locator('#' + id + '-trigger').click(); await p.locator('#' + id + '-menu [role="option"]').filter({ hasText: value }).filter({ hasText: new RegExp('^' + value + '$') }).click(); };
+  await choose(page, 'target-difficulty', 'Medium');
+  await choose(page, 'target-topic', 'Array');
+  await page.locator('#target-generate').click();
+  await page.locator('#target-results .target-question').waitFor();
+  assert.match(await page.locator('.target-question-meta').innerText(), /Medium/);
+  assert.match(await page.locator('.target-question-topics').innerText(), /Array/);
+  const first = await page.locator('.target-question h3').innerText();
+  await page.locator('#target-generate').click();
+  await page.waitForFunction(previous => document.querySelector('.target-question h3')?.textContent !== previous && document.querySelectorAll('.target-question').length === 1, first);
+  report.checks.push('Random filters and another distinct pick');
+  await page.locator('#target-plan').click();
+  await choose(page, 'target-company', 'Microsoft');
+  await choose(page, 'target-difficulty', 'All difficulties');
+  await choose(page, 'target-topic', 'All topics');
+  await page.locator('#target-generate').click();
+  await page.waitForFunction(() => document.querySelectorAll('.target-question').length === 20);
+  assert.match(await page.locator('#target-message').innerText(), /20 questions.*topics.*Microsoft/);
+  assert.ok(await page.locator('.target-reason').count() >= 3);
+  await page.screenshot({ path: path.join(output, 'target-fullpage-preview.png'), animations: 'disabled' });
+  report.checks.push('Microsoft prep with20unique questions and topic coverage');
+  await page.waitForFunction(async () => (await chrome.storage.local.get('lctTargetPreferences')).lctTargetPreferences?.hasPlan === true);
+  await page.locator('#mode-problems').click();
+  await page.locator('#results .question-row').first().waitFor();
+  const popup = await context.newPage(); await popup.setViewportSize({ width: 440, height: 800 });
+  await popup.goto(base + '/popup.html'); await popup.locator('#mode-target').click();
+  await popup.waitForFunction(() => document.querySelectorAll('.target-question').length === 20);
+  assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth > 440), false);
+  await popup.screenshot({ path: path.join(output, 'target-popup-preview.png'), animations: 'disabled' });
+  const opened = context.waitForEvent('page'); await popup.locator('#target-expand').click();
+  const expanded = await opened; await expanded.waitForLoadState();
+  assert.equal(new URL(expanded.url()).searchParams.get('mode'), 'target');
+  await expanded.waitForFunction(() => document.querySelectorAll('.target-question').length === 20);
+  report.checks.push('Popup restores prep settings, expands Target, and Browse still works');
+  await choose(expanded, 'target-status', 'Not solved');
+  await expanded.locator('#target-generate').click();
+  await expanded.waitForFunction(() => /signed-in LeetCode tab/.test(document.querySelector('#target-message').textContent));
+  assert.equal(await expanded.locator('.target-question').count(), 0);
+  report.checks.push('Not-solved without a LeetCode tab shows guidance, not fake results');
+  assert.deepEqual(report.pageErrors, []);
+  report.status = 'passed';
+} catch (error) { report.status = 'failed'; report.error = error.stack; process.exitCode = 1; }
+finally { if (context) await context.close(); report.contextClosed = true; await writeFile(path.join(output, 'target-report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report)); }

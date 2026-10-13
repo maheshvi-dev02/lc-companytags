@@ -433,7 +433,7 @@
 
   function renderShell() {
     for (const key of ['problems', 'companies']) {
-      const selected = key === mode;
+      const selected = key === mode && !document.body.hasAttribute('data-target');
       $(`mode-${key}`).setAttribute('aria-selected', String(selected));
       $(`mode-${key}`).tabIndex = selected ? 0 : -1;
     }
@@ -476,6 +476,7 @@
     return frame ? frame.filters.completionFilter : problemView.completionFilter;
   }
   function activeFilteredOwner() {
+    if (document.body.hasAttribute('data-target')) return null;
     const frame = activeDetail();
     if (frame) return frame.kind === 'company' && frame.filters.completionFilter !== 'all' ? frame : null;
     return mode === 'problems' && problemView.completionFilter !== 'all' ? list : null;
@@ -586,6 +587,7 @@
     } else scheduleCompletionScan();
   }
   function scheduleCompletionScan() {
+    if (document.body.hasAttribute('data-target')) return;
     if (activeFilteredOwner()) return;
     if (Date.now() - completionRefreshedAt >= completionTTL) { refreshCompletionStatus(); return; }
     completionNeedsScan = true;
@@ -597,6 +599,7 @@
     });
   }
   async function runCompletionPass() {
+    if (document.body.hasAttribute('data-target')) return;
     if (completionRunning || document.hidden || completionBlocked || activeFilteredOwner()) return;
     completionRunning = true;
     const epoch = completionEpoch;
@@ -951,6 +954,7 @@
     $('problem-status-select').disabled = false; syncSelectControl($('problem-status-select'));
   }
   async function loadList(append = false) {
+    if (document.body.hasAttribute('data-target')) return;
     if (activeDetail() || (append && (list.loading || !list.hasMore || grouped()))) return;
     if (append && list.version !== listVersion()) append = false;
     const id = ++listRequest, stamp = generation;
@@ -1092,6 +1096,7 @@
     }
   }
   async function loadDetail(append = false) {
+    if (document.body.hasAttribute('data-target')) return;
     const frame = activeDetail();
     if (!frame || (append && (frame.loading || !frame.hasMore || (frame.kind === 'company' && scopeGrouped(frame))))) return;
     if (append && frame.version !== detailVersion(frame)) append = false;

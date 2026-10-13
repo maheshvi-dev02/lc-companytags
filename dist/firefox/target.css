@@ -1,0 +1,42 @@
+.popup-mode-tabs { display:flex; gap:4px; padding:4px; margin:14px 0; border:1px solid var(--line); border-radius:10px; background:var(--wash); }
+.popup-mode-tabs button { flex:1; background:transparent; border-color:transparent; color:var(--muted); padding:8px 12px; }
+.popup-mode-tabs [aria-selected="true"] { background:var(--paper); color:var(--ink); border-color:var(--line); }
+body[data-target] #search-view,body[data-target] #detail-view,body[data-target] .problem,body[data-target] .setting,body[data-target] #explore-dataset,body[data-target] .explore-hint,body[data-target] #completion-status { display:none !important; }
+.target-view { margin:0 0 20px; min-width:0; }
+.target-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.target-heading h2 { margin:0; }
+.target-help { color:var(--muted); font-size:var(--font-label); margin:8px 0 18px; }
+.target-expand { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:7px; flex:none; border:1px solid var(--line); border-radius:8px; background:var(--wash); color:var(--ink); }
+.target-expand svg { width:16px; height:16px; }
+.target-kind { display:flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:10px; background:var(--wash); width:fit-content; margin-bottom:16px; }
+.target-kind button { padding:8px 12px; border-color:transparent; background:transparent; color:var(--muted); }
+.target-kind [aria-pressed="true"] { background:var(--paper); color:var(--ink); border-color:var(--line); }
+.target-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.target-controls label { display:block; min-width:0; color:var(--muted); font-size:var(--font-label); }
+.target-controls label > span { display:block; margin-bottom:5px; }
+.target-controls input,.target-controls select,.target-controls .select-control,.target-controls .select-trigger { width:100%; max-width:100%; min-width:0; }
+.target-controls input { padding:9px 11px; min-height:40px; background:var(--wash); color:var(--ink); border:1px solid var(--line); border-radius:8px; font:inherit; }
+.target-company-search { grid-column:1/-1; }
+.target-submit { margin-top:16px; padding:10px 16px; }
+.target-message { color:var(--muted); font-size:var(--font-label); margin:14px 0; overflow-wrap:anywhere; }
+.target-message[data-error] { color:var(--warn); }
+.target-results { list-style:none; margin:0; padding:0; }
+.target-question { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-top:1px solid var(--line); padding:15px 0; }
+.target-question-info { min-width:0; flex:1; }
+.target-question h3 { display:flex; align-items:center; gap:6px; margin:0; font-size:var(--font-name); line-height:1.45; overflow-wrap:anywhere; }
+.target-question-meta,.target-question-topics,.target-reason { color:var(--muted); font-size:var(--font-caption); margin:5px 0 0; overflow-wrap:anywhere; }
+.target-reason { color:var(--ink); }
+.target-open { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; padding:7px; flex:none; border:1px solid var(--line); border-radius:8px; background:var(--wash); }
+.target-open img { width:20px; height:20px; }
+.target-coverage { border:1px solid var(--line); border-radius:8px; padding:9px 12px; margin:0 0 14px; font-size:var(--font-caption); color:var(--muted); }
+.target-coverage summary { cursor:pointer; color:var(--ink); }
+.target-coverage p { margin:8px 0 0; }
+.target-view[data-popup] .target-kind { width:100%; }
+.target-view[data-popup] .target-kind button { flex:1; }
+.target-view[data-popup] .target-submit { width:100%; }
+@media(max-width:540px) { .target-controls { gap:10px; } .target-question { padding:13px 0; } }
+
+.target-view:not([data-popup]) .target-controls { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.target-view:not([data-popup]) .target-company-search,.target-view:not([data-popup]) .target-company-wrap { grid-column:span 2; }
+.target-view[data-popup] .target-results { max-height:300px; overflow:auto; overscroll-behavior:contain; }
+@media(max-width:700px) { .target-view:not([data-popup]) .target-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } .target-view:not([data-popup]) .target-company-search { grid-column:1/-1; } .target-view:not([data-popup]) .target-company-wrap { grid-column:auto; } }

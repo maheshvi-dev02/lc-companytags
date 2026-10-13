@@ -743,7 +743,7 @@
   }
 
   function refreshPracticeCompletion() {
-    if (!practiceCompany || practiceCompletionFilter() === 'all' || document.hidden || practiceRefreshScheduled) return;
+    if (!practiceCompany || practiceCompletionFilter() === 'all' || document.hidden || practiceRefreshScheduled || document.body.hasAttribute('data-target')) return;
     // Invalidate the displayed account snapshot before any asynchronous request.
     practiceRequestId++;
     practiceLoading = false; practiceLoadingAll = false;
