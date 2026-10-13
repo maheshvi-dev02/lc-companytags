@@ -198,20 +198,37 @@
   const practiceOrderLabel = () => practiceSortOptions.find(([key]) => key === practiceSort)[1];
   const practiceCompletionFilter = () => ['solved', 'not-solved'].includes($('practice-status-select').value)
     ? $('practice-status-select').value : 'all';
-  function syncPracticeSort() {
-    $('practice-sort-select').value = practiceSort;
-    selectMenus.sync($('practice-sort-select'));
-  }
-  function changePracticeSort() {
-    const next = validPracticeSort($('practice-sort-select').value);
-    if (next === practiceSort) return;
-    practiceSort = next;
-    syncPracticeSort();
-    void loadPractice();
+  function savePracticeSort() {
+    const next = practiceSort;
     practiceSortSave = practiceSortSave.then(() => api.storage.local.set({ lctPopupPracticeSort: next })).catch(() => {
       practiceError = 'Could not save your sort preference. The current view still works.';
       renderPracticeSummary();
     });
+  }
+  function syncPracticeSort() {
+    const difficulty = $('difficulty-select').value;
+    if (difficulty && practiceSort.startsWith('difficulty-')) {
+      practiceSort = 'frequency-desc'; savePracticeSort();
+    }
+    const select = $('practice-sort-select');
+    const options = practiceSortOptions.filter(([value]) => !difficulty || !value.startsWith('difficulty-'));
+    const signature = JSON.stringify(options);
+    if (select.dataset.sortOptions !== signature) {
+      select.replaceChildren(...options.map(([value, label]) => {
+        const option = document.createElement('option'); option.value = value; option.textContent = label; return option;
+      }));
+      select.dataset.sortOptions = signature;
+    }
+    select.value = practiceSort;
+    selectMenus.sync(select);
+  }
+  function changePracticeSort() {
+    const next = validPracticeSort($('practice-sort-select').value);
+    if (next === practiceSort || ($('difficulty-select').value && next.startsWith('difficulty-'))) return;
+    practiceSort = next;
+    syncPracticeSort();
+    void loadPractice();
+    savePracticeSort();
   }
 
   let acceptanceHelpId = 0;
@@ -646,6 +663,7 @@
     if (!practiceCompany || (append && (practiceLoading || !practiceHasMore))) return;
     clearTimeout(topicTimer);
     selectMenus.close();
+    syncPracticeSort();
     const id = ++practiceRequestId;
     const context = practiceContext();
     const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), sort: practiceSort, completionFilter: practiceCompletionFilter() };

@@ -292,6 +292,7 @@
     pendingDetail = null;
     invalidate(); resetTopicGroups();
     list.version = null; list.rows = []; list.total = 0; list.hasMore = false; list.loading = true; list.error = '';
+    renderSortControls();
     renderListRows([]); renderProblemControls(); renderListSummary(); if (save) saveProblemView();
     if (debounce) searchTimer = setTimeout(() => void loadList(), 150); else void loadList();
   }
@@ -321,22 +322,32 @@
     if (sort === 'relevance') return queries.problems.trim() ? 'Best match first' : 'A–Z';
     return sortOptions[key].find(([value]) => value === sort)?.[1] || '';
   }
-  function renderSortSelect(select, key, selected) {
-    if (select.dataset.sortKind !== key) {
-      select.replaceChildren(...sortOptions[key].map(([value, label]) => { const option = node('option', '', label); option.value = value; return option; }));
-      select.dataset.sortKind = key;
+  function renderSortSelect(select, key, selected, difficulty = '') {
+    const options = sortOptions[key].filter(([value]) => !difficulty || !value.startsWith('difficulty-'));
+    const signature = JSON.stringify([key, options]);
+    if (select.dataset.sortKind !== signature) {
+      select.replaceChildren(...options.map(([value, label]) => { const option = node('option', '', label); option.value = value; return option; }));
+      select.dataset.sortKind = signature;
     }
     select.value = selected;
     select.setAttribute('aria-label', sortNames[key]);
     syncSelectControl(select);
   }
   function renderSortControls() {
-    renderSortSelect($('sort-select'), mode, sorts[mode]);
-    $('result-order').textContent = orderLabel(mode, sorts[mode]);
+    let changed = false;
+    if (problemView.difficulty && sorts.problems.startsWith('difficulty-')) {
+      sorts.problems = sortDefaults.problems; changed = true;
+    }
     const frame = activeDetail();
+    if (frame?.kind === 'company' && frame.filters.difficulty && frame.sort.startsWith('difficulty-')) {
+      frame.sort = sortDefaults.companyQuestions; sorts.companyQuestions = frame.sort; changed = true;
+    }
+    if (changed) saveSorts();
+    renderSortSelect($('sort-select'), mode, sorts[mode], mode === 'problems' ? problemView.difficulty : '');
+    $('result-order').textContent = orderLabel(mode, sorts[mode]);
     if (frame) {
       const key = detailSortKey(frame);
-      renderSortSelect($('detail-sort-select'), key, frame.sort);
+      renderSortSelect($('detail-sort-select'), key, frame.sort, frame.kind === 'company' ? frame.filters.difficulty : '');
       $('detail-order').textContent = orderLabel(key, frame.sort);
     }
   }
@@ -350,7 +361,8 @@
   function changeSort(key, value) {
     const frame = activeDetail();
     const current = frame && detailSortKey(frame) === key ? frame.sort : sorts[key];
-    if (!sortOptions[key].some(([allowed]) => allowed === value) || current === value) return;
+    const difficulty = key === 'problems' ? problemView.difficulty : key === 'companyQuestions' ? frame?.filters.difficulty : '';
+    if ((difficulty && value.startsWith('difficulty-')) || !sortOptions[key].some(([allowed]) => allowed === value) || current === value) return;
     sorts[key] = value;
     invalidate();
     if (!activeDetail() && key === 'problems') resetTopicGroups();
@@ -1043,8 +1055,8 @@
       context.append(document.createTextNode(`${frame.difficulty || 'Difficulty unavailable'} · `), acceptance.button, document.createTextNode(` · ${labels[windowKey()].toLowerCase()}`), acceptance.help);
     } else context.textContent = `Every question listed for ${frame.name} · ${labels[windowKey()].toLowerCase()}`;
     $('detail-filters').hidden = frame.kind !== 'company';
-    $('detail-results').setAttribute('aria-label', frame.kind === 'problem' ? 'Companies listed for this problem' : `Company questions sorted by ${orderLabel(detailSortKey(frame), frame.sort).toLocaleLowerCase()}`);
     renderSortControls();
+    $('detail-results').setAttribute('aria-label', frame.kind === 'problem' ? 'Companies listed for this problem' : `Company questions sorted by ${orderLabel(detailSortKey(frame), frame.sort).toLocaleLowerCase()}`);
     $('detail-source').hidden = !frame.sourceUrl;
     if (frame.sourceUrl) $('detail-source').href = sourceURL(frame.sourceUrl);
     if (frame.kind === 'company') {
