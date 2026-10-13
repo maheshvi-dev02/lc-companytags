@@ -7,6 +7,10 @@
   panel.setAttribute('aria-labelledby', 'target-title'); if (popup) panel.dataset.popup = '';
   panel.innerHTML = `<div class="target-heading"><h2 id="target-title">Target</h2><button id="target-expand" class="target-expand" type="button" title="Open Target full page" aria-label="Open Target full page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M12 12 21 3M15 3h6v6"/></svg></button></div>
     <p class="target-help" id="target-help">Pick your next problem, or build a company prep list.</p>
+    <section id="target-editor" class="target-editor" aria-labelledby="target-editor-title" hidden>
+      <h3 id="target-editor-title">Edit collection</h3><label for="target-name">Collection name</label><input id="target-name" type="text" maxlength="100" autocomplete="off">
+      <p id="target-editor-help" class="target-help"></p><div class="target-editor-actions"><button id="target-rename" type="button">Save name</button><button id="target-update" type="button">Update collection</button><button id="target-cancel" type="button">Cancel</button></div>
+    </section>
     <div class="target-kind" role="group" aria-label="Target mode"><button id="target-random" type="button" aria-pressed="true">Random problem</button><button id="target-plan" type="button" aria-pressed="false">Company prep</button></div>
     <div class="target-controls">
       <label class="target-company-search"><span>Find a company</span><input id="target-company-search" type="search" placeholder="e.g. Microsoft" aria-label="Find a target company" maxlength="200" autocomplete="off"></label>
@@ -18,7 +22,7 @@
     </div><button id="target-generate" type="button" class="target-submit">Pick a problem</button>
     <p id="target-message" class="target-message" role="status" aria-live="polite">Choose optional filters, then pick a problem.</p>
     <details id="target-coverage" class="target-coverage" hidden><summary id="target-coverage-title"></summary><p id="target-coverage-topics"></p></details>
-    <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><span id="target-saved-status" role="status"></span></div>
+    <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><button id="target-edit" type="button" hidden>Edit collection</button><span id="target-saved-status" role="status"></span></div>
     <details id="target-collection" class="target-collection"><summary id="target-collection-title">Saved targets</summary><p id="target-collection-empty" class="target-help">Company prep lists are saved here automatically.</p><ul id="target-collection-list"></ul></details>
     <ul id="target-results" class="target-results" aria-label="Target problems"></ul>`;
   if (popup) document.querySelector('.problem').after(panel); else $('detail-view').after(panel);
@@ -27,15 +31,17 @@
   let initialized = false, initializing = null, companies = [], kind = 'random', generation = 0, catalogGeneration = 0;
   let recent = [], recentContext = '', lastResult = null, hasPlan = false, saveQueue = Promise.resolve();
   let savedTargets = [], currentSaved = null, lastContext = null, saving = 0;
+  let editing = null, editBusy = null;
   const visible = () => document.body.hasAttribute('data-target');
   function node(tag, cls, text) { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; }
   function message(text, error = false) { $('target-message').textContent = text; $('target-message').toggleAttribute('data-error', error); }
-  function clearResults(text) { generation++; $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; currentSaved = null; lastContext = null; renderActions(); $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
+  function clearResults(text) { generation++; if (editBusy !== 'save') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; currentSaved = null; lastContext = null; renderActions(); $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
   function preferences() { return { targetMode: kind, company: $('target-company').value, difficulty: $('target-difficulty').value, topic: $('target-topic').value, completionFilter: $('target-status').value, count: Number($('target-count').value), hasPlan, savedTargetId: currentSaved?.id || null }; }
   function save() { const value = preferences(); saveQueue = saveQueue.then(() => api.storage.local.set({ lctTargetPreferences: value })).catch(() => {}); return saveQueue; }
   function setKind(value) {
     kind = value; $('target-random').setAttribute('aria-pressed', String(kind === 'random')); $('target-plan').setAttribute('aria-pressed', String(kind === 'plan'));
     $('target-count-wrap').hidden = kind !== 'plan'; $('target-company-label').textContent = kind === 'plan' ? 'Target company' : 'Company (optional)';
+    renderEditor();
     $('target-generate').textContent = kind === 'plan' ? 'Build prep list' : 'Pick a problem';
     $('target-help').textContent = kind === 'plan' ? 'Prioritize company frequency while covering different topics.' : 'Choose optional filters. Recent picks are skipped while you keep picking.';
   }
@@ -116,24 +122,29 @@
     if (result.completion?.unknownCount > 0) message($('target-message').textContent + ' ' + result.completion.unknownCount + ' unknown statuses excluded.');
     renderActions();
   }
-  async function generate() {
+  async function generate(editState = null) {
     controls.close();
+    if (editState && (editing !== editState || editBusy)) return;
+    const collectionName = editState ? $('target-name').value.trim() : null;
+    if (editState && !collectionName) { message('Enter a collection name.', true); $('target-name').focus(); return; }
     if (kind === 'plan' && !$('target-company').value) { message('Choose a target company first.', true); $('target-company-trigger').focus(); return; }
     const query = request(), context = JSON.stringify(query);
     if (recentContext !== context) { recent = []; recentContext = context; }
-    clearResults(); const id = generation; $('target-generate').disabled = true; panel.setAttribute('aria-busy', 'true'); message(kind === 'plan' ? 'Building your prep list…' : 'Picking a problem…');
+    clearResults(); if (editState) { editBusy = 'generate'; renderEditor(); } const id = generation; $('target-generate').disabled = true; panel.setAttribute('aria-busy', 'true'); message(kind === 'plan' ? 'Building your prep list…' : 'Picking a problem…');
     try {
       const result = await api.runtime.sendMessage({ ...query, ...(kind === 'random' ? { excludeSlugs: recent.slice(-100) } : {}), ...(query.completionFilter !== 'all' ? { refreshCompletion: true } : {}) });
       if (id !== generation) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not build your target. Try again.');
       if (query.completionFilter !== 'all' && result.completion?.state !== 'ready') throw new Error(result.completion?.state === 'signed-out' ? 'Sign in to LeetCode, then try again.' : result.completion?.state === 'no-tab' ? 'Open a signed-in LeetCode tab, then try again.' : 'Could not check completion status. Refresh your LeetCode tab or choose All problems.');
       if (!result.available) throw new Error('The saved dataset is unavailable for this time window. Refresh the dataset or choose another window.');
+      if (editState && !result.questions?.length) throw new Error('No matching problems. Your saved collection has been kept. Change the filters and try again.');
       if (kind === 'random' && result.questions?.length) recent.push(result.questions[0].slug);
       hasPlan = kind === 'plan' && Boolean(result.questions?.length); lastContext = query; render(result);
-      if (hasPlan) await saveCurrent(true);
+      if (editState) await commitEdit(editState, collectionName, { ...result, context: query });
+      else if (hasPlan) await saveCurrent(true);
       if (id === generation) void save();
     } catch (error) { if (id === generation) message(error.message, true); }
-    finally { if (id === generation) { $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); } }
+    finally { if (id === generation) { $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); if (editState && editing === editState) { editBusy = null; renderEditor(); } } }
   }
   function renderActions() {
     $('target-actions').hidden = !lastResult?.questions?.length;
@@ -141,14 +152,16 @@
     $('target-download').disabled = !lastResult?.questions?.length;
     $('target-save').textContent = saving ? 'Saving…' : 'Save to collection';
     $('target-saved-status').textContent = currentSaved ? 'Saved to collection' : '';
-    $('target-save').hidden = Boolean(currentSaved);
+    $('target-save').hidden = Boolean(currentSaved) || Boolean(editing);
+    $('target-edit').hidden = !currentSaved || Boolean(editing);
+    $('target-saved-status').textContent = currentSaved ? 'Saved · ' + currentSaved.name : '';
   }
   function targetSnapshot() { return { ...lastResult, context: lastContext }; }
   function download(target) {
     try {
       const blob = new Blob([globalThis.LCTTargetCollection.csv(target)], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob), link = document.createElement('a');
-      link.href = url; link.download = 'company-lens-' + (target.context.company || 'random').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + target.context.window + '.csv';
+      link.href = url; link.download = 'company-lens-' + (target.name || target.context.company || 'random').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + target.context.window + '.csv';
       document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (error) { message('Could not download CSV. ' + error.message, true); }
   }
@@ -158,13 +171,14 @@
     $('target-collection-empty').hidden = Boolean(savedTargets.length);
     $('target-collection-list').replaceChildren(...savedTargets.map(target => {
       const li = node('li', 'target-saved-entry'), info = node('div', 'target-saved-info');
-      info.append(node('h3', '', target.context.company || 'Random problem'), node('p', '', target.questions.length + ' questions · ' + windowLabel(target.context.window) + ' · ' + new Date(target.createdAt).toLocaleDateString()));
+      info.append(node('h3', '', target.name), node('p', '', [target.context.company || 'Any company', target.questions.length + ' questions', windowLabel(target.context.window), target.context.difficulty || 'All difficulties', ...(target.context.topics || []), target.context.completionFilter !== 'all' ? target.context.completionFilter === 'solved' ? 'Solved' : 'Not solved' : '', new Date(target.updatedAt).toLocaleDateString()].filter(Boolean).join(' · ')));
       const actions = node('div', 'target-saved-actions');
-      for (const [label, callback] of [['Open', () => openSaved(target)], ['CSV', () => download(target)], ['Remove', async button => {
+      for (const [label, callback] of [['Open', () => openSaved(target)], ['Edit', () => startEdit(target, 'edit')], ['Clone', () => startEdit(target, 'clone')], ['CSV', () => download(target)], ['Remove', async button => {
         button.disabled = true;
         try {
           const result = await api.runtime.sendMessage({ type: 'LCT_TARGET_REMOVE', id: target.id });
           if (!result?.ok) throw new Error(result?.error || 'Could not remove saved Target.');
+          if (editing?.entry.id === target.id) { editing = null; editBusy = null; renderEditor(); }
           if (currentSaved?.id === target.id) { currentSaved = null; renderActions(); void save(); }
           await loadCollection();
         } catch (error) { message(error.message, true); button.disabled = false; }
@@ -195,6 +209,7 @@
     finally { saving--; renderActions(); }
   }
   function openSaved(target) {
+    editing = null; editBusy = null;
     clearResults(); setKind(target.context.targetMode);
     if ($('window-select').value !== target.context.window) { $('window-select').value = target.context.window; $('window-select').dispatchEvent(new Event('change', { bubbles: true })); }
     $('target-company-search').value = ''; companyOptions();
@@ -208,9 +223,50 @@
     if ([12, 20, 30, 50].includes(target.context.count)) $('target-count').value = String(target.context.count);
     for (const id of ['target-company', 'target-difficulty', 'target-topic', 'target-status', 'target-count']) controls.sync($(id));
     currentSaved = target; lastContext = target.context; hasPlan = kind === 'plan'; render(target);
-    message('Saved target · ' + (target.context.company || 'Random problem') + ' · ' + windowLabel(target.context.window) + ' · ' + new Date(target.createdAt).toLocaleDateString());
+    message('Saved target · ' + target.name + ' · ' + windowLabel(target.context.window) + ' · ' + new Date(target.createdAt).toLocaleDateString());
     void catalog(); void save();
   }
+  function renderEditor() {
+    $('target-editor').hidden = !editing;
+    $('target-generate').hidden = Boolean(editing);
+    for (const id of ['target-random', 'target-plan']) $(id).disabled = Boolean(editing) || Boolean(initializing);
+    if (!editing) return;
+    const clone = editing.mode === 'clone';
+    $('target-editor-title').textContent = clone ? 'Clone collection' : 'Edit collection';
+    $('target-editor-help').textContent = clone ? 'Save an exact copy, or change the filters below and build a filtered copy.' : 'Change the filters below, then update this collection. Save name keeps the current questions.';
+    $('target-rename').textContent = clone ? 'Save copy' : 'Save name';
+    $('target-update').textContent = clone ? 'Build filtered copy' : 'Update collection';
+    for (const id of ['target-name', 'target-rename', 'target-update']) $(id).disabled = Boolean(editBusy);
+    $('target-cancel').disabled = editBusy === 'save';
+  }
+  function startEdit(entry, mode) {
+    openSaved(entry); editing = { entry, mode }; editBusy = null;
+    let name = entry.name;
+    if (mode === 'clone') {
+      const base = name.slice(0, 85); name = base + ' copy'; let suffix = 2;
+      while (savedTargets.some(target => target.name === name)) name = base + ' copy ' + suffix++;
+    }
+    $('target-name').value = name; renderEditor(); renderActions();
+    message(mode === 'clone' ? 'The original collection will be kept.' : 'Changes are saved only when you choose Save name or Update collection.');
+    $('target-name').focus(); $('target-name').select();
+  }
+  async function commitEdit(state, name, target) {
+    if (editing !== state) return;
+    if (!name.trim()) { message('Enter a collection name.', true); $('target-name').focus(); return; }
+    const stamp = generation; editBusy = 'save'; renderEditor();
+    try {
+      const result = await api.runtime.sendMessage({ type: state.mode === 'clone' ? 'LCT_TARGET_CLONE' : 'LCT_TARGET_UPDATE',
+        id: state.entry.id, name, revision: state.entry.revision, ...(target ? { target } : {}) });
+      if (!result?.ok) throw new Error(result?.error || 'Could not save collection changes.');
+      await loadCollection();
+      if (editing === state && stamp === generation) { openSaved(result.target); message(state.mode === 'clone' ? 'Created collection · ' + result.target.name : 'Updated collection · ' + result.target.name); }
+    } catch (error) { if (editing === state) message(error.message + ' Your original collection has been kept.', true); }
+    finally { if (editing === state) editBusy = null; renderEditor(); renderActions(); }
+  }
+  $('target-rename').addEventListener('click', () => { if (editing && !editBusy) void commitEdit(editing, $('target-name').value.trim()); });
+  $('target-update').addEventListener('click', () => { if (editing && !editBusy) void generate(editing); });
+  $('target-cancel').addEventListener('click', () => { if (editing && editBusy !== 'save') { const entry = savedTargets.find(target => target.id === editing.entry.id) || editing.entry; openSaved(entry); } });
+  $('target-edit').addEventListener('click', () => { if (currentSaved) startEdit(currentSaved, 'edit'); });
   $('target-download').addEventListener('click', () => download(targetSnapshot()));
   $('target-save').addEventListener('click', () => void saveCurrent());
   function show(active) {
@@ -220,7 +276,7 @@
     if (popup) { $('popup-browse').setAttribute('aria-selected', String(!active)); $('popup-browse').tabIndex = active ? -1 : 0; }
     else if (active) for (const id of ['mode-problems', 'mode-companies']) { $(id).setAttribute('aria-selected', 'false'); $(id).tabIndex = -1; }
     if (active) void initialize().catch(error => { companies = []; message(error.message + ' Switch tabs to retry.', true); });
-    else { generation++; $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); }
+    else { generation++; if (editBusy === 'generate') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); }
   }
   $('mode-target').addEventListener('click', () => show(true));
   for (const id of popup ? ['popup-browse'] : ['mode-problems', 'mode-companies']) $(id).addEventListener('click', () => show(false), true);

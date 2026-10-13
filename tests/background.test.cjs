@@ -783,7 +783,7 @@ test('one completion deadline includes popup context lookup and expired context 
 
 test('Target collection messages reject content pages and unrelated senders before storage access', async () => {
   const fixture = harness();
-  for (const type of ['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE']) {
+  for (const type of ['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE', 'LCT_TARGET_UPDATE', 'LCT_TARGET_CLONE']) {
     for (const caller of [sender(), { ...sender(), url: 'chrome-extension://' + EXTENSION_ID + '/other.html' }, { ...sender(), id: 'another-extension' }]) {
       assert.equal(fixture.dispatch({ type }, caller).accepted, false);
     }

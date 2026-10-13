@@ -99,3 +99,39 @@ test('Target CSV preserves exact rows, quotes embedded text, blanks unknown metr
   assert.equal(rows[1][7], '');
   assert.equal(rows[1][9], 'https://leetcode.com/problems/two-sum/');
 });
+
+test('named collection rename, filtered update and clone preserve identity and protect against stale or empty changes', async () => {
+  const state = {}, storage = { get: async () => structuredClone(state), set: async value => Object.assign(state, structuredClone(value)) };
+  const service = collection.create(storage), original = await service.save(savedExample());
+  const renamed = await service.update(original.id, 'Microsoft warmup', original.revision);
+  assert.equal(renamed.id, original.id);
+  assert.equal(renamed.createdAt, original.createdAt);
+  assert.equal(renamed.name, 'Microsoft warmup');
+  assert.deepEqual(renamed.questions, original.questions);
+  const cloned = await service.clone(renamed.id, 'Microsoft next week', renamed.revision);
+  assert.notEqual(cloned.id, original.id);
+  assert.deepEqual(cloned.questions, original.questions);
+  const options = { targetMode: 'plan', company: 'Microsoft', window: 'all', difficulty: 'Medium', completionFilter: 'all', topics: [], count: 12 };
+  const generated = core.targetQuestions(data, options);
+  const updated = await service.update(renamed.id, renamed.name, renamed.revision, { ...generated, context: options });
+  assert.equal(updated.id, original.id);
+  assert.equal(updated.questions.length, 12);
+  assert.ok(updated.questions.every(row => row.difficulty === 'Medium'));
+  assert.equal(updated.context.count, 12);
+  assert.equal((await service.list()).length, 2);
+  assert.deepEqual((await service.list()).find(row => row.id === cloned.id).questions, original.questions);
+  const before = JSON.stringify(state);
+  await assert.rejects(service.update(renamed.id, 'Stale edit', renamed.revision), /changed in another view/);
+  await assert.rejects(service.update(updated.id, updated.name, updated.revision, { ...generated, context: options, questions: [] }), /Invalid saved Target/);
+  await assert.rejects(service.clone(updated.id, ' ', updated.revision), /collection name/);
+  assert.equal(JSON.stringify(state), before);
+});
+test('older unnamed collections retain their exact questions and acquire a default name without regeneration', async () => {
+  const old = { ...savedExample(), id: 'legacy-target', createdAt: '2026-10-13T10:00:00.000Z' };
+  const service = collection.create({ get: async () => ({ lctTargetCollection: [old] }) });
+  const [entry] = await service.list();
+  assert.equal(entry.id, old.id);
+  assert.equal(entry.name, 'Microsoft prep');
+  assert.equal(entry.revision, 1);
+  assert.equal(entry.questions[0].slug, 'two-sum');
+});

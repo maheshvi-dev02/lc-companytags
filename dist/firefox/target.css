@@ -54,3 +54,10 @@ body[data-target] #search-view,body[data-target] #detail-view,body[data-target] 
 .target-saved-actions button { padding:6px 10px; font-size:var(--font-caption); }
 .target-view[data-popup] .target-saved-entry { align-items:flex-start; flex-direction:column; }
 @media(max-width:540px) { .target-saved-entry { align-items:flex-start; flex-direction:column; } }
+.target-editor { margin:0 0 16px; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--wash); }
+.target-editor h3 { margin:0 0 12px; font-size:var(--font-name); }
+.target-editor label { display:block; margin-bottom:6px; color:var(--muted); font-size:var(--font-label); }
+.target-editor input { width:100%; min-width:0; box-sizing:border-box; min-height:40px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--paper); font:inherit; }
+.target-editor .target-help { margin:10px 0; }
+.target-editor-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.target-editor-actions button { padding:8px 12px; }

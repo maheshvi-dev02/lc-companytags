@@ -103,8 +103,8 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!sender || sender.id !== api.runtime.id) return false;
     if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
-      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION', 'LCT_TARGET', 'LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE'].includes(message.type)) return false;
-    if (['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE'].includes(message.type) && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
+      'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION', 'LCT_TARGET', 'LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE', 'LCT_TARGET_UPDATE', 'LCT_TARGET_CLONE'].includes(message.type)) return false;
+    if (['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE', 'LCT_TARGET_UPDATE', 'LCT_TARGET_CLONE'].includes(message.type) && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
     if (message.type === 'LCT_COMPLETION' && !LCTCompletion.isExplorerSender(sender, api.runtime)) return false;
     if (['LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS', 'LCT_TARGET'].includes(message.type) && message.completionFilter !== undefined &&
         message.completionFilter !== 'all' && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
@@ -174,6 +174,8 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
       }
       if (message.type === 'LCT_TARGET_LIST') return { ok: true, targets: await targetCollection.list() };
       if (message.type === 'LCT_TARGET_SAVE') return { ok: true, target: await targetCollection.save(message.target) };
+      if (message.type === 'LCT_TARGET_UPDATE') return { ok: true, target: await targetCollection.update(message.id, message.name, message.revision, message.target) };
+      if (message.type === 'LCT_TARGET_CLONE') return { ok: true, target: await targetCollection.clone(message.id, message.name, message.revision, message.target) };
       if (message.type === 'LCT_TARGET_REMOVE') { await targetCollection.remove(message.id); return { ok: true }; }
       if (message.type === 'LCT_TARGET') return queryWithCompletion(message, sender, (options, snapshot) => service.getTarget(options, snapshot));
       if (message.type === 'LCT_PRACTICE') return queryWithCompletion(message, sender, (options, snapshot) => service.getPractice(options, snapshot));

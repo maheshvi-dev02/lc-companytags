@@ -23,9 +23,14 @@
         frequency: Number.isFinite(row.frequency) && row.frequency >= 0 ? row.frequency : null,
         rank: Number.isInteger(row.rank) && row.rank > 0 ? row.rank : null };
     });
-    return { context: { targetMode: input.targetMode, company, window: input.window, difficulty: input.difficulty || '', topics: strings(input.topics), completionFilter: input.completionFilter || 'all', count: questions.length },
+    return { context: { targetMode: input.targetMode, company, window: input.window, difficulty: input.difficulty || '', topics: strings(input.topics), completionFilter: input.completionFilter || 'all', count: Number.isInteger(input.count) && input.count >= 1 && input.count <= 50 ? input.count : questions.length },
       questions, coveredTopics: strings(value.coveredTopics), availableTopicCount: Number.isInteger(value.availableTopicCount) && value.availableTopicCount >= 0 ? value.availableTopicCount : 0,
       sourceRevision: text(value.sourceRevision), total: Number.isInteger(value.total) && value.total >= questions.length ? value.total : questions.length };
+  }
+  function nameFor(target) { return ((target.context.company || 'Random problem') + (target.context.targetMode === 'plan' ? ' prep' : '')).slice(0, 100); }
+  function cleanName(value) {
+    if (typeof value !== 'string' || !value.trim() || value.trim().length > 100 || /[\u0000-\u001f]/.test(value)) throw new Error('Enter a collection name (1–100 characters).');
+    return value.trim();
   }
   function validID(value) { return typeof value === 'string' && /^[a-zA-Z0-9-]{1,100}$/.test(value); }
   function create(storage) {
@@ -34,17 +39,38 @@
     async function read() {
       const stored = (await storage.get(KEY))[KEY], entries = [];
       for (const entry of Array.isArray(stored) ? stored : []) {
-        try { if (validID(entry?.id) && typeof entry.createdAt === 'string' && Number.isFinite(Date.parse(entry.createdAt))) entries.push({ ...cleanTarget(entry), id: entry.id, createdAt: entry.createdAt }); } catch (_) { /* Skip malformed saved entries. */ }
+        try { if (validID(entry?.id) && typeof entry.createdAt === 'string' && Number.isFinite(Date.parse(entry.createdAt))) entries.push({ ...cleanTarget(entry), id: entry.id, name: cleanName(entry.name || nameFor(entry)), createdAt: entry.createdAt, updatedAt: entry.updatedAt || entry.createdAt, revision: Number.isInteger(entry.revision) && entry.revision > 0 ? entry.revision : 1 }); } catch (_) { /* Skip malformed saved entries. */ }
       }
       return entries;
     }
+    function existing(entries, id, revision) {
+      if (!validID(id)) throw new Error('Invalid saved Target.');
+      const entry = entries.find(target => target.id === id);
+      if (!entry) throw new Error('This collection was removed. Open another saved target.');
+      if (revision !== entry.revision) throw new Error('This collection changed in another view. Open it again before editing.');
+      return entry;
+    }
+    const newID = () => globalThis.crypto?.randomUUID?.() || 'target-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
     return {
       list: () => serial(read),
       save: value => serial(async () => {
         const target = cleanTarget(value), entries = await read();
         if (entries.length >= MAX_TARGETS) throw new Error('Your collection has 100 targets. Remove a saved target before adding another.');
-        const id = globalThis.crypto?.randomUUID?.() || 'target-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
-        const entry = { ...target, id, createdAt: new Date().toISOString() };
+        const createdAt = new Date().toISOString();
+        const entry = { ...target, id: newID(), name: cleanName(value.name === undefined ? nameFor(target) : value.name), createdAt, updatedAt: createdAt, revision: 1 };
+        await storage.set({ [KEY]: [entry, ...entries] }); return entry;
+      }),
+      update: (id, name, revision, value) => serial(async () => {
+        const entries = await read(), original = existing(entries, id, revision);
+        const target = value === undefined ? cleanTarget(original) : cleanTarget(value);
+        const entry = { ...target, id, name: cleanName(name), createdAt: original.createdAt, updatedAt: new Date().toISOString(), revision: original.revision + 1 };
+        await storage.set({ [KEY]: entries.map(item => item.id === id ? entry : item) }); return entry;
+      }),
+      clone: (id, name, revision, value) => serial(async () => {
+        const entries = await read(), original = existing(entries, id, revision);
+        if (entries.length >= MAX_TARGETS) throw new Error('Your collection has 100 targets. Remove a saved target before adding another.');
+        const createdAt = new Date().toISOString(), target = value === undefined ? cleanTarget(original) : cleanTarget(value);
+        const entry = { ...target, id: newID(), name: cleanName(name), createdAt, updatedAt: createdAt, revision: 1 };
         await storage.set({ [KEY]: [entry, ...entries] }); return entry;
       }),
       remove: id => serial(async () => {
