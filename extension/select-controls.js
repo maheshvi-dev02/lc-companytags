@@ -68,6 +68,12 @@
       const gap = 6;
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = window.innerHeight;
+      // Firefox action popups emit resize while negotiating their preferred size,
+      // even when the final viewport is unchanged. Keep the menu open and avoid
+      // rewriting identical styles, which can trigger another sizing pass.
+      const positionSignature = [rect.left, rect.top, rect.width, rect.height, viewportWidth, viewportHeight].join(',');
+      if (control.positionSignature === positionSignature) return;
+      control.positionSignature = positionSignature;
       const width = Math.min(Math.max(rect.width, 220), Math.max(0, viewportWidth - margin * 2));
       control.menu.style.width = `${width}px`;
       const below = viewportHeight - rect.bottom - gap - margin;
@@ -87,6 +93,7 @@
       control.menu.hidden = false;
       control.button.setAttribute('aria-expanded', 'true');
       control.button.focus();
+      control.positionSignature = null;
       positionSelectMenu(control);
       const options = Array.from(control.menu.children);
       const selected = options.findIndex(option => option.dataset.value === control.select.value);
@@ -207,7 +214,9 @@
       document.addEventListener('focusin', event => {
         if (openSelect && event.target !== openSelect.button && !openSelect.menu.contains(event.target)) closeSelectMenu();
       });
-      window.addEventListener('resize', () => closeSelectMenu());
+      window.addEventListener('resize', () => {
+        if (openSelect) positionSelectMenu(openSelect);
+      });
       window.addEventListener('scroll', event => {
         if (openSelect && event.target !== openSelect.menu && !openSelect.menu.contains(event.target)) closeSelectMenu();
       }, true);

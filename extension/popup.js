@@ -48,6 +48,7 @@
   let companySort = 'frequency-desc';
   let companySortSave = Promise.resolve();
   let sortMenuOpen = false;
+  let sortPositionSignature = null;
   let sortActiveIndex = 0;
   let sortTypeahead = '';
   let sortTypedAt = 0;
@@ -80,23 +81,32 @@
       menu.scrollTop = active.offsetTop + active.offsetHeight - menu.clientHeight;
     }
   }
-  function openCompanySort(edge) {
+  function positionCompanySort() {
     const trigger = $('company-sort-trigger');
-    if (trigger.hidden) return;
     const menu = $('company-sort-menu');
     const rect = trigger.getBoundingClientRect();
+    // As with shared selects, Firefox popup sizing must not dismiss the menu.
+    const signature = [rect.left, rect.top, rect.width, rect.height, document.documentElement.clientWidth, window.innerHeight].join(',');
+    if (sortPositionSignature === signature) return;
+    sortPositionSignature = signature;
     const width = Math.min(Math.max(rect.width, 190), document.documentElement.clientWidth - 16);
     const below = window.innerHeight - rect.bottom - 14;
     const above = rect.top - 14;
     const upward = below < 160 && above > below;
     menu.style.width = `${width}px`;
     menu.style.maxHeight = `${Math.max(0, Math.min(220, upward ? above : below))}px`;
-    menu.hidden = false;
     menu.style.left = `${Math.max(8, Math.min(rect.left, document.documentElement.clientWidth - width - 8))}px`;
     menu.style.top = `${upward ? Math.max(8, rect.top - 6 - menu.getBoundingClientRect().height) : rect.bottom + 6}px`;
+  }
+  function openCompanySort(edge) {
+    const trigger = $('company-sort-trigger');
+    if (trigger.hidden) return;
+    $('company-sort-menu').hidden = false;
     sortMenuOpen = true;
     trigger.setAttribute('aria-expanded', 'true');
     trigger.focus();
+    sortPositionSignature = null;
+    positionCompanySort();
     setSortActive(edge === 'first' ? 0 : edge === 'last' ? companySortOptions.length - 1 : companySortOptions.findIndex(([key]) => key === companySort));
   }
   function changeCompanySort(value, save = false) {
@@ -179,7 +189,9 @@
     document.addEventListener('focusin', event => {
       if (sortMenuOpen && event.target !== trigger && !menu.contains(event.target)) closeCompanySort();
     });
-    window.addEventListener('resize', () => closeCompanySort());
+    window.addEventListener('resize', () => {
+      if (sortMenuOpen) positionCompanySort();
+    });
     window.addEventListener('scroll', event => {
       if (sortMenuOpen && !menu.contains(event.target)) closeCompanySort();
     }, true);
