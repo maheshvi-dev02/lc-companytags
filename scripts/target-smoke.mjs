@@ -100,6 +100,8 @@ try {
   const namedRow = expanded.locator('.target-saved-entry').filter({ has: expanded.locator('h3', { hasText: /^Microsoft warmup$/ }) });
   await namedRow.locator('[data-collection-action="Clone"]').click();
   await expanded.locator('#target-name').fill('Microsoft next week');
+  await expanded.evaluate(() => window.scrollTo(0, 0));
+  await expanded.screenshot({ path: path.join(output, 'target-clone-preview.png'), animations: 'disabled' });
   await expanded.locator('#target-rename').click();
   await expanded.waitForFunction(() => document.querySelector('#target-saved-status').textContent === 'Saved · Microsoft next week');
   assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes => nodes.map(node => node.href)), expectedLinks);

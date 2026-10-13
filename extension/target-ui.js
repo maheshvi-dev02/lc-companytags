@@ -7,11 +7,7 @@
   panel.setAttribute('aria-labelledby', 'target-title'); if (popup) panel.dataset.popup = '';
   panel.innerHTML = `<div class="target-heading"><h2 id="target-title">Target</h2><button id="target-expand" class="target-expand" type="button" title="Open Target full page" aria-label="Open Target full page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M12 12 21 3M15 3h6v6"/></svg></button></div>
     <p class="target-help" id="target-help">Pick your next problem, or build a company prep list.</p>
-    <section id="target-editor" class="target-editor" aria-labelledby="target-editor-title" hidden>
-      <h3 id="target-editor-title">Edit collection</h3><label for="target-name">Collection name</label><input id="target-name" type="text" maxlength="100" autocomplete="off">
-      <p id="target-editor-help" class="target-help"></p><div class="target-editor-actions"><button id="target-rename" type="button">Save name</button><button id="target-update" type="button">Update collection</button><button id="target-cancel" type="button">Cancel</button></div>
-    </section>
-    <div class="target-kind" role="group" aria-label="Target mode"><button id="target-random" type="button" aria-pressed="true">Random problem</button><button id="target-plan" type="button" aria-pressed="false">Company prep</button></div>
+    <div id="target-kind" class="target-kind" role="group" aria-label="Target mode"><button id="target-random" type="button" aria-pressed="true">Random problem</button><button id="target-plan" type="button" aria-pressed="false">Company prep</button></div>
     <div class="target-controls">
       <label class="target-company-search"><span>Find a company</span><input id="target-company-search" type="search" placeholder="e.g. Microsoft" aria-label="Find a target company" maxlength="200" autocomplete="off"></label>
       <label class="target-company-wrap"><span id="target-company-label">Company (optional)</span><select id="target-company" aria-label="Target company"><option value="">Any company</option></select></label>
@@ -19,7 +15,12 @@
       <label><span>Topic</span><select id="target-topic" aria-label="Target topic"><option value="">All topics</option></select></label>
       <label><span>Status</span><select id="target-status" aria-label="Target problem status"><option value="all">All problems</option><option value="solved">Solved</option><option value="not-solved">Not solved</option></select></label>
       <label id="target-count-wrap" hidden><span>List size</span><select id="target-count" aria-label="Target list size"><option value="12">12 questions</option><option value="20" selected>20 questions</option><option value="30">30 questions</option><option value="50">50 questions</option></select></label>
-    </div><button id="target-generate" type="button" class="target-submit">Pick a problem</button>
+    </div>
+    <section id="target-editor" class="target-editor" aria-labelledby="target-editor-title" hidden>
+      <h3 id="target-editor-title">Edit collection</h3><label for="target-name">Collection name</label><input id="target-name" type="text" maxlength="100" autocomplete="off">
+      <p id="target-editor-help" class="target-help"></p><div class="target-editor-actions"><button id="target-rename" type="button">Save name</button><button id="target-update" type="button">Update collection</button><button id="target-cancel" type="button">Cancel</button></div>
+    </section>
+    <button id="target-generate" type="button" class="target-submit">Pick a problem</button>
     <p id="target-message" class="target-message" role="status" aria-live="polite">Choose optional filters, then pick a problem.</p>
     <details id="target-coverage" class="target-coverage" hidden><summary id="target-coverage-title"></summary><p id="target-coverage-topics"></p></details>
     <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><button id="target-edit" type="button" hidden>Edit collection</button><span id="target-saved-status" role="status"></span></div>
@@ -242,12 +243,13 @@
   }
   function renderEditor() {
     $('target-editor').hidden = !editing;
+    $('target-kind').hidden = Boolean(editing);
     $('target-generate').hidden = Boolean(editing);
     for (const id of ['target-random', 'target-plan']) $(id).disabled = Boolean(editing) || Boolean(initializing);
     if (!editing) return;
     const clone = editing.mode === 'clone';
     $('target-editor-title').textContent = clone ? 'Clone collection' : 'Edit collection';
-    $('target-editor-help').textContent = clone ? 'Save an exact copy, or change the filters below and build a filtered copy.' : 'Change the filters below, then update this collection. Save name keeps the current questions.';
+    $('target-editor-help').textContent = clone ? 'Save an exact copy, or adjust the filters above and build a filtered copy.' : 'Adjust the filters above, then update this collection. Save name keeps the current questions.';
     $('target-rename').textContent = clone ? 'Save copy' : 'Save name';
     $('target-update').textContent = clone ? 'Build filtered copy' : 'Update collection';
     for (const id of ['target-name', 'target-rename', 'target-update']) $(id).disabled = Boolean(editBusy);
