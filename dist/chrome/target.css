@@ -16,7 +16,7 @@ body[data-target] #search-view,body[data-target] #detail-view,body[data-target] 
 .target-controls label > span { display:block; margin-bottom:5px; }
 .target-controls input,.target-controls select,.target-controls .select-control,.target-controls .select-trigger { width:100%; max-width:100%; min-width:0; }
 .target-controls input { padding:9px 11px; min-height:40px; background:var(--wash); color:var(--ink); border:1px solid var(--line); border-radius:8px; font:inherit; }
-.target-company-search { grid-column:1/-1; }
+
 .target-submit { margin-top:16px; padding:10px 16px; }
 .target-message { color:var(--muted); font-size:var(--font-label); margin:14px 0; overflow-wrap:anywhere; }
 .target-message[data-error] { color:var(--warn); }
@@ -37,9 +37,9 @@ body[data-target] #search-view,body[data-target] #detail-view,body[data-target] 
 @media(max-width:540px) { .target-controls { gap:10px; } .target-question { padding:13px 0; } }
 
 .target-view:not([data-popup]) .target-controls { grid-template-columns:repeat(4,minmax(0,1fr)); }
-.target-view:not([data-popup]) .target-company-search,.target-view:not([data-popup]) .target-company-wrap { grid-column:span 2; }
+.target-company-wrap { grid-column:1/-1; }
 .target-view[data-popup] .target-results { max-height:300px; overflow:auto; overscroll-behavior:contain; }
-@media(max-width:700px) { .target-view:not([data-popup]) .target-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } .target-view:not([data-popup]) .target-company-search { grid-column:1/-1; } .target-view:not([data-popup]) .target-company-wrap { grid-column:auto; } }
+@media(max-width:700px) { .target-view:not([data-popup]) .target-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } .target-view:not([data-popup])  .target-view:not([data-popup]) .target-company-wrap { grid-column:auto; } }
 .target-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 14px; }
 .target-actions button { padding:8px 12px; }
 .target-actions span { color:var(--muted); font-size:var(--font-caption); }

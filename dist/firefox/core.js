@@ -449,6 +449,13 @@
     return typeof completed === 'boolean' ? completed : null;
   }
 
+  function difficultyValues(value) {
+    return typeof value === 'string' && value ? [...new Set(value.split(',').map(v => v.trim().toLowerCase()))] : [];
+  }
+  function validDifficultyFilter(value) {
+    return typeof value === 'string' && value.length <= 30 && difficultyValues(value).every(v => ['easy', 'medium', 'hard'].includes(v));
+  }
+
   function searchProblems(data, options = {}, verifiedSnapshot) {
     const completion = completionSelection(options, verifiedSnapshot);
     const window = options.window || 'all';
@@ -460,19 +467,22 @@
     if (completion.filter !== 'all') Object.assign(empty, { total: completion.ready ? 0 : null, completionUnknownCount: completion.ready ? 0 : null });
     if (!available) return empty;
     const { query, terms } = queryTerms(options.query);
-    const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
+    const difficulty = difficultyValues(options.difficulty);
     const sort = selectedSort(options.sort, 'searchProblems', 'relevance');
     const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
       .filter((topic) => typeof topic === 'string').map((topic) => topic.trim().toLowerCase()).filter(Boolean))) : [];
     const topicMatch = options.topicMatch === 'all' ? 'all' : 'any';
     const groupTopic = typeof options.groupTopic === 'string' ? options.groupTopic.trim().toLowerCase() : options.groupTopic;
     const catalog = new Map();
+    const targetCompanies = new Set(Array.isArray(options.companies) ? options.companies : []);
     const candidates = [];
     for (const [slug, entries] of Object.entries(data.windows[window].index)) {
       if (!SLUG_PATTERN.test(slug) || !Array.isArray(entries)) continue;
       let representative = null, knownDifficulty = null;
-      const companies = new Set(), topicKeys = new Set();
+      const companies = new Set(), topicKeys = new Set(), companyMatches = [];
       for (const { company, record } of matchingCompanyRecords(data, slug, window)) {
+        if (targetCompanies.size && !targetCompanies.has(company.name)) continue;
+        if (targetCompanies.size) companyMatches.push({ name: company.name, frequency: record.frequency, rank: record.rank });
         companies.add(company.name);
         if (!representative) representative = record;
         if (!knownDifficulty && ['Easy', 'Medium', 'Hard'].includes(record.difficulty)) knownDifficulty = record.difficulty;
@@ -488,6 +498,7 @@
         representative.title : formatProblemTitle(slug), difficulty: knownDifficulty,
         acceptanceRate: problemForSlug(data, slug)?.acceptanceRate ?? null,
         companyCount: companies.size, url: 'https://leetcode.com/problems/' + slug + '/' };
+      if (targetCompanies.size) problem.companyMatches = companyMatches;
       candidates.push({ problem, topicKeys });
     }
     // Derive the catalog from the complete selected window before applying any
@@ -497,7 +508,7 @@
     const groups = new Map(), problems = [];
     let completionUnknownCount = 0;
     for (const { problem, topicKeys } of candidates) {
-      if ((difficulty && (problem.difficulty || '').toLowerCase() !== difficulty) || !matchesProblem(problem, terms)) continue;
+      if ((difficulty.length && !difficulty.includes((problem.difficulty || '').toLowerCase())) || !matchesProblem(problem, terms)) continue;
       if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((topic) => topicKeys.has(topic)) :
         selectedTopics.some((topic) => topicKeys.has(topic)))) continue;
       if (completion.filter !== 'all') {
@@ -576,7 +587,7 @@
     // the rows. Company topics never inherit another company's source tags.
     const topics = Array.from(catalog.values()).sort(compareTopicLabels);
     if (!completion.ready) return Object.assign(empty, { topics, sourceUrl: sourceFileURL(data.commit, path) });
-    const difficulty = typeof options.difficulty === 'string' ? options.difficulty.toLowerCase() : '';
+    const difficulty = difficultyValues(options.difficulty);
     const topic = typeof options.topic === 'string' ? options.topic.toLowerCase() : '';
     const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
       .filter((value) => typeof value === 'string').map((value) => value.trim().toLowerCase()).filter(Boolean))) : [];
@@ -586,7 +597,7 @@
     const sort = selectedSort(options.sort, 'practiceQuestions', 'frequency-desc');
     const filtered = [], groups = new Map(), completionUnknownSlugs = new Set();
     for (const { record, topicKeys } of candidates) {
-      if (record.slug === options.excludeSlug || (difficulty && (record.difficulty || '').toLowerCase() !== difficulty) ||
+      if (record.slug === options.excludeSlug || (difficulty.length && !difficulty.includes((record.difficulty || '').toLowerCase())) ||
           (topic && !record.topics.some((value) => value.toLowerCase() === topic)) || !matchesProblem(record, terms)) continue;
       if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((value) => topicKeys.has(value)) :
         selectedTopics.some((value) => topicKeys.has(value)))) continue;
@@ -618,9 +629,10 @@
 
 
   function targetQuestions(data, options = {}, verifiedSnapshot, random = Math.random) {
-    const company = options.company || '';
+    const companies = [...new Set(Array.isArray(options.companies) ? options.companies : options.company ? [options.company] : [])].sort(compareTopicLabels);
+    const company = companies.length === 1 ? companies[0] : '';
     const query = company ? practiceQuestions : searchProblems;
-    const base = { ...options, sort: company ? 'frequency-desc' : 'name-asc', offset: 0, limit: 100 };
+    const base = { ...options, company, companies, sort: company ? 'frequency-desc' : 'name-asc', offset: 0, limit: 100 };
     const first = query(data, base, verifiedSnapshot);
     const { questions: initialQuestions, problems: initialProblems, ...metadata } = first;
     const empty = { ...metadata, questions: [], hasMore: false, coveredTopics: [], availableTopicCount: 0 };
@@ -641,15 +653,22 @@
       }
       return { ...empty, questions: [pool[Math.floor(random() * pool.length)]], availableTopicCount: availableTopics.size };
     }
-    const selected = [], remaining = [...candidates], covered = new Map(), difficulties = new Set();
+    const selected = [], remaining = [...candidates], covered = new Map(), difficulties = new Set(), coveredCompanies = new Map();
+    const companyMax = new Map();
+    for (const row of candidates) for (const match of row.companyMatches || []) {
+      companyMax.set(match.name, Math.max(companyMax.get(match.name) || 0, Number.isFinite(match.frequency) ? match.frequency : 0));
+    }
     const maxFrequency = Math.max(0, ...candidates.map(row => Number.isFinite(row.frequency) ? row.frequency : 0));
     while (remaining.length && selected.length < (options.count || 20)) {
       let best = 0, bestScore = -Infinity;
       remaining.forEach((row, index) => {
         const topics = row.topics || [];
         const coverage = topics.length ? topics.reduce((sum, topic) => sum + 1 / (1 + (covered.get(topic) || 0)), 0) / topics.length : 0;
-        const frequency = maxFrequency > 0 && Number.isFinite(row.frequency) ? row.frequency / maxFrequency : 0;
-        const score = .55 * coverage + .4 * frequency + (row.difficulty && !difficulties.has(row.difficulty) ? .05 : 0);
+        const matches = row.companyMatches || [];
+        // Normalize within each company; source scores are not comparable across companies.
+        const frequency = matches.length ? Math.max(...matches.map(m => companyMax.get(m.name) > 0 && Number.isFinite(m.frequency) ? m.frequency / companyMax.get(m.name) : 0)) : maxFrequency > 0 && Number.isFinite(row.frequency) ? row.frequency / maxFrequency : 0;
+        const companyCoverage = matches.length ? matches.reduce((sum, m) => sum + 1 / (1 + (coveredCompanies.get(m.name) || 0)), 0) / matches.length : 0;
+        const score = (companies.length > 1 ? .45 * coverage + .35 * frequency + .15 * companyCoverage : .55 * coverage + .4 * frequency) + (row.difficulty && !difficulties.has(row.difficulty) ? .05 : 0);
         if (score > bestScore) { bestScore = score; best = index; }
       });
       const row = remaining.splice(best, 1)[0];
@@ -657,12 +676,13 @@
       selected.push({ ...row, newTopics });
       for (const topic of row.topics || []) covered.set(topic, (covered.get(topic) || 0) + 1);
       if (row.difficulty) difficulties.add(row.difficulty);
+      for (const match of row.companyMatches || []) coveredCompanies.set(match.name, (coveredCompanies.get(match.name) || 0) + 1);
     }
     return { ...empty, questions: selected, availableTopicCount: availableTopics.size,
       coveredTopics: [...covered.keys()].sort((a, b) => a.localeCompare(b)) };
   }
 
-  return { targetQuestions, SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, COMPLETION_FILTERS, getProblemSlug, formatProblemTitle,
+  return { difficultyValues, validDifficultyFilter, targetQuestions, SOURCE_URL, API_URL, RAW_URL, DATA_VERSION, DATA_SCHEMA, ACCEPTANCE_VERSION, ACCEPTANCE_TOOLTIP, WINDOW_FILES, SHA_PATTERN, SLUG_PATTERN, SORT_OPTIONS, COMPLETION_FILTERS, getProblemSlug, formatProblemTitle,
     parseCSV, parseCompanyCSV, parseCompanyRecords, sortCompanies, selectCompanyFiles, selectWindowFiles, encodedPath, sourceFileURL, rawFileURL,
     validAcceptanceRate, formatAcceptanceRate, hasAcceptanceData, problemForSlug, reusableFile, buildData, companiesForSlug, windowAvailable, practiceQuestions, searchProblems, searchCompanies };
 });

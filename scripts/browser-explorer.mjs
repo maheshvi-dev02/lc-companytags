@@ -25,7 +25,11 @@ export function chromiumExplorerDriver(page) {
       // Let the page-scroll dismissal settle before opening the positioned menu.
       await settleScroll(trigger);
       await trigger.click();
-      await page.locator(`#${id}-menu [role=option][data-value=${JSON.stringify(value)}]`).click();
+      if (await field.evaluate(node => node.multiple)) {
+        await page.locator(`#${id}-clear`).click();
+        for (const item of (Array.isArray(value) ? value : value.split(',')).filter(Boolean)) await page.locator(`#${id}-options input[data-value=${JSON.stringify(item)}]`).check();
+        await page.locator(`#${id}-apply`).click();
+      } else await page.locator(`#${id}-menu [role=option][data-value=${JSON.stringify(value)}]`).click();
     },
     press: async (selector,key) => { const locator=page.locator(selector);await settleScroll(locator);return locator.press(key); },
     activateWithKeyboard: async (selector) => { await page.locator(selector).focus(); await page.locator(selector).press('Enter'); },
@@ -54,6 +58,10 @@ export function firefoxExplorerDriver(evaluate) {
       await mutate(`document.querySelector('[data-select-for="'+document.querySelector(${JSON.stringify(selector)}).id+'"]').scrollIntoView({block:'nearest'})`);
       await wait(50);
       await mutate(`document.querySelector('[data-select-for="'+document.querySelector(${JSON.stringify(selector)}).id+'"]').click()`);
+      if (JSON.parse(await evaluate(`JSON.stringify(document.querySelector(${JSON.stringify(selector)}).multiple)`))) {
+        await mutate(`const id=document.querySelector(${JSON.stringify(selector)}).id;document.getElementById(id+'-clear').click();const values=${JSON.stringify(value)};for(const input of document.getElementById(id+'-options').querySelectorAll('input'))if((Array.isArray(values)?values:values.split(',')).includes(input.value))input.click();document.getElementById(id+'-apply').click()`);
+        return;
+      }
       await mutate(`const menu=document.getElementById(document.querySelector(${JSON.stringify(selector)}).id+'-menu');const option=Array.from(menu.querySelectorAll('[role=option]')).find(node=>node.dataset.value===${JSON.stringify(value)});if(!option)throw new Error('Missing visible select option');option.scrollIntoView({block:'nearest'});option.click()`);
     },
     press: (selector, key) => mutate(`const node=document.querySelector(${JSON.stringify(selector)});node.focus();node.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key === 'Space' ? ' ' : key)},bubbles:true,cancelable:true}))`),

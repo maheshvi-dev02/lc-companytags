@@ -34,3 +34,15 @@
 .select-option[aria-selected="true"]::after { content:'✓'; position:absolute; right:10px; top:8px; color:var(--muted); }
 .select-option[aria-disabled="true"] { opacity:.5; cursor:default; }
 @media(max-width:440px) { .window-filter .select-control { max-width:190px; } }
+
+/* Search and checkbox selection share the same popup/full-page control. */
+.multi-select-menu { display:flex; flex-direction:column; padding:12px; }
+.multi-select-search { display:block; flex:none; font-size:var(--font-label); color:var(--muted); }
+.multi-select-search input { display:block; width:100%; min-width:0; margin-top:5px; padding:8px 10px; color:var(--ink); background:var(--wash); border:1px solid var(--line); border-radius:8px; font:inherit; }
+.multi-select-hint { margin:7px 0; font-size:var(--font-caption); color:var(--muted); flex:none; }
+.multi-select-options { min-height:0; max-height:230px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; margin:6px 0; }
+.multi-select-option { display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:8px; color:var(--ink); font-size:var(--font-label); cursor:pointer; overflow-wrap:anywhere; }
+.multi-select-option:hover { background:var(--wash); }
+.multi-select-option input { width:16px; height:16px; min-height:0; padding:0; margin:0; flex:none; accent-color:var(--accent); }
+.multi-select-actions { display:flex; justify-content:space-between; gap:10px; flex:none; border-top:1px solid var(--line); padding-top:10px; }
+.multi-select-actions button { padding:7px 10px; font-size:var(--font-label); }

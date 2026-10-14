@@ -416,7 +416,7 @@
       const limit = optionsForQuery.limit === undefined ? defaultLimit : optionsForQuery.limit;
       if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Search limit must be between 1 and 100.');
       if (optionsForQuery.difficulty !== undefined && optionsForQuery.difficulty !== '' &&
-          (typeof optionsForQuery.difficulty !== 'string' || !['easy', 'medium', 'hard'].includes(optionsForQuery.difficulty.toLowerCase()))) {
+          !core.validDifficultyFilter(optionsForQuery.difficulty)) {
         throw new Error('Invalid difficulty filter.');
       }
       const sort = optionsForQuery.sort === undefined ? defaultSort : optionsForQuery.sort;
@@ -499,13 +499,17 @@
         if (!targetOptions || typeof targetOptions !== 'object' || Array.isArray(targetOptions)) throw new Error('Invalid Target options.');
         const targetMode = targetOptions.targetMode === undefined ? 'random' : targetOptions.targetMode;
         if (!['random', 'plan', 'catalog'].includes(targetMode)) throw new Error('Invalid Target mode.');
-        const company = targetOptions.company === undefined ? '' : targetOptions.company;
-        if (typeof company !== 'string' || company.length > 200 || company !== company.trim() || (targetMode === 'plan' && !company)) throw new Error('Choose a company for your prep list.');
+        if (targetOptions.company !== undefined && (typeof targetOptions.company !== 'string' || targetOptions.company.length > 200 || targetOptions.company !== targetOptions.company.trim())) throw new Error('Invalid target company.');
+        const selected = targetOptions.companies === undefined ? (targetOptions.company ? [targetOptions.company] : []) : targetOptions.companies;
+        if (!Array.isArray(selected) || selected.length > 500 || selected.some(name => typeof name !== 'string' || !name.trim() || name.length > 200 || name !== name.trim())) throw new Error('Invalid target companies.');
+        const companies = [...new Set(selected)];
+        if (targetMode === 'plan' && !companies.length) throw new Error('Choose at least one company for your prep list.');
+        const company = companies.length === 1 ? companies[0] : '';
         const count = targetOptions.count === undefined ? 20 : targetOptions.count;
         if (!Number.isInteger(count) || count < 1 || count > 50) throw new Error('Choose between 1 and 50 questions.');
         const excludeSlugs = targetOptions.excludeSlugs === undefined ? [] : targetOptions.excludeSlugs;
         if (!Array.isArray(excludeSlugs) || excludeSlugs.length > 100 || excludeSlugs.some(slug => typeof slug !== 'string' || slug.length > 200 || !core.SLUG_PATTERN.test(slug))) throw new Error('Invalid recent problems.');
-        const value = { ...targetOptions, company, offset: 0, limit: 100, sort: company ? 'frequency-desc' : 'name-asc' };
+        const value = { ...targetOptions, company, companies, offset: 0, limit: 100, sort: company ? 'frequency-desc' : 'name-asc' };
         const validated = validateCompletionFilter(company ? validatePracticeOptions(value) : validateProblemSearchOptions(value), verifiedSnapshot, true);
         if (targetMode === 'catalog' && validated.completionFilter !== 'all') throw new Error('Invalid Target catalog filter.');
         await initialize();

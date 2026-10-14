@@ -36,6 +36,16 @@ try {
     await trigger.scrollIntoViewIfNeeded();
     await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await trigger.click();
+    if (await p.locator('#' + id).evaluate(node => node.multiple)) {
+      await p.locator('#' + id + '-clear').click();
+      const values = Array.isArray(value) ? value : /^All |^Any /.test(value) ? [] : [value];
+      for (const item of values) {
+        const search = p.locator('#' + id + '-search');
+        if (await search.isVisible()) await search.fill(item);
+        await p.locator('#' + id + '-options').getByRole('checkbox', { name: item, exact: true }).check();
+      }
+      await p.locator('#' + id + '-apply').click(); return;
+    }
     await p.locator('#' + id + '-menu [role="option"]').filter({ hasText: value }).filter({ hasText: new RegExp('^' + value + '$') }).click();
   };
   await choose(page, 'target-company', 'Microsoft');
@@ -143,10 +153,47 @@ try {
   assert.equal(await expanded.locator('#target-results .target-question').count(), 20);
   assert.equal(await expanded.locator('#target-save').isVisible(), true);
   await expanded.reload();
-  await expanded.waitForFunction(() => /Choose a company/.test(document.querySelector('#target-message')?.textContent) && !document.querySelector('#target-generate').disabled);
+  await expanded.waitForFunction(() => /Choose companies/.test(document.querySelector('#target-message')?.textContent) && !document.querySelector('#target-generate').disabled);
   assert.equal(await expanded.locator('#target-results .target-question').count(), 0);
   assert.equal(await expanded.locator('.target-saved-entry').count(), 0);
   report.checks.push('Saved list reopens after filter changes; removed targets are not recreated on reload');
+
+  await expanded.goto(base + '/explore.html?mode=target');
+  await expanded.locator('#target-company option[value="Google"]').waitFor({state:'attached'});
+  assert.equal(await expanded.locator('#target-company-search').count(), 1, 'Search exists only inside the picker');
+  assert.equal(await expanded.locator('#target-company-search').isVisible(), false);
+  await choose(expanded, 'target-company', ['Google','Microsoft']);
+  await expanded.waitForFunction(()=>Array.from(document.querySelector('#target-topic').options).some(o=>o.value==='Linked List'));
+  await choose(expanded, 'target-topic', ['Array','Linked List']);
+  await choose(expanded, 'target-difficulty', ['Easy','Medium']);
+  await choose(expanded, 'target-status', 'All problems');
+  await expanded.locator('#target-plan').click();
+  await expanded.locator('#target-generate').click();
+  await expanded.waitForFunction(()=>document.querySelectorAll('.target-question').length===20 && /^Saved/.test(document.querySelector('#target-saved-status').textContent));
+  const selectedValues = id=>expanded.locator('#'+id).evaluate(node=>Array.from(node.selectedOptions,o=>o.value));
+  const combinedLinks=await expanded.locator('#target-results .target-open').evaluateAll(nodes=>nodes.map(n=>n.href));
+  assert.equal(new Set(combinedLinks).size,20);
+  assert.ok((await expanded.locator('.target-question-topics').allTextContents()).every(t=>/Array|Linked List/.test(t)));
+  assert.ok((await expanded.locator('.target-question h3 + .target-question-meta').allTextContents()).every(t=>/^(Easy|Medium)/.test(t)));
+  await expanded.reload(); await expanded.locator('.target-question').first().waitFor();
+  assert.deepEqual(await selectedValues('target-company'),['Google','Microsoft']);
+  assert.deepEqual(await selectedValues('target-topic'),['Array','Linked List']);
+  assert.deepEqual(await selectedValues('target-difficulty'),['Easy','Medium']);
+  assert.deepEqual(await expanded.locator('#target-results .target-open').evaluateAll(nodes=>nodes.map(n=>n.href)),combinedLinks);
+  await expanded.locator('#target-collection').evaluate(node=>node.open=true);
+  await expanded.locator('.target-saved-entry[data-active] [data-collection-action="Clone"]').click();
+  assert.deepEqual(await selectedValues('target-company'),['Google','Microsoft']);
+  await choose(expanded,'target-topic',['Linked List']);
+  await expanded.locator('#target-name').fill('Two-company linked lists');
+  await expanded.locator('#target-update').click();
+  await expanded.waitForFunction(()=>document.querySelector('#target-saved-status').textContent==='Saved · Two-company linked lists');
+  assert.ok((await expanded.locator('.target-question-topics').allTextContents()).every(t=>t.includes('Linked List')));
+  await expanded.evaluate(()=>window.scrollTo(0,0));
+  await expanded.locator('#target-company-trigger').click();
+  await expanded.locator('#target-company-search').fill('micro');
+  await expanded.screenshot({path:path.join(output,'target-multiselect-preview.png')});
+  await expanded.keyboard.press('Escape');
+  report.checks.push('Searchable company/topic checkboxes and Easy+Medium; unique combined prep survives reload; filtered clone preserves both companies.');
   assert.deepEqual(report.pageErrors, []);
   report.status = 'passed';
 } catch (error) { report.status = 'failed'; report.error = error.stack; process.exitCode = 1; }

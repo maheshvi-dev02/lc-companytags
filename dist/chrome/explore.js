@@ -4,6 +4,7 @@
   const core = globalThis.LCTCore;
   const logos = globalThis.LCTCompanyLogos;
   const $ = id => document.getElementById(id);
+  const selection = (id, ...next) => globalThis.LCTSelectControls.value($(id), ...next);
   const labels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
   const defaults = { enabled: true, collapsed: false, window: 'all' };
   const sortDefaults = { problems: 'relevance', companies: 'name-asc', companyQuestions: 'frequency-desc', problemCompanies: 'frequency-desc' };
@@ -41,7 +42,7 @@
   const companyRoute = params.get('mode') === 'companies' && !params.has('slug') &&
     typeof requestedCompany === 'string' && Boolean(requestedCompany.trim()) && requestedCompany === requestedCompany.trim() && requestedCompany.length <= 200 &&
     (!params.has('window') || Object.hasOwn(core.WINDOW_FILES, params.get('window'))) &&
-    (!params.has('difficulty') || ['', 'Easy', 'Medium', 'Hard'].includes(params.get('difficulty'))) &&
+    (!params.has('difficulty') || core.validDifficultyFilter(params.get('difficulty'))) &&
     (!params.has('topic') || params.get('topic').length <= 200) &&
     (!params.has('sort') || core.SORT_OPTIONS.practiceQuestions.includes(params.get('sort'))) &&
     (!params.has('completionFilter') || completionFilters.includes(params.get('completionFilter')));
@@ -163,7 +164,7 @@
       if (typeof topic !== 'string' || !topic.trim() || topic.trim().length > 200 || seen.has(topic.trim().toLocaleLowerCase())) return false;
       seen.add(topic.trim().toLocaleLowerCase()); return true;
     }).slice(0, 256).map(topic => topic.trim());
-    return { difficulty: ['', 'Easy', 'Medium', 'Hard'].includes(stored.difficulty) ? stored.difficulty : '',
+    return { difficulty: core.validDifficultyFilter(stored.difficulty) ? stored.difficulty : '',
       topics, topicMatch: stored.topicMatch === 'all' ? 'all' : 'any', completionFilter: completionFilters.includes(stored.completionFilter) ? stored.completionFilter : 'all', view: stored.view === 'topics' ? 'topics' : 'list' };
   }
   function saveProblemView() {
@@ -262,7 +263,7 @@
   }
   function renderProblemControls() {
     $('problem-filters').hidden = mode !== 'problems' || Boolean(activeDetail());
-    $('problem-difficulty-select').value = problemView.difficulty;
+    selection('problem-difficulty-select', problemView.difficulty);
     $('topic-match-select').value = problemView.topicMatch;
     $('problem-status-select').value = problemView.completionFilter; syncSelectControl($('problem-status-select'));
     syncSelectControl($('problem-difficulty-select')); syncSelectControl($('topic-match-select'));
@@ -323,7 +324,7 @@
     return sortOptions[key].find(([value]) => value === sort)?.[1] || '';
   }
   function renderSortSelect(select, key, selected, difficulty = '') {
-    const options = sortOptions[key].filter(([value]) => !difficulty || !value.startsWith('difficulty-'));
+    const options = sortOptions[key].filter(([value]) => core.difficultyValues(difficulty).length !== 1 || !value.startsWith('difficulty-'));
     const signature = JSON.stringify([key, options]);
     if (select.dataset.sortKind !== signature) {
       select.replaceChildren(...options.map(([value, label]) => { const option = node('option', '', label); option.value = value; return option; }));
@@ -335,11 +336,11 @@
   }
   function renderSortControls() {
     let changed = false;
-    if (problemView.difficulty && sorts.problems.startsWith('difficulty-')) {
+    if (core.difficultyValues(problemView.difficulty).length === 1 && sorts.problems.startsWith('difficulty-')) {
       sorts.problems = sortDefaults.problems; changed = true;
     }
     const frame = activeDetail();
-    if (frame?.kind === 'company' && frame.filters.difficulty && frame.sort.startsWith('difficulty-')) {
+    if (frame?.kind === 'company' && core.difficultyValues(frame.filters.difficulty).length === 1 && frame.sort.startsWith('difficulty-')) {
       frame.sort = sortDefaults.companyQuestions; sorts.companyQuestions = frame.sort; changed = true;
     }
     if (changed) saveSorts();
@@ -362,7 +363,7 @@
     const frame = activeDetail();
     const current = frame && detailSortKey(frame) === key ? frame.sort : sorts[key];
     const difficulty = key === 'problems' ? problemView.difficulty : key === 'companyQuestions' ? frame?.filters.difficulty : '';
-    if ((difficulty && value.startsWith('difficulty-')) || !sortOptions[key].some(([allowed]) => allowed === value) || current === value) return;
+    if ((core.difficultyValues(difficulty).length === 1 && value.startsWith('difficulty-')) || !sortOptions[key].some(([allowed]) => allowed === value) || current === value) return;
     sorts[key] = value;
     invalidate();
     if (!activeDetail() && key === 'problems') resetTopicGroups();
@@ -1060,7 +1061,7 @@
     $('detail-source').hidden = !frame.sourceUrl;
     if (frame.sourceUrl) $('detail-source').href = sourceURL(frame.sourceUrl);
     if (frame.kind === 'company') {
-      $('difficulty-select').value = frame.filters.difficulty;
+      selection('difficulty-select', frame.filters.difficulty);
       syncSelectControl($('difficulty-select'));
       $('question-search').value = frame.filters.query;
       renderCompanyTopicControls(frame);
@@ -1254,7 +1255,7 @@
     searchTimer = setTimeout(() => void loadList(), 150);
   });
   $('problem-difficulty-select').addEventListener('change', () => {
-    problemView.difficulty = $('problem-difficulty-select').value; problemFiltersChanged();
+    problemView.difficulty = selection('problem-difficulty-select'); problemFiltersChanged();
   });
   $('problem-status-select').addEventListener('change', () => {
     problemView.completionFilter = completionFilters.includes($('problem-status-select').value) ? $('problem-status-select').value : 'all';
@@ -1371,7 +1372,7 @@
   function filterChanged(debounce = false) {
     const frame = activeDetail();
     if (!frame || frame.kind !== 'company') return;
-    frame.filters.difficulty = $('difficulty-select').value;
+    frame.filters.difficulty = selection('difficulty-select');
     frame.filters.query = $('question-search').value.slice(0, 200);
     companyFiltersChanged(frame, debounce);
   }

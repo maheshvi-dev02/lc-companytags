@@ -168,7 +168,11 @@ try {
   }
   async function choose(id,value) {
     await ui.click(`#${id}-trigger`); await visibleMenu(id);
-    await ui.click(`#${id}-menu [data-value="${value}"]`);
+    if (await ui.read(`document.getElementById('${id}').multiple`)) {
+      await ui.click(`#${id}-clear`);
+      await ui.click(`#${id}-options input[data-value="${value}"]`);
+      await ui.click(`#${id}-apply`);
+    } else await ui.click(`#${id}-menu [data-value="${value}"]`);
     assert.equal(await ui.read(`document.getElementById('${id}').value`),value);
     assert.equal(await ui.read(`document.getElementById('${id}-menu').hidden`),true);
   }

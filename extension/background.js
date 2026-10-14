@@ -146,7 +146,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         if (company === undefined && contextKeys.some(key => message[key] !== undefined)) throw new Error('Invalid explorer practice context.');
         if (company !== undefined && (
           (message.window !== undefined && (typeof message.window !== 'string' || !Object.hasOwn(LCTCore.WINDOW_FILES, message.window))) ||
-          (message.difficulty !== undefined && !['', 'Easy', 'Medium', 'Hard'].includes(message.difficulty)) ||
+          (message.difficulty !== undefined && !LCTCore.validDifficultyFilter(message.difficulty)) ||
           (message.topic !== undefined && (typeof message.topic !== 'string' || message.topic.length > 200)) ||
           (message.sort !== undefined && !LCTCore.SORT_OPTIONS.practiceQuestions.includes(message.sort)) ||
           (message.completionFilter !== undefined && !['all', 'solved', 'not-solved'].includes(message.completionFilter))

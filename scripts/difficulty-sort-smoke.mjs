@@ -29,7 +29,19 @@ try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
   const url = new URL(worker.url()), base = url.protocol + '//' + url.host;
   const choose = async (p, id, label) => {
+    await p.locator('#' + id + '-trigger').scrollIntoViewIfNeeded();
+    await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
     await p.locator('#' + id + '-trigger').click();
+    if (await p.locator('#' + id).evaluate(node => node.multiple)) {
+      await p.locator('#' + id + '-clear').click();
+      const values = Array.isArray(label) ? label : /^All |^Any /.test(label) ? [] : [label];
+      for (const item of values) {
+        const search = p.locator('#' + id + '-search');
+        if (await search.isVisible()) await search.fill(item);
+        await p.locator('#' + id + '-options').getByRole('checkbox', { name: item, exact: true }).check();
+      }
+      await p.locator('#' + id + '-apply').click(); return;
+    }
     await p.locator('#' + id + '-menu [role="option"]').filter({ hasText: new RegExp('^' + label + '$') }).click();
   };
   const verify = async (p, difficultyId, sortId, fallback) => {
@@ -42,6 +54,8 @@ try {
       assert.equal(await p.locator('#' + sortId + ' option[value^="difficulty-"]').count(), 0);
       await p.keyboard.press('Escape');
     }
+    await choose(p, difficultyId, ['Easy', 'Medium']);
+    assert.equal(await p.locator('#' + sortId + ' option[value^="difficulty-"]').count(), 2);
     await choose(p, difficultyId, 'All difficulties');
     await p.locator('#' + sortId + '-trigger').click();
     assert.equal(await p.locator('#' + sortId + '-menu [data-value^="difficulty-"]').count(), 2);

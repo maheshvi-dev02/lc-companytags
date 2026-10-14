@@ -135,3 +135,43 @@ test('older unnamed collections retain their exact questions and acquire a defau
   assert.equal(entry.revision, 1);
   assert.equal(entry.questions[0].slug, 'two-sum');
 });
+
+
+test('multiple companies combine distinct problems and preserve company-specific scores, topic match and difficulty filters', async () => {
+  const options = { targetMode: 'plan', companies: ['Microsoft', 'Google'], window: 'all', difficulty: 'Easy,Medium', topics: ['Array', 'Linked List'], topicMatch: 'any', count: 50 };
+  const union = new Set(options.companies.flatMap(company => data.files[company + '/' + core.WINDOW_FILES.all].records.filter(r => ['Easy','Medium'].includes(r.difficulty) && r.topics.some(t => options.topics.includes(t))).map(r => r.slug)));
+  const result = core.targetQuestions(data, options);
+  assert.equal(result.total, union.size);
+  assert.equal(new Set(result.questions.map(r => r.slug)).size, result.questions.length);
+  assert.ok(result.questions.every(row => union.has(row.slug) && ['Easy','Medium'].includes(row.difficulty)));
+  assert.deepEqual(new Set(result.questions.flatMap(row => row.companyMatches.map(m => m.name))), new Set(options.companies));
+  for (const row of result.questions) for (const match of row.companyMatches) {
+    const record = data.files[match.name + '/' + core.WINDOW_FILES.all].records.find(r => r.slug === row.slug);
+    assert.equal(match.frequency, record.frequency); assert.equal(match.rank, record.rank);
+  }
+  const all = core.targetQuestions(data, { ...options, topics: ['Array','Hash Table'], topicMatch: 'all' });
+  assert.ok(all.questions.length > 0);
+  assert.ok(all.questions.every(row => ['Array','Hash Table'].every(t => row.topics.includes(t))));
+  const chosen = result.questions[0].slug;
+  const status = core.targetQuestions(data, {...options, completionFilter:'solved'}, {state:'ready',completed:{[chosen]:true}});
+  assert.deepEqual(status.questions.map(r => r.slug), [chosen]);
+  const state={}, service=collection.create({get:async()=>state,set:async value=>Object.assign(state,value)});
+  const saved=await service.save({...result,context:options});
+  const clone=await service.clone(saved.id,'Combined prep copy',saved.revision);
+  assert.deepEqual(clone.context.companies, options.companies);
+  assert.deepEqual(clone.context.topics, options.topics); assert.equal(clone.context.difficulty,'Easy,Medium');
+  assert.deepEqual(clone.questions,saved.questions);
+  assert.match(collection.csv(clone), /Microsoft:|Google:/);
+});
+
+test('difficulty combinations work in problem and company lists; invalid multi filters reject before reading data', async () => {
+  for (const query of [core.searchProblems, core.practiceQuestions]) {
+    const result=query(data,{company:'Microsoft',difficulty:'Easy,Medium',limit:100});
+    const rows=result.questions || result.problems;
+    assert.ok(rows.length);assert.ok(rows.every(row=>['Easy','Medium'].includes(row.difficulty)));
+  }
+  let reads=0;
+  const service=sync.createSyncService({storage:{get:async()=>{reads++;return {lctData:data};},set:async()=>{}},fetch:async()=>{throw new Error('No network');}});
+  for (const bad of [{companies:'Google'}, {companies:['']}, {companies:Array(501).fill('Google')}, {company:42}, {difficulty:'Easy,Impossible'}]) await assert.rejects(service.getTarget(bad));
+  assert.equal(reads,0);
+});

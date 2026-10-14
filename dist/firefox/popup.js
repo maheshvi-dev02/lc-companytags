@@ -4,6 +4,7 @@
   const core = globalThis.LCTCore;
   const logos = globalThis.LCTCompanyLogos;
   const $ = id => document.getElementById(id);
+  const selection = (id, ...next) => globalThis.LCTSelectControls.value($(id), ...next);
   const defaults = { enabled: true, collapsed: false, window: 'all' };
   const windowLabels = { all: 'All time', '30d': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', older: 'Older than 6 months' };
   let settings = { ...defaults };
@@ -218,12 +219,12 @@
     });
   }
   function syncPracticeSort() {
-    const difficulty = $('difficulty-select').value;
-    if (difficulty && practiceSort.startsWith('difficulty-')) {
+    const difficulty = selection('difficulty-select');
+    if (core.difficultyValues(difficulty).length === 1 && practiceSort.startsWith('difficulty-')) {
       practiceSort = 'frequency-desc'; savePracticeSort();
     }
     const select = $('practice-sort-select');
-    const options = practiceSortOptions.filter(([value]) => !difficulty || !value.startsWith('difficulty-'));
+    const options = practiceSortOptions.filter(([value]) => core.difficultyValues(difficulty).length !== 1 || !value.startsWith('difficulty-'));
     const signature = JSON.stringify(options);
     if (select.dataset.sortOptions !== signature) {
       select.replaceChildren(...options.map(([value, label]) => {
@@ -236,7 +237,7 @@
   }
   function changePracticeSort() {
     const next = validPracticeSort($('practice-sort-select').value);
-    if (next === practiceSort || ($('difficulty-select').value && next.startsWith('difficulty-'))) return;
+    if (next === practiceSort || (core.difficultyValues(selection('difficulty-select')).length === 1 && next.startsWith('difficulty-'))) return;
     practiceSort = next;
     syncPracticeSort();
     void loadPractice();
@@ -452,7 +453,7 @@
     practiceLoadingAll = false;
     clearPracticeQuestions();
     practiceCompany = company;
-    $('difficulty-select').value = '';
+    selection('difficulty-select', '');
     selectMenus.sync($('difficulty-select'));
     $('topic-input').value = '';
     render();
@@ -461,7 +462,7 @@
   }
 
   function practiceContext() {
-    return JSON.stringify([practiceCompany, selectedWindow(), $('difficulty-select').value, $('topic-input').value.trim(), practiceSort, practiceCompletionFilter(), slug]);
+    return JSON.stringify([practiceCompany, selectedWindow(), selection('difficulty-select'), $('topic-input').value.trim(), practiceSort, practiceCompletionFilter(), slug]);
   }
 
   function clearPracticeQuestions() {
@@ -613,7 +614,7 @@
     if (!practiceCompany || practiceOpening) return;
     const context = practiceContext();
     const request = { type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: practiceCompany,
-      window: selectedWindow(), difficulty: $('difficulty-select').value,
+      window: selectedWindow(), difficulty: selection('difficulty-select'),
       topic: $('topic-input').value.trim(), sort: practiceSort, completionFilter: practiceCompletionFilter() };
     selectMenus.close();
     closeCompanySort();
@@ -679,7 +680,7 @@
     const id = ++practiceRequestId;
     const context = practiceContext();
     const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), sort: practiceSort, completionFilter: practiceCompletionFilter() };
-    if ($('difficulty-select').value) request.difficulty = $('difficulty-select').value;
+    if (selection('difficulty-select')) request.difficulty = selection('difficulty-select');
     if ($('topic-input').value.trim()) request.topic = $('topic-input').value.trim();
     const current = () => id === practiceRequestId && Boolean(practiceCompany) && context === practiceContext();
     if (!append) clearPracticeQuestions();
