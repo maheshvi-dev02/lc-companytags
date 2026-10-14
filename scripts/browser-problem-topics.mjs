@@ -40,7 +40,7 @@ export async function exerciseProblemTopics(ui, { data, core, output, browserNam
       await expectRead(ui, `Boolean(document.querySelector(${JSON.stringify(input)}))`, true);
       await ui.click(input);
     }
-    await ui.click('#topic-picker-apply');
+    await ui.press('#topic-picker-search', 'Escape');
     await expectRead(ui, visible('#topic-picker-menu'), false);
     options.topics = topics.slice();
     await expectRead(ui, selectedTopics, topics.slice().sort());
@@ -218,19 +218,17 @@ export async function exerciseProblemTopics(ui, { data, core, output, browserNam
     assert.equal(await ui.read("document.querySelector('#topic-picker-trigger').getAttribute('aria-expanded')"), 'true');
     await ui.fill('#topic-picker-search', 'Linked List');
     const checkbox = '#topic-picker-options input[data-topic="Linked List"]';
-    const beforeDraft = await ui.read('__problemTopicsAudit.calls.length');
     if (ui.keyboard.startsWith('Native Chromium')) await ui.press(checkbox, 'Space'); else await ui.click(checkbox);
     await expectRead(ui, `document.querySelector(${JSON.stringify(checkbox)}).checked`, true);
-    assert.equal(await ui.read('__problemTopicsAudit.calls.length'), beforeDraft, 'Draft checkbox changes must not reload backend results.');
+    await expectRead(ui, selectedTopics, ['Linked List'], 'Checkbox changes apply immediately.');
     await ui.press('#topic-picker-search', 'Escape');
     await expectRead(ui, visible('#topic-picker-menu'), false);
     assert.equal(await ui.read("document.activeElement===document.querySelector('#topic-picker-trigger')"), true);
-    await expectRead(ui, selectedTopics, [], 'Escape must cancel draft topic changes.');
+    await expectRead(ui, selectedTopics, ['Linked List'], 'Escape closes the picker without reverting applied changes.');
     await preparePicker(); await ui.activateWithKeyboard('#topic-picker-trigger');
     await ui.fill('#topic-picker-search', 'Linked List');
-    await expectRead(ui, `document.querySelector(${JSON.stringify(checkbox)}).checked`, false);
-    if (ui.keyboard.startsWith('Native Chromium')) await ui.press(checkbox, 'Space'); else await ui.click(checkbox);
-    await ui.activateWithKeyboard('#topic-picker-apply');
+    await expectRead(ui, `document.querySelector(${JSON.stringify(checkbox)}).checked`, true);
+    await ui.press(checkbox, 'Escape');
     await expectRead(ui, visible('#topic-picker-menu'), false);
     options.topics = ['Linked List']; await assertGroups();
 

@@ -26,11 +26,11 @@
     const menu = make('div', 'select-menu multi-select-menu'); menu.id = id + '-menu'; menu.hidden = true; menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Select ' + noun);
     const searchLabel = make('label', 'multi-select-search', 'Search ' + noun), search = make('input');
     search.type = 'search'; search.id = id + '-search'; search.placeholder = 'Find ' + noun; search.autocomplete = 'off'; searchLabel.append(search); searchLabel.hidden = !searchable;
-    const hint = make('p', 'multi-select-hint', select.dataset.hint || 'Select any combination, then apply. No selection includes all.');
+    const hint = make('p', 'multi-select-hint', select.dataset.hint || 'Changes apply immediately. No selection includes all.');
     const list = make('div', 'multi-select-options'); list.id = id + '-options'; list.setAttribute('role', 'group'); list.setAttribute('aria-label', noun);
     const emptyMessage = make('p', 'multi-select-hint', 'No matches. Try another search.'); emptyMessage.hidden = true;
-    const actions = make('div', 'multi-select-actions'), clear = make('button', '', 'Clear selection'), apply = make('button', '', 'Apply ' + noun);
-    clear.type = apply.type = 'button'; clear.id = id + '-clear'; apply.id = id + '-apply'; actions.append(clear, apply);
+    const actions = make('div', 'multi-select-actions'), clear = make('button', '', 'Clear selection');
+    clear.type = 'button'; clear.id = id + '-clear'; actions.append(clear);
     menu.append(searchLabel, hint, list, emptyMessage, actions); document.body.append(menu);
     let open = false, draft = new Set(), signature = '', positionSignature = '';
     const selectedValues = () => Array.from(select.selectedOptions, option => option.value).filter(Boolean);
@@ -58,26 +58,27 @@
       const query = search.value.trim().toLocaleLowerCase();
       list.replaceChildren(...Array.from(select.options).filter(option => option.value && !option.disabled && option.textContent.toLocaleLowerCase().includes(query)).map(option => {
         const label = make('label', 'multi-select-option'), check = make('input'); check.type = 'checkbox'; check.value = option.value; check.dataset.value = option.value;
-        check.addEventListener('change', () => { if (check.checked) draft.add(option.value); else draft.delete(option.value); syncDraft(); });
+        check.addEventListener('change', () => { if (check.checked) draft.add(option.value); else draft.delete(option.value); commit(); });
         label.append(check, make('span', '', option.textContent)); return label;
       }));
       emptyMessage.hidden = Boolean(list.children.length); syncDraft(); position(true);
     }
     function sync() {
       const selected = selectedValues(), name = select.getAttribute('aria-label') || noun;
-      hint.textContent = select.dataset.hint || 'Select any combination, then apply. No selection includes all.';
+      hint.textContent = select.dataset.hint || 'Changes apply immediately. No selection includes all.';
       caption.textContent = !selected.length ? empty : noun === 'difficulties' ? selected.join(', ') : selected.length === 1 ? selected[0] : selected.length + ' selected';
       button.title = selected.length ? selected.join(', ') : empty;
       button.setAttribute('aria-label', name + ': ' + caption.textContent); button.disabled = select.disabled;
       const nextSignature = JSON.stringify(Array.from(select.options, option => [option.value, option.textContent, option.disabled]));
       if (open && (button.disabled || signature !== nextSignature)) close();
       signature = nextSignature;
+      if (open) { draft = new Set(selected); syncDraft(); }
     }
     function show() {
       if (button.disabled) return;
       activeMulti?.close(); document.dispatchEvent(new Event('lct-multi-open'));
       draft = new Set(selectedValues()); search.value = ''; menu.hidden = false; open = true; activeMulti = controller; button.setAttribute('aria-expanded', 'true');
-      renderOptions(); (searchable ? search : list.querySelector('input') || apply).focus({ preventScroll: true });
+      renderOptions(); (searchable ? search : list.querySelector('input') || clear).focus({ preventScroll: true });
     }
     button.addEventListener('click', () => open ? close() : show());
     button.addEventListener('keydown', event => { if (event.key === 'Escape' && open) { event.preventDefault(); close(true); } if (event.key === 'ArrowDown') { event.preventDefault(); show(); } });
@@ -91,15 +92,16 @@
         if (input) { event.preventDefault(); input.focus(); }
       }
     });
-    clear.addEventListener('click', () => { draft.clear(); syncDraft(); });
-    apply.addEventListener('click', () => {
-      const previous = JSON.stringify(selectedValues()); value(select, [...draft]); close(true); sync();
+    function commit() {
+      const previous = JSON.stringify(selectedValues()); value(select, [...draft]); sync(); syncDraft();
       if (previous !== JSON.stringify(selectedValues())) select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+      position(true);
+    }
+    clear.addEventListener('click', () => { draft.clear(); commit(); });
     document.addEventListener('pointerdown', event => { if (open && !wrapper.contains(event.target) && !menu.contains(event.target)) close(); });
     document.addEventListener('focusin', event => { if (open && !wrapper.contains(event.target) && !menu.contains(event.target)) close(); });
     window.addEventListener('resize', () => position());
-    window.addEventListener('scroll', event => { if (open && event.target !== menu && !menu.contains(event.target)) close(); }, true);
+    window.addEventListener('scroll', event => { if (open && event.target !== menu && !menu.contains(event.target)) { const rect = button.getBoundingClientRect(); if (rect.bottom <= 0 || rect.top >= innerHeight) close(); else position(); } }, true);
     select.addEventListener('change', sync);
     new MutationObserver(sync).observe(select, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['disabled', 'selected', 'aria-label'] });
     const controller = { multi: true, close, sync }; sync(); return controller;

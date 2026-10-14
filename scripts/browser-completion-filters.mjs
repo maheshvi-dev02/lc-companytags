@@ -114,7 +114,7 @@ export async function exerciseCompletionFilters(ui, { fixture, data, core, outpu
   async function topics(driver, prefix, selected) {
     await driver.click(`#${prefix}topic-picker-trigger`); await driver.click('#topic-picker-reset');
     for (const topic of selected) { await driver.fill('#topic-picker-search', topic); await driver.click(`#topic-picker-options input[data-topic=${JSON.stringify(topic)}]`); }
-    await driver.click('#topic-picker-apply'); await expectRead(driver, visible('#topic-picker-menu'), false);
+    await driver.press('#topic-picker-search', 'Escape'); await expectRead(driver, visible('#topic-picker-menu'), false);
   }
   async function groups(driver, root, options) {
     const expected = oracle(options);

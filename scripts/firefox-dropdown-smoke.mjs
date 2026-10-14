@@ -171,7 +171,9 @@ try {
     if (await ui.read(`document.getElementById('${id}').multiple`)) {
       await ui.click(`#${id}-clear`);
       await ui.click(`#${id}-options input[data-value="${value}"]`);
-      await ui.click(`#${id}-apply`);
+      await visibleMenu(id);
+      assert.equal(await ui.read(`document.getElementById('${id}').value`),value);
+      await ui.press(`#${id}-search`, 'Escape');
     } else await ui.click(`#${id}-menu [data-value="${value}"]`);
     assert.equal(await ui.read(`document.getElementById('${id}').value`),value);
     assert.equal(await ui.read(`document.getElementById('${id}-menu').hidden`),true);

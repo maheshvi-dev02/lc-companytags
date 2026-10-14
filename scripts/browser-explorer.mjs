@@ -28,7 +28,7 @@ export function chromiumExplorerDriver(page) {
       if (await field.evaluate(node => node.multiple)) {
         await page.locator(`#${id}-clear`).click();
         for (const item of (Array.isArray(value) ? value : value.split(',')).filter(Boolean)) await page.locator(`#${id}-options input[data-value=${JSON.stringify(item)}]`).check();
-        await page.locator(`#${id}-apply`).click();
+        await page.keyboard.press('Escape');
       } else await page.locator(`#${id}-menu [role=option][data-value=${JSON.stringify(value)}]`).click();
     },
     press: async (selector,key) => { const locator=page.locator(selector);await settleScroll(locator);return locator.press(key); },
@@ -59,7 +59,7 @@ export function firefoxExplorerDriver(evaluate) {
       await wait(50);
       await mutate(`document.querySelector('[data-select-for="'+document.querySelector(${JSON.stringify(selector)}).id+'"]').click()`);
       if (JSON.parse(await evaluate(`JSON.stringify(document.querySelector(${JSON.stringify(selector)}).multiple)`))) {
-        await mutate(`const id=document.querySelector(${JSON.stringify(selector)}).id;document.getElementById(id+'-clear').click();const values=${JSON.stringify(value)};for(const input of document.getElementById(id+'-options').querySelectorAll('input'))if((Array.isArray(values)?values:values.split(',')).includes(input.value))input.click();document.getElementById(id+'-apply').click()`);
+        await mutate(`const id=document.querySelector(${JSON.stringify(selector)}).id;document.getElementById(id+'-clear').click();const values=${JSON.stringify(value)};for(const input of document.getElementById(id+'-options').querySelectorAll('input'))if((Array.isArray(values)?values:values.split(',')).includes(input.value))input.click();document.getElementById(id+'-menu').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
         return;
       }
       await mutate(`const menu=document.getElementById(document.querySelector(${JSON.stringify(selector)}).id+'-menu');const option=Array.from(menu.querySelectorAll('[role=option]')).find(node=>node.dataset.value===${JSON.stringify(value)});if(!option)throw new Error('Missing visible select option');option.scrollIntoView({block:'nearest'});option.click()`);
@@ -115,7 +115,7 @@ async function chooseCompanyTopics(ui, topics) {
     await ui.fill('#topic-picker-search', topic);
     await ui.click(`#topic-picker-options input[data-topic=${JSON.stringify(topic)}]`);
   }
-  await ui.click('#topic-picker-apply');
+  await ui.press('#topic-picker-search', 'Escape');
   await expectRead(ui, visible('#topic-picker-menu'), false);
   await expectRead(ui, "Array.from(document.querySelectorAll('#detail-topic-picker-selected button[data-topic]'),node=>node.dataset.topic).sort()", topics.slice().sort());
 }

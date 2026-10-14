@@ -40,7 +40,9 @@ try {
         if (await search.isVisible()) await search.fill(item);
         await p.locator('#' + id + '-options').getByRole('checkbox', { name: item, exact: true }).check();
       }
-      await p.locator('#' + id + '-apply').click(); return;
+      assert.equal(await p.locator('#' + id + '-menu').isVisible(), true);
+      assert.deepEqual(await p.locator('#' + id).evaluate(node => Array.from(node.selectedOptions, o => o.textContent).filter(Boolean).sort()), [...values].sort());
+      await p.keyboard.press('Escape'); return;
     }
     await p.locator('#' + id + '-menu [role="option"]').filter({ hasText: new RegExp('^' + label + '$') }).click();
   };

@@ -39,7 +39,7 @@ export async function exerciseCompanyTopics(ui, { data, core, output, browserNam
       await expectRead(ui, `Boolean(document.querySelector(${JSON.stringify(selector)}))`, true);
       await ui.click(selector);
     }
-    await ui.click('#topic-picker-apply');
+    await ui.press('#topic-picker-search', 'Escape');
     await expectRead(ui, visible('#topic-picker-menu'), false);
     options.topics = topics.slice(); await expectRead(ui, selected, topics.slice().sort());
   }
@@ -223,18 +223,16 @@ export async function exerciseCompanyTopics(ui, { data, core, output, browserNam
     assert.equal(await ui.read("document.querySelector('#topic-picker-menu').getAttribute('role')"), 'dialog');
     await ui.fill('#topic-picker-search', 'Linked List');
     const checkbox = '#topic-picker-options input[data-topic="Linked List"]';
-    const beforeDraft = await ui.read('__companyTopicsAudit.calls.length');
     if (ui.keyboard.startsWith('Native Chromium')) await ui.press(checkbox, 'Space'); else await ui.click(checkbox);
     await expectRead(ui, `document.querySelector(${JSON.stringify(checkbox)}).checked`, true);
-    assert.equal(await ui.read('__companyTopicsAudit.calls.length'), beforeDraft);
+    await expectRead(ui, selected, ['Linked List']);
     await ui.press(checkbox, 'Escape'); await expectRead(ui, visible('#topic-picker-menu'), false);
     await expectRead(ui, "document.activeElement===document.querySelector('#detail-topic-picker-trigger')", true);
-    await expectRead(ui, selected, []);
+    await expectRead(ui, selected, ['Linked List']);
     await preparePicker(); await ui.activateWithKeyboard('#detail-topic-picker-trigger');
     await ui.fill('#topic-picker-search', 'Linked List');
-    await expectRead(ui, `document.querySelector(${JSON.stringify(checkbox)}).checked`, false);
-    if (ui.keyboard.startsWith('Native Chromium')) await ui.press(checkbox, 'Space'); else await ui.click(checkbox);
-    await ui.activateWithKeyboard('#topic-picker-apply'); options.topics = ['Linked List']; await assertGroups();
+    await expectRead(ui, `document.querySelector(${JSON.stringify(checkbox)}).checked`, true);
+    await ui.press(checkbox, 'Escape'); options.topics = ['Linked List']; await assertGroups();
     await selectTopics(['Array', 'Linked List']); await ui.select('#detail-topic-match-select', 'any'); options.topicMatch = 'any';
     await ui.select('#difficulty-select', 'Medium'); options.difficulty = 'Medium';
     await assertGroups(); await expand('Linked List');
@@ -257,7 +255,7 @@ export async function exerciseCompanyTopics(ui, { data, core, output, browserNam
       'Flat50 paging and grouped20 paging preserve source frequency, rank, difficulty, acceptance and company-scoped topics.',
       'Expand all stays within3 concurrent requests; collapse preserves nodes; retry and delayed old-filter pages do not corrupt rows.',
       'Nested problem Back restores company state; a new company starts with independent filters and supports positive AND matches and untagged questions.',
-      'Unavailable and valid empty results remain distinct; picker drafts, keyboard cancellation and available theme/narrow checks pass.');
+      'Unavailable and valid empty results remain distinct; immediate checkbox updates, keyboard dismissal and available theme/narrow checks pass.');
     return report;
   } finally { await ui.mutate('globalThis.__companyTopicsAudit?.restore();delete globalThis.__retainedCompanyRows;'); }
 }

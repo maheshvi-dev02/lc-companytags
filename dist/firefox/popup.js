@@ -672,10 +672,10 @@
     return JSON.stringify([completion.sessionKey, completion.revision, completion.site]);
   }
 
-  async function loadPractice({ append = false, all = false, refreshCompletion = false } = {}) {
+  async function loadPractice({ append = false, all = false, refreshCompletion = false, keepFilters = false } = {}) {
     if (!practiceCompany || (append && (practiceLoading || !practiceHasMore))) return;
     clearTimeout(topicTimer);
-    selectMenus.close();
+    if (!keepFilters) selectMenus.close();
     syncPracticeSort();
     const id = ++practiceRequestId;
     const context = practiceContext();
@@ -845,7 +845,7 @@
     const returnButton = Array.from($('companies').querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
     (returnButton || $('window-select-trigger')).focus();
   });
-  $('difficulty-select').addEventListener('change', () => void loadPractice());
+  $('difficulty-select').addEventListener('change', () => void loadPractice({ keepFilters: true }));
   $('practice-sort-select').addEventListener('change', changePracticeSort);
   $('practice-status-select').addEventListener('change', () => void loadPractice());
   $('practice-load-more').addEventListener('click', () => void loadPractice({ append: true }));

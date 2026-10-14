@@ -89,10 +89,10 @@
   const listVersion = () => JSON.stringify([version(), queries[mode], sorts[mode], mode === 'problems' ? problemContext() : null, mode === 'problems' ? problemView.view : null]);
   const detailVersion = frame => JSON.stringify([version(), frame.kind, frame.slug || frame.name, frame.sort, frame.filters,
     frame.kind === 'company' && frame.filters.completionFilter !== 'all' ? completionFingerprint(frame.completion) : null]);
-  const invalidate = () => {
-    closeSelectMenu();
+  const invalidate = (keepFilters = false) => {
+    if (!keepFilters) closeSelectMenu();
     closeAcceptanceHelp();
-    closeTopicPicker();
+    if (!keepFilters) closeTopicPicker();
     groupQueue.length = 0;
     for (const groups of [topicGroups, ...stack.filter(frame => frame.kind === 'company').map(frame => frame.topicGroups)]) {
       for (const group of groups.values()) { group.request++; group.loading = false; group.queued = false; renderTopicGroupState(group); }
@@ -207,7 +207,7 @@
       input.checked = selected.has(input.dataset.topic.toLocaleLowerCase());
       input.disabled = !input.checked && selected.size >= 256;
     });
-    $('topic-picker-hint').textContent = selected.size >= 256 ? '256 topics selected. Remove a topic to select another.' : 'Select topics, then apply. No selection includes all topics.';
+    $('topic-picker-hint').textContent = selected.size >= 256 ? '256 topics selected. Remove a topic to select another.' : 'Changes apply immediately. No selection includes all topics.';
   }
   function renderTopicOptions() {
     const focused = document.activeElement?.dataset.topic;
@@ -219,7 +219,7 @@
       input.addEventListener('change', () => {
         draftTopics = draftTopics.filter(value => value.toLocaleLowerCase() !== topic.toLocaleLowerCase());
         if (input.checked) draftTopics.push(topic);
-        syncTopicDraft();
+        syncTopicDraft(); commitTopicSelection();
       });
       label.append(input, node('span', '', topic)); return label;
     }));
@@ -291,7 +291,7 @@
   }
   function problemFiltersChanged(debounce = false, save = true) {
     pendingDetail = null;
-    invalidate(); resetTopicGroups();
+    invalidate(true); resetTopicGroups();
     list.version = null; list.rows = []; list.total = 0; list.hasMore = false; list.loading = true; list.error = '';
     renderSortControls();
     renderListRows([]); renderProblemControls(); renderListSummary(); if (save) saveProblemView();
@@ -310,7 +310,7 @@
   function companyFiltersChanged(frame, debounce = false) {
     if (frame !== activeDetail() || frame.kind !== 'company') return;
     frame.filters.topic = frame.filters.topics.length === 1 ? frame.filters.topics[0] : '';
-    invalidate(); resetTopicGroups(frame);
+    invalidate(true); resetTopicGroups(frame);
     frame.rows = []; frame.total = 0; frame.hasMore = false; frame.version = null; frame.error = ''; frame.loading = true;
     renderDetailRows([]); renderDetailShell(); renderDetailSummary();
     if (debounce) questionTimer = setTimeout(() => void loadDetail(), 150); else void loadDetail();
@@ -1280,15 +1280,15 @@
     event.preventDefault();
     inputs[event.key === 'Home' ? 0 : event.key === 'End' ? inputs.length - 1 : Math.max(0, Math.min(inputs.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
   });
-  $('topic-picker-reset').addEventListener('click', () => { draftTopics = []; syncTopicDraft(); });
-  $('topic-picker-apply').addEventListener('click', () => {
+  function commitTopicSelection() {
     if (!pickerOpen) return;
     const frame = pickerFrame, topics = [...draftTopics];
     if (frame ? frame !== activeDetail() : activeDetail() || mode !== 'problems') { closeTopicPicker(); return; }
-    closeTopicPicker(true);
-    if (frame) { frame.filters.topics = topics; companyFiltersChanged(frame); }
-    else { problemView.topics = topics; problemFiltersChanged(); }
-  });
+    if (frame) { frame.filters.topics = topics; companyFiltersChanged(frame, true); }
+    else { problemView.topics = topics; problemFiltersChanged(true); }
+    positionTopicPicker();
+  }
+  $('topic-picker-reset').addEventListener('click', () => { draftTopics = []; syncTopicDraft(); commitTopicSelection(); });
   $('topic-picker-clear').addEventListener('click', () => {
     problemView.topics = []; problemFiltersChanged(); $('topic-picker-trigger').focus();
   });
@@ -1301,9 +1301,9 @@
   document.addEventListener('focusin', event => {
     if (pickerOpen && !pickerTrigger?.contains(event.target) && !$('topic-picker-menu').contains(event.target)) closeTopicPicker();
   });
-  window.addEventListener('resize', () => closeTopicPicker($('topic-picker-menu').contains(document.activeElement)));
+  window.addEventListener('resize', () => positionTopicPicker());
   window.addEventListener('scroll', event => {
-    if (pickerOpen && !$('topic-picker-menu').contains(event.target)) closeTopicPicker($('topic-picker-menu').contains(document.activeElement));
+    if (pickerOpen && !$('topic-picker-menu').contains(event.target)) { const rect = pickerTrigger.getBoundingClientRect(); if (rect.bottom <= 0 || rect.top >= innerHeight) closeTopicPicker(); else positionTopicPicker(); }
   }, true);
   for (const view of ['list', 'topics']) $('problem-view-' + view).addEventListener('click', () => {
     if (problemView.view === view) return;
