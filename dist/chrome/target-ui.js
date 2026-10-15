@@ -28,6 +28,7 @@
     <details id="target-coverage" class="target-coverage" hidden><summary id="target-coverage-title"></summary><p id="target-coverage-topics"></p></details>
     <div id="target-actions" class="target-actions" hidden><button id="target-download" type="button">Download CSV</button><button id="target-save" type="button">Save to collection</button><span id="target-saved-status" role="status"></span></div>
     <details id="target-collection" class="target-collection"><summary id="target-collection-title">Saved targets</summary><p id="target-collection-empty" class="target-help">Company prep lists are saved here automatically.</p><ul id="target-collection-list"></ul></details>
+    <p id="target-completion-status" class="target-message" role="status" aria-live="polite" hidden></p>
     <ul id="target-results" class="target-results" aria-label="Target problems" tabindex="-1"></ul>`;
   if (popup) document.querySelector('.problem').after(panel); else $('detail-view').after(panel);
   $('target-expand').hidden = !popup;
@@ -36,10 +37,11 @@
   let recent = [], recentContext = '', lastResult = null, hasPlan = false, saveQueue = Promise.resolve();
   let savedTargets = [], currentSaved = null, lastContext = null, saving = 0;
   let editing = null, editBusy = null;
+  let completionEpoch = 0, completionTimer = null;
   const visible = () => document.body.hasAttribute('data-target');
   function node(tag, cls, text) { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; }
   function message(text, error = false) { $('target-message').textContent = text; $('target-message').toggleAttribute('data-error', error); }
-  function clearResults(text) { generation++; if (editBusy !== 'save') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; currentSaved = null; lastContext = null; renderActions(); $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
+  function clearResults(text) { clearCompletion(); generation++; if (editBusy !== 'save') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; currentSaved = null; lastContext = null; renderActions(); $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
   function preferences() { return { targetMode: kind, company: selected('target-company').length === 1 ? selected('target-company')[0] : '', companies: selected('target-company'), difficulty: selection('target-difficulty'), topics: selected('target-topic'), topicMatch: $('target-topic-match').value, completionFilter: $('target-status').value, count: Number($('target-count').value), hasPlan, savedTargetId: currentSaved?.id || null }; }
   function save() { const value = preferences(); saveQueue = saveQueue.then(() => api.storage.local.set({ lctTargetPreferences: value })).catch(() => {}); return saveQueue; }
   function setKind(value) {
@@ -109,7 +111,8 @@
     const rows = result.questions || [];
     $('target-results').replaceChildren(...rows.map((row, index) => {
       const li = node('li', 'target-question'), info = node('div', 'target-question-info'), title = node('h3', '', (kind === 'plan' ? (index + 1) + '. ' : '') + row.title);
-      if (row.completed === true) { const check = node('span', 'completion-indicator'); check.setAttribute('role', 'img'); check.setAttribute('aria-label', 'Completed on LeetCode'); check.title = 'Completed on LeetCode'; check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m7.5 12 3 3 6-6"/></svg>'; title.append(check); }
+      li.dataset.slug = row.slug;
+      const check = node('span', 'completion-indicator'); check.hidden = true; check.setAttribute('role', 'img'); check.setAttribute('aria-label', 'Completed on LeetCode'); check.title = 'Completed on LeetCode'; check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m7.5 12 3 3 6-6"/></svg>'; title.append(check);
       const rate = core.formatAcceptanceRate(row.acceptanceRate);
       const parts = [row.difficulty || 'Difficulty unavailable']; if (rate !== null) parts.push('Acceptance ' + rate);
       if (Number.isFinite(row.frequency)) parts.push('Frequency ' + row.frequency);
@@ -126,6 +129,7 @@
     message(rows.length ? kind === 'plan' ? rows.length + ' questions · ' + (result.coveredTopics || []).length + ' topics · ' + selected('target-company').join(', ') : 'Picked from ' + result.total.toLocaleString() + ' matching problems.' : 'No matching problems. Try another difficulty, topic, status, or time window.');
     if (result.completion?.unknownCount > 0) message($('target-message').textContent + ' ' + result.completion.unknownCount + ' unknown statuses excluded.');
     renderActions();
+    refreshCompletion();
   }
   async function generate(editState = null) {
     controls.close();
@@ -295,13 +299,12 @@
   $('target-download').addEventListener('click', () => download(targetSnapshot()));
   $('target-save').addEventListener('click', () => void saveCurrent());
   function show(active) {
-    if (active) invalidatePrivate();
     document.body.toggleAttribute('data-target', active); panel.hidden = !active; controls.close();
     $('mode-target').setAttribute('aria-selected', String(active)); $('mode-target').tabIndex = active ? 0 : -1;
     if (popup) { $('popup-browse').setAttribute('aria-selected', String(!active)); $('popup-browse').tabIndex = active ? -1 : 0; }
     else if (active) for (const id of ['mode-problems', 'mode-companies']) { $(id).setAttribute('aria-selected', 'false'); $(id).tabIndex = -1; }
-    if (active) void initialize().catch(error => { companies = []; message(error.message + ' Switch tabs to retry.', true); });
-    else { generation++; if (editBusy === 'generate') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); }
+    if (active) { refreshCompletion(); void initialize().catch(error => { companies = []; message(error.message + ' Switch tabs to retry.', true); }); }
+    else { clearCompletion(); generation++; if (editBusy === 'generate') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); }
   }
   $('mode-target').addEventListener('click', () => show(true));
   for (const id of popup ? ['popup-browse'] : ['mode-problems', 'mode-companies']) $(id).addEventListener('click', () => show(false), true);
@@ -317,9 +320,48 @@
   $('window-select').addEventListener('change', () => { if (initialized) { clearResults('Time window changed. Generate a new target.'); void catalog(); } });
   $('target-generate').addEventListener('click', () => void generate());
   $('target-expand').addEventListener('click', async () => { try { await save(); const result = await api.runtime.sendMessage({ type: 'LCT_OPEN_EXPLORER', mode: 'target' }); if (!result?.ok) throw new Error(result?.error || 'Could not expand Target.'); } catch (error) { message(error.message, true); } });
-  function invalidatePrivate() { if (!currentSaved && $('target-status').value !== 'all' && (lastResult || (visible() && panel.getAttribute('aria-busy') === 'true'))) { clearResults('Generate again to refresh your LeetCode status.'); $('target-generate').disabled = false; } }
-  window.addEventListener('focus', invalidatePrivate); document.addEventListener('visibilitychange', () => { if (!document.hidden) invalidatePrivate(); });
-  setInterval(() => { if (!document.hidden) invalidatePrivate(); }, 60000);
+  // Completion belongs to the current LeetCode account, not the saved collection.
+  // Recheck the displayed slugs without changing membership, order or stored data.
+  function clearCompletion() {
+    completionEpoch++; clearTimeout(completionTimer); completionTimer = null;
+    for (const check of $('target-results').querySelectorAll('.completion-indicator')) check.hidden = true;
+    const hint = $('target-completion-status'); hint.hidden = true; hint.textContent = ''; delete hint.dataset.state;
+  }
+  function refreshCompletion() {
+    clearCompletion();
+    if (!visible() || document.hidden || !lastResult?.questions?.length) return;
+    const epoch = completionEpoch, result = lastResult, hint = $('target-completion-status');
+    hint.hidden = false; hint.dataset.state = 'checking'; hint.textContent = 'Checking LeetCode completion status…';
+    // Focus and visibilitychange often arrive together; make one request.
+    completionTimer = setTimeout(async () => {
+      completionTimer = null;
+      let response;
+      try { response = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs: result.questions.map(row => row.slug) }); }
+      catch (_) { response = null; }
+      if (epoch !== completionEpoch || result !== lastResult || !visible() || document.hidden) return;
+      const ready = response?.ok === true && response.state === 'ready' && typeof response.sessionKey === 'string' && response.sessionKey &&
+        ['https://leetcode.com', 'https://www.leetcode.com', 'https://leetcode.cn', 'https://www.leetcode.cn'].includes(response.site) &&
+        response.completed && typeof response.completed === 'object' && !Array.isArray(response.completed);
+      if (!ready) {
+        hint.dataset.state = response?.state === 'signed-out' ? 'signed-out' : response?.state === 'no-tab' ? 'no-tab' : 'unavailable';
+        hint.textContent = hint.dataset.state === 'signed-out' ? 'Sign in to LeetCode to see completion status.' :
+          hint.dataset.state === 'no-tab' ? 'Open a signed-in LeetCode tab to see completion status.' : 'Completion status unavailable. Return here after refreshing your LeetCode tab to retry.';
+        return;
+      }
+      let completed = 0, unknown = 0;
+      for (const row of $('target-results').children) {
+        const status = Object.hasOwn(response.completed, row.dataset.slug) ? response.completed[row.dataset.slug] : null;
+        row.querySelector('.completion-indicator').hidden = status !== true;
+        if (status === true) completed++;
+        else if (status !== false) unknown++;
+      }
+      hint.dataset.state = 'ready';
+      hint.textContent = completed + ' of ' + result.questions.length + ' completed on LeetCode' + (unknown ? ' · ' + unknown + (unknown === 1 ? ' status unavailable' : ' statuses unavailable') : '');
+    }, 150);
+  }
+  window.addEventListener('focus', refreshCompletion);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearCompletion(); else refreshCompletion(); });
+  setInterval(() => { if (visible() && !document.hidden) refreshCompletion(); }, 60000);
   api.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.lctTargetCollection && initialized) void loadCollection().catch(error => message(error.message, true));
     if (area === 'local' && changes.lctStatus && initialized && lastResult && !currentSaved && changes.lctStatus.newValue?.commit && changes.lctStatus.newValue.commit !== lastResult.sourceRevision) clearResults('Dataset updated. Generate a fresh target.'); });

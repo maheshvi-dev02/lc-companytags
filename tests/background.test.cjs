@@ -294,7 +294,7 @@ test('invalid or ambiguous company practice routes cannot create a tab or touch 
     ...['', ' ', ' Uber', 'Uber ', 'a'.repeat(201), null, 2, []].map(company => ({ ...base, company })),
     { ...base, mode: 'problems' }, { ...base, slug: 'two-sum' },
     ...['recent', '__proto__', null, 3, {}].map(window => ({ ...base, window })),
-    ...['medium', 'Impossible', null, 3, {}].map(difficulty => ({ ...base, difficulty })),
+    ...['Easy,Impossible', 'Impossible', null, 3, {}].map(difficulty => ({ ...base, difficulty })),
     ...['a'.repeat(201), null, 3, {}].map(topic => ({ ...base, topic })),
     ...['questions-desc', 'relevance', null, 3, {}].map(sort => ({ ...base, sort })),
     ...['window', 'difficulty', 'topic', 'sort'].map(key => ({ type: 'LCT_OPEN_EXPLORER', [key]: '' }))
@@ -335,13 +335,30 @@ test('completion routing accepts the exact Explorer page including deep links an
   }
 });
 
+test('Target popup completion uses browser-verified window context and rejects invalid slugs first', async () => {
+  for (const chrome of [false, true]) {
+    const active = { id: 9, windowId: 7, incognito: false, url: 'https://example.com/' };
+    const fixture = harness({ chrome, queryTabs: options => options.active ? [active] : [
+      { id: 51, windowId: 7, incognito: false, url: 'https://leetcode.com/problems/two-sum/' },
+      { id: 52, windowId: 8, incognito: true, url: 'https://leetcode.com/problems/two-sum/' }
+    ] });
+    const sender = explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/popup.html', tab: undefined });
+    const invalid = await fixture.dispatch({ type: 'LCT_COMPLETION', slugs: ['Invalid'] }, sender).response;
+    assert.equal(invalid.ok, false); assert.deepEqual(fixture.calls.queriedTabs, []);
+    const result = await fixture.dispatch({ type: 'LCT_COMPLETION', slugs: ['two-sum'], tabId: 52 }, sender).response;
+    assert.equal(result.state, 'ready'); assert.deepEqual(result.completed, { 'two-sum': true });
+    assert.deepEqual(fixture.calls.queriedTabs[0], { active: true, lastFocusedWindow: true });
+    assert.equal(fixture.calls.completionMessages[0].id, 51); noDataWork(fixture.calls);
+  }
+});
+
 test('completion routing rejects every unrelated document before tab or account access', () => {
   const fixture = harness();
   const invalid = [
     undefined,
     explorerSender({ id: 'another-extension' }),
     explorerSender({ url: 'https://leetcode.com/explore.html', origin: 'https://leetcode.com' }),
-    explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/popup.html' }),
+    explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/folder/popup.html' }),
     explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/folder/explore.html' }),
     explorerSender({ url: 'chrome-extension://' + EXTENSION_ID + '/explore.html/extra' }),
     explorerSender({ url: 'chrome-extension://another-extension/explore.html' }),

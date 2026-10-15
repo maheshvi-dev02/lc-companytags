@@ -105,7 +105,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
     if (!message || !['LCT_GET', 'LCT_STATUS', 'LCT_REFRESH', 'LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS',
       'LCT_SEARCH_COMPANIES', 'LCT_OPEN_EXPLORER', 'LCT_OPEN_POPUP', 'LCT_COMPLETION', 'LCT_TARGET', 'LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE', 'LCT_TARGET_UPDATE', 'LCT_TARGET_CLONE'].includes(message.type)) return false;
     if (['LCT_TARGET_LIST', 'LCT_TARGET_SAVE', 'LCT_TARGET_REMOVE', 'LCT_TARGET_UPDATE', 'LCT_TARGET_CLONE'].includes(message.type) && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
-    if (message.type === 'LCT_COMPLETION' && !LCTCompletion.isExplorerSender(sender, api.runtime)) return false;
+    if (message.type === 'LCT_COMPLETION' && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
     if (['LCT_PRACTICE', 'LCT_SEARCH_PROBLEMS', 'LCT_TARGET'].includes(message.type) && message.completionFilter !== undefined &&
         message.completionFilter !== 'all' && !LCTCompletion.isInterfaceSender(sender, api.runtime)) return false;
     if (message.type === 'LCT_OPEN_POPUP') {
@@ -120,7 +120,10 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         !Number.isInteger(sender.tab?.windowId) || sender.tab.windowId < 0) return false;
     }
     (async () => {
-      if (message.type === 'LCT_COMPLETION') return completionService.get(message.slugs, sender);
+      if (message.type === 'LCT_COMPLETION') {
+        const slugs = LCTCompletion.validateSlugs(message.slugs);
+        return completionService.get(slugs, await privateQuerySender(sender, Date.now() + LCTCompletion.OVERALL_TIMEOUT_MS));
+      }
       if (message.type === 'LCT_OPEN_POPUP') {
         if (typeof api.action?.openPopup !== 'function') {
           throw new Error('This browser cannot open the toolbar popup from the page. Click Company Lens in the browser toolbar.');
