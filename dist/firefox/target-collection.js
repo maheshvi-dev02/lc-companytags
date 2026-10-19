@@ -25,7 +25,7 @@
         frequency: Number.isFinite(row.frequency) && row.frequency >= 0 ? row.frequency : null,
         rank: Number.isInteger(row.rank) && row.rank > 0 ? row.rank : null };
     });
-    return { context: { targetMode: input.targetMode, company, companies, topicMatch: input.topicMatch === 'all' ? 'all' : 'any', window: input.window, difficulty: input.difficulty || '', topics: strings(input.topics), completionFilter: input.completionFilter || 'all', count: Number.isInteger(input.count) && input.count >= 1 && input.count <= 50 ? input.count : questions.length },
+    return { context: { targetMode: input.targetMode, company, companies, topicMatch: input.topicMatch === 'all' ? 'all' : 'any', window: input.window, difficulty: input.difficulty || '', topics: strings(input.topics), excludedTopics: strings(input.excludedTopics), completionFilter: input.completionFilter || 'all', count: Number.isInteger(input.count) && input.count >= 1 && input.count <= 50 ? input.count : questions.length },
       questions, coveredTopics: strings(value.coveredTopics), availableTopicCount: Number.isInteger(value.availableTopicCount) && value.availableTopicCount >= 0 ? value.availableTopicCount : 0,
       sourceRevision: text(value.sourceRevision), total: Number.isInteger(value.total) && value.total >= questions.length ? value.total : questions.length };
   }

@@ -96,7 +96,7 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 .acceptance-help { display:block; max-width:680px; margin:6px 0 0; padding:8px 10px; color:var(--muted); background:var(--wash); border:1px solid var(--line); border-radius:8px; font-size:var(--font-caption); line-height:1.5; overflow-wrap:anywhere; }
 
 /* Global problem filters share the existing rounded, neutral controls. */
-.problem-filters { display:grid; grid-template-columns:minmax(130px,1fr) minmax(140px,1.1fr) minmax(180px,1.3fr) minmax(130px,1fr) auto; align-items:end; gap:12px; margin-top:16px; }
+.problem-filters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; gap:12px; margin-top:16px; }
 .problem-filter { display:block; min-width:0; color:var(--muted); font-size:var(--font-label); }
 .problem-filter > .select-control,.problem-filter > .select-trigger { display:block; width:100%; margin-top:5px; }
 .problem-filter > .select-trigger { display:flex; }
@@ -142,7 +142,7 @@ button.acceptance-rate:hover { background:transparent; text-decoration-style:sol
 @media(max-width:540px) { .problem-filters { grid-template-columns:1fr; } .topic-group-tools { flex-direction:column; gap:8px; } .selected-topic-tools { gap:8px; } .topic-group-toggle { padding:11px 12px; } .topic-group-body { padding:0 12px 12px; } }
 
 /* Company question filters use the same picker and view controls as Problems. */
-.detail-filters { grid-template-columns:minmax(130px,1fr) minmax(140px,1.1fr) minmax(180px,1.3fr) minmax(130px,1fr) auto; align-items:end; }
+.detail-filters { grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; }
 .detail-filters .question-search { grid-column:1/-1; }
 .detail-filters .problem-filter > .select-trigger { display:flex; margin-top:5px; }
 .detail-filters .problem-view-switch { justify-self:start; align-self:end; }

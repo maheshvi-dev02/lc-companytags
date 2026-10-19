@@ -15,6 +15,7 @@
       <label class="target-company-wrap"><span id="target-company-label">Companies (optional)</span><select multiple data-multiple-noun="companies" data-empty="Any company" data-limit="500" data-hint="Include problems from any selected company. No selection includes all companies." id="target-company" aria-label="Target company"><option value="">Any company</option></select></label>
       <label><span>Difficulty</span><select multiple data-multiple-noun="difficulties" data-empty="All difficulties" data-searchable="false" data-limit="3" id="target-difficulty" aria-label="Target difficulty"><option value="">All difficulties</option><option>Easy</option><option>Medium</option><option>Hard</option></select></label>
       <label><span>Topics</span><select multiple data-multiple-noun="topics" data-empty="All topics" data-limit="256" id="target-topic" aria-label="Target topic"><option value="">All topics</option></select></label>
+      <label><span>Exclude topics</span><select id="target-excluded-topics" multiple data-multiple-noun="topics" data-empty="None excluded" data-selected-label="Excluded topics" data-limit="256" data-hint="Hide problems with any selected topic, even if they match an included topic. Changes apply immediately." aria-label="Exclude Target topics"></select></label>
       <label><span>Topic matching</span><select id="target-topic-match" aria-label="Target topic matching"><option value="any">Match any selected topic</option><option value="all">Match all selected topics</option></select></label>
       <label><span>Status</span><select id="target-status" aria-label="Target problem status"><option value="all">All problems</option><option value="solved">Solved</option><option value="not-solved">Not solved</option></select></label>
       <label id="target-count-wrap" hidden><span>List size</span><select id="target-count" aria-label="Target list size"><option value="12">12 questions</option><option value="20" selected>20 questions</option><option value="30">30 questions</option><option value="50">50 questions</option></select></label>
@@ -32,7 +33,7 @@
     <ul id="target-results" class="target-results" aria-label="Target problems" tabindex="-1"></ul>`;
   if (popup) document.querySelector('.problem').after(panel); else $('detail-view').after(panel);
   $('target-expand').hidden = !popup;
-  controls.enhance(['target-company', 'target-difficulty', 'target-topic', 'target-topic-match', 'target-status', 'target-count']);
+  controls.enhance(['target-company', 'target-difficulty', 'target-topic', 'target-excluded-topics', 'target-topic-match', 'target-status', 'target-count']);
   let initialized = false, initializing = null, companies = [], kind = 'random', generation = 0, catalogGeneration = 0;
   let recent = [], recentContext = '', lastResult = null, hasPlan = false, saveQueue = Promise.resolve();
   let savedTargets = [], currentSaved = null, lastContext = null, saving = 0;
@@ -42,7 +43,7 @@
   function node(tag, cls, text) { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; }
   function message(text, error = false) { $('target-message').textContent = text; $('target-message').toggleAttribute('data-error', error); }
   function clearResults(text) { clearCompletion(); generation++; if (editBusy !== 'save') editBusy = null; renderEditor(); $('target-generate').disabled = false; panel.setAttribute('aria-busy', 'false'); lastResult = null; currentSaved = null; lastContext = null; renderActions(); $('target-results').replaceChildren(); $('target-coverage').hidden = true; if (text) message(text); }
-  function preferences() { return { targetMode: kind, company: selected('target-company').length === 1 ? selected('target-company')[0] : '', companies: selected('target-company'), difficulty: selection('target-difficulty'), topics: selected('target-topic'), topicMatch: $('target-topic-match').value, completionFilter: $('target-status').value, count: Number($('target-count').value), hasPlan, savedTargetId: currentSaved?.id || null }; }
+  function preferences() { return { targetMode: kind, company: selected('target-company').length === 1 ? selected('target-company')[0] : '', companies: selected('target-company'), difficulty: selection('target-difficulty'), topics: selected('target-topic'), excludedTopics: selected('target-excluded-topics'), topicMatch: $('target-topic-match').value, completionFilter: $('target-status').value, count: Number($('target-count').value), hasPlan, savedTargetId: currentSaved?.id || null }; }
   function save() { const value = preferences(); saveQueue = saveQueue.then(() => api.storage.local.set({ lctTargetPreferences: value })).catch(() => {}); return saveQueue; }
   function setKind(value) {
     kind = value; $('target-random').setAttribute('aria-pressed', String(kind === 'random')); $('target-plan').setAttribute('aria-pressed', String(kind === 'plan'));
@@ -54,7 +55,7 @@
     $('target-help').textContent = kind === 'plan' ? 'Prioritize company frequency while covering different topics.' : 'Choose optional filters. Recent picks are skipped while you keep picking.';
   }
   function request(targetMode = kind) { return { type: 'LCT_TARGET', targetMode, company: selected('target-company').length === 1 ? selected('target-company')[0] : '', companies: selected('target-company'),
-    difficulty: selection('target-difficulty'), topics: selected('target-topic'), topicMatch: $('target-topic-match').value,
+    difficulty: selection('target-difficulty'), topics: selected('target-topic'), excludedTopics: selected('target-excluded-topics'), topicMatch: $('target-topic-match').value,
     completionFilter: $('target-status').value, count: Number($('target-count').value), window: $('window-select').value }; }
   function companyOptions(values = selected('target-company')) {
     const names = [...new Set([...companies.map(c => c.name), ...values])].sort((a, b) => a.localeCompare(b));
@@ -64,20 +65,22 @@
   async function catalog() {
     const id = ++catalogGeneration;
     try {
-      const result = await api.runtime.sendMessage({ ...request('catalog'), difficulty: '', topics: [], completionFilter: 'all' });
+      const result = await api.runtime.sendMessage({ ...request('catalog'), difficulty: '', topics: [], excludedTopics: [], completionFilter: 'all' });
       if (id !== catalogGeneration) return;
       if (!result?.ok) throw new Error(result?.error || 'Could not load topics.');
-      const values = selected('target-topic');
-      const topics = [...new Set([...(result.topics || []), ...values])].sort((a, b) => a.localeCompare(b));
-      $('target-topic').replaceChildren(...topics.map(topic => new Option(topic, topic)));
-      selection('target-topic', values); controls.sync($('target-topic'));
+      for (const control of ['target-topic', 'target-excluded-topics']) {
+        const values = selected(control);
+        const topics = [...new Set([...(result.topics || []), ...values])].sort((a, b) => a.localeCompare(b));
+        $(control).replaceChildren(...topics.map(topic => new Option(topic, topic)));
+        selection(control, values); controls.sync($(control));
+      }
     } catch (error) { if (id === catalogGeneration) message(error.message, true); }
   }
   async function initialize() {
     if (initialized) return;
     if (initializing) return initializing;
     initializing = (async () => {
-      for (const id of ['target-random', 'target-plan', 'target-company', 'target-difficulty', 'target-topic', 'target-topic-match', 'target-status', 'target-count', 'target-generate']) { $(id).disabled = true; if ($(id).tagName === 'SELECT') controls.sync($(id)); }
+      for (const id of ['target-random', 'target-plan', 'target-company', 'target-difficulty', 'target-topic', 'target-excluded-topics', 'target-topic-match', 'target-status', 'target-count', 'target-generate']) { $(id).disabled = true; if ($(id).tagName === 'SELECT') controls.sync($(id)); }
       message('Loading saved companies…');
       const stored = await api.storage.local.get(['lctTargetPreferences', 'lctSettings']);
       if (core.WINDOW_FILES[stored.lctSettings?.window]) $('window-select').value = stored.lctSettings.window;
@@ -97,13 +100,14 @@
       if ([12, 20, 30, 50].includes(pref.count)) $('target-count').value = String(pref.count);
       setKind(pref.targetMode === 'plan' ? 'plan' : 'random'); hasPlan = pref.hasPlan === true;
       await catalog(); selection('target-topic', Array.isArray(pref.topics) ? pref.topics : pref.topic ? [pref.topic] : []);
-      for (const id of ['target-company', 'target-difficulty', 'target-status', 'target-topic', 'target-topic-match', 'target-count']) controls.sync($(id));
+      restoreExcludedTopics(pref.excludedTopics);
+      for (const id of ['target-company', 'target-difficulty', 'target-status', 'target-topic', 'target-excluded-topics', 'target-topic-match', 'target-count']) controls.sync($(id));
       initialized = true; message(kind === 'plan' ? 'Choose companies, then build your prep list.' : 'Choose optional filters, then pick a problem.');
       await loadCollection();
       const saved = savedTargets.find(target => target.id === pref.savedTargetId);
       if (saved && saved.context.targetMode === kind && visible()) openSaved(saved);
       else if (kind === 'plan' && hasPlan && !Object.hasOwn(pref, 'savedTargetId') && selected('target-company').length && visible()) await generate();
-    })().finally(() => { initializing = null; for (const id of ['target-random', 'target-plan', 'target-company', 'target-difficulty', 'target-topic', 'target-topic-match', 'target-status', 'target-count', 'target-generate']) { $(id).disabled = false; if ($(id).tagName === 'SELECT') controls.sync($(id)); } });
+    })().finally(() => { initializing = null; for (const id of ['target-random', 'target-plan', 'target-company', 'target-difficulty', 'target-topic', 'target-excluded-topics', 'target-topic-match', 'target-status', 'target-count', 'target-generate']) { $(id).disabled = false; if ($(id).tagName === 'SELECT') controls.sync($(id)); } });
     return initializing;
   }
   function render(result) {
@@ -200,7 +204,7 @@
       const activate = () => { openSaved(target); $('target-results').scrollIntoView({ block: 'nearest' }); $('target-results').focus({ preventScroll: true }); };
       open.addEventListener('click', activate); heading.append(open);
       li.addEventListener('click', event => { if (!event.target.closest('button')) activate(); });
-      info.append(heading, node('p', '', [companyNames(target.context) || 'Any company', target.questions.length + ' questions', windowLabel(target.context.window), target.context.difficulty.split(',').join(', ') || 'All difficulties', ...(target.context.topics || []), target.context.completionFilter !== 'all' ? target.context.completionFilter === 'solved' ? 'Solved' : 'Not solved' : '', new Date(target.updatedAt).toLocaleDateString()].filter(Boolean).join(' · ')));
+      info.append(heading, node('p', '', [companyNames(target.context) || 'Any company', target.questions.length + ' questions', windowLabel(target.context.window), target.context.difficulty.split(',').join(', ') || 'All difficulties', ...(target.context.topics || []), target.context.excludedTopics?.length ? 'Excludes ' + target.context.excludedTopics.join(', ') : '', target.context.completionFilter !== 'all' ? target.context.completionFilter === 'solved' ? 'Solved' : 'Not solved' : '', new Date(target.updatedAt).toLocaleDateString()].filter(Boolean).join(' · ')));
       const actions = node('div', 'target-saved-actions');
       for (const [label, callback] of [['Edit', () => startEdit(target, 'edit')], ['Clone', () => startEdit(target, 'clone')], ['CSV', () => download(target)], ['Remove', async button => {
         button.disabled = true;
@@ -239,6 +243,11 @@
     } catch (error) { if (id === generation) message('Your questions are ready, but could not be saved. ' + error.message, true); }
     finally { saving--; renderActions(); }
   }
+  function restoreExcludedTopics(values) {
+    values = (Array.isArray(values) ? values : []).filter(topic => typeof topic === 'string' && topic.trim() && topic.length <= 200).slice(0, 256);
+    for (const topic of values) if (![...$('target-excluded-topics').options].some(option => option.value === topic)) $('target-excluded-topics').append(new Option(topic, topic));
+    selection('target-excluded-topics', values); controls.sync($('target-excluded-topics'));
+  }
   function openSaved(target) {
     editing = null; editBusy = null;
     clearResults(); setKind(target.context.targetMode);
@@ -249,8 +258,9 @@
     $('target-topic-match').value = target.context.topicMatch === 'all' ? 'all' : 'any';
     for (const topic of target.context.topics) if (![...$('target-topic').options].some(option => option.value === topic)) $('target-topic').append(new Option(topic, topic));
     selection('target-topic', target.context.topics);
+    restoreExcludedTopics(target.context.excludedTopics);
     if ([12, 20, 30, 50].includes(target.context.count)) $('target-count').value = String(target.context.count);
-    for (const id of ['target-company', 'target-difficulty', 'target-topic', 'target-topic-match', 'target-status', 'target-count']) controls.sync($(id));
+    for (const id of ['target-company', 'target-difficulty', 'target-topic', 'target-excluded-topics', 'target-topic-match', 'target-status', 'target-count']) controls.sync($(id));
     currentSaved = target; lastContext = target.context; hasPlan = kind === 'plan'; render(target);
     message('Saved target · ' + target.name + ' · ' + windowLabel(target.context.window) + ' · ' + new Date(target.createdAt).toLocaleDateString());
     void catalog(); void save();
@@ -316,7 +326,7 @@
     $(tabs[next]).click(); $(tabs[next]).focus();
   }, true);
   for (const [id, value] of [['target-random', 'random'], ['target-plan', 'plan']]) $(id).addEventListener('click', () => { clearResults(); setKind(value); void catalog(); message(value === 'plan' ? 'Choose companies, then build your prep list.' : 'Pick a problem using these filters.'); void save(); });
-  for (const id of ['target-company', 'target-difficulty', 'target-topic', 'target-topic-match', 'target-status', 'target-count']) $(id).addEventListener('change', () => { clearResults('Filters changed. Generate a new target.'); $('target-generate').disabled = false; if (id === 'target-company') void catalog(); void save(); });
+  for (const id of ['target-company', 'target-difficulty', 'target-topic', 'target-excluded-topics', 'target-topic-match', 'target-status', 'target-count']) $(id).addEventListener('change', () => { clearResults('Filters changed. Generate a new target.'); $('target-generate').disabled = false; if (id === 'target-company') void catalog(); void save(); });
   $('window-select').addEventListener('change', () => { if (initialized) { clearResults('Time window changed. Generate a new target.'); void catalog(); } });
   $('target-generate').addEventListener('click', () => void generate());
   $('target-expand').addEventListener('click', async () => { try { await save(); const result = await api.runtime.sendMessage({ type: 'LCT_OPEN_EXPLORER', mode: 'target' }); if (!result?.ok) throw new Error(result?.error || 'Could not expand Target.'); } catch (error) { message(error.message, true); } });

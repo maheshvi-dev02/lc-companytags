@@ -471,6 +471,7 @@
     const sort = selectedSort(options.sort, 'searchProblems', 'relevance');
     const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
       .filter((topic) => typeof topic === 'string').map((topic) => topic.trim().toLowerCase()).filter(Boolean))) : [];
+    const excludedTopics = (Array.isArray(options.excludedTopics) ? options.excludedTopics : []).filter(value => typeof value === 'string').map(value => value.trim().toLowerCase()).filter(Boolean);
     const topicMatch = options.topicMatch === 'all' ? 'all' : 'any';
     const groupTopic = typeof options.groupTopic === 'string' ? options.groupTopic.trim().toLowerCase() : options.groupTopic;
     const catalog = new Map();
@@ -509,6 +510,7 @@
     let completionUnknownCount = 0;
     for (const { problem, topicKeys } of candidates) {
       if ((difficulty.length && !difficulty.includes((problem.difficulty || '').toLowerCase())) || !matchesProblem(problem, terms)) continue;
+      if (excludedTopics.some(topic => topicKeys.has(topic))) continue;
       if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((topic) => topicKeys.has(topic)) :
         selectedTopics.some((topic) => topicKeys.has(topic)))) continue;
       if (completion.filter !== 'all') {
@@ -591,6 +593,7 @@
     const topic = typeof options.topic === 'string' ? options.topic.toLowerCase() : '';
     const selectedTopics = Array.isArray(options.topics) ? Array.from(new Set(options.topics
       .filter((value) => typeof value === 'string').map((value) => value.trim().toLowerCase()).filter(Boolean))) : [];
+    const excludedTopics = (Array.isArray(options.excludedTopics) ? options.excludedTopics : []).filter(value => typeof value === 'string').map(value => value.trim().toLowerCase()).filter(Boolean);
     const topicMatch = options.topicMatch === 'all' ? 'all' : 'any';
     const groupTopic = typeof options.groupTopic === 'string' ? options.groupTopic.trim().toLowerCase() : options.groupTopic;
     const { terms } = queryTerms(options.query);
@@ -599,6 +602,7 @@
     for (const { record, topicKeys } of candidates) {
       if (record.slug === options.excludeSlug || (difficulty.length && !difficulty.includes((record.difficulty || '').toLowerCase())) ||
           (topic && !record.topics.some((value) => value.toLowerCase() === topic)) || !matchesProblem(record, terms)) continue;
+      if (excludedTopics.some(topic => topicKeys.has(topic))) continue;
       if (selectedTopics.length && !(topicMatch === 'all' ? selectedTopics.every((value) => topicKeys.has(value)) :
         selectedTopics.some((value) => topicKeys.has(value)))) continue;
       let completed = null;

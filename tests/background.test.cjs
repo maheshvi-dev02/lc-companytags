@@ -818,3 +818,17 @@ test('cached completion is limited to extension interfaces and an empty cache ne
   const result = await fixture.dispatch({ type: 'LCT_COMPLETION_CACHED' }, explorerSender()).response;
   assert.equal(result.state, 'empty'); assert.deepEqual(fixture.calls.completionMessages, []);
 });
+
+
+test('company expansion validates topic exclusions and encodes each one in the full-page route', async () => {
+  const fixture = harness({ createTab: () => Promise.resolve({ id: 21 }) });
+  const response = await fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: 'Amazon', excludedTopics: ['Shell', 'Database'] }, sender()).response;
+  assert.equal(response.ok, true);
+  const url = new URL(fixture.calls.createdTabs[0].url);
+  assert.deepEqual(url.searchParams.getAll('excludedTopic'), ['Shell', 'Database']);
+  for (const excludedTopics of ['Shell', [''], [null], Array(257).fill('Array')]) {
+    const invalid = await fixture.dispatch({ type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: 'Amazon', excludedTopics }, sender()).response;
+    assert.equal(invalid.ok, false);
+  }
+  assert.equal(fixture.calls.createdTabs.length, 1);
+});

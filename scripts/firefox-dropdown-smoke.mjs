@@ -197,6 +197,11 @@ try {
   await choose('practice-status-select','all');
   await choose('practice-sort-select','name-asc');
   report.checks.push('Company practice difficulty, completion-status and sort menus open and select.');
+  await choose('practice-excluded-topics', 'Array');
+  await ui.click('#practice-excluded-topics-trigger'); await visibleMenu('practice-excluded-topics');
+  assert.equal(await ui.read(`document.querySelectorAll('#practice-excluded-topics-selected .multi-select-chip').length`), 1);
+  await ui.click('#practice-excluded-topics-clear'); await ui.press('#practice-excluded-topics-search', 'Escape');
+  report.checks.push('Excluded-topic checkboxes auto-apply and keep selected topics accessible in native Firefox practice.');
   await until(`document.querySelectorAll('#practice-questions > li').length > 0`);
   const practiceSlug = await ui.read(`document.querySelector('#practice-questions > li').dataset.slug`);
   completionFixture.setStatus(practiceSlug, 'ac');
@@ -207,6 +212,10 @@ try {
   await ui.click('#mode-target');
   await until(`document.querySelector('#target-company').options.length>2 && !document.querySelector('#target-company-trigger').disabled`);
   await choose('target-company','Microsoft'); await choose('target-difficulty','Medium');
+  await choose('target-excluded-topics', 'Array');
+  await ui.click('#target-excluded-topics-trigger'); await visibleMenu('target-excluded-topics');
+  await ui.click('#target-excluded-topics-clear'); await ui.press('#target-excluded-topics-search', 'Escape');
+  report.checks.push('Target exclusion dropdown opens and auto-applies in the native Firefox popup.');
   await ui.click('#target-company-trigger');
   await ui.click('#target-company-options input[data-value="Google"]');
   assert.equal(await ui.read(`document.querySelectorAll('#target-company-selected button').length`), 2);
@@ -226,7 +235,7 @@ try {
   await visibleMenu('target-company');
   await ui.mutate(`document.querySelector('#target-title').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))`);
   assert.equal(await ui.read(`document.querySelector('#target-company-menu').hidden`),true);
-  report.checks.push('All five Target dropdowns work, long menus scroll, Escape and outside clicks still dismiss.');
+  report.checks.push('All Target dropdowns work, long menus scroll, Escape and outside clicks still dismiss.');
   await ui.click('#target-count-trigger'); await visibleMenu('target-count');
   report.resizeEvents=await ui.read('__resizes'); assert.ok(report.resizeEvents>0);
   report.screenshot=await screenshotExtension(target,'firefox-dropdown-fixed.png');

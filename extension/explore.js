@@ -18,7 +18,7 @@
   let sorts = { ...sortDefaults };
   let sortSave = Promise.resolve();
   const completionFilters = ['all', 'solved', 'not-solved'];
-  const problemViewDefaults = { difficulty: '', topics: [], topicMatch: 'any', completionFilter: 'all', view: 'list' };
+  const problemViewDefaults = { difficulty: '', topics: [], excludedTopics: [], topicMatch: 'any', completionFilter: 'all', view: 'list' };
   let problemView = { ...problemViewDefaults, topics: [] };
   let problemViewSave = Promise.resolve();
   let problemViewDirty = false;
@@ -44,12 +44,13 @@
     (!params.has('window') || Object.hasOwn(core.WINDOW_FILES, params.get('window'))) &&
     (!params.has('difficulty') || core.validDifficultyFilter(params.get('difficulty'))) &&
     (!params.has('topic') || params.get('topic').length <= 200) &&
+    (params.getAll('excludedTopic').length <= 256 && params.getAll('excludedTopic').every(topic => topic.trim() && topic.length <= 200)) &&
     (!params.has('sort') || core.SORT_OPTIONS.practiceQuestions.includes(params.get('sort'))) &&
     (!params.has('completionFilter') || completionFilters.includes(params.get('completionFilter')));
   const problemRoute = !params.has('company') && typeof requestedSlug === 'string' && requestedSlug.length <= 200 && requestedSlug === requestedSlug.trim() && core.SLUG_PATTERN.test(requestedSlug);
   let pendingDetail = companyRoute ? { kind: 'company', name: requestedCompany, title: requestedCompany,
     window: params.get('window'), sort: params.get('sort'),
-    filters: { difficulty: params.get('difficulty') || '', topic: params.get('topic') || '', query: '', completionFilter: params.get('completionFilter') || 'all' }
+    filters: { difficulty: params.get('difficulty') || '', topic: params.get('topic') || '', excludedTopics: params.getAll('excludedTopic'), query: '', completionFilter: params.get('completionFilter') || 'all' }
   } : problemRoute ? { kind: 'problem', slug: requestedSlug, title: core.formatProblemTitle(requestedSlug) } : null;
   let mode = problemRoute ? 'problems' : params.get('mode') === 'companies' ? 'companies' : 'problems';
   const queries = { problems: '', companies: '' };
@@ -84,7 +85,7 @@
   const version = () => `${mode}|${windowKey()}|${status.commit || ''}`;
   const count = value => Number(value || 0).toLocaleString();
   const detailSortKey = frame => frame.kind === 'company' ? 'companyQuestions' : 'problemCompanies';
-  const problemContext = () => JSON.stringify([windowKey(), queries.problems, sorts.problems, problemView.difficulty, problemView.topics.map(topic => topic.toLocaleLowerCase()).sort(), problemView.topicMatch, problemView.completionFilter,
+  const problemContext = () => JSON.stringify([windowKey(), queries.problems, sorts.problems, problemView.difficulty, problemView.topics.map(topic => topic.toLocaleLowerCase()).sort(), problemView.excludedTopics.map(topic => topic.toLocaleLowerCase()).sort(), problemView.topicMatch, problemView.completionFilter,
     problemView.completionFilter === 'all' ? null : completionFingerprint(list.completion)]);
   const grouped = () => mode === 'problems' && problemView.view === 'topics';
   const listVersion = () => JSON.stringify([version(), queries[mode], sorts[mode], mode === 'problems' ? problemContext() : null, mode === 'problems' ? problemView.view : null]);
@@ -155,7 +156,7 @@
   const closeSelectMenu = returnFocus => selectMenus.close(returnFocus);
   const syncSelectControl = select => selectMenus.sync(select);
   function enhanceSelects() {
-    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'problem-difficulty-select', 'topic-match-select', 'detail-topic-match-select', 'problem-status-select', 'detail-status-select'],
+    selectMenus.enhance(['sort-select', 'detail-sort-select', 'window-select', 'difficulty-select', 'problem-difficulty-select', 'topic-match-select', 'detail-topic-match-select', 'problem-status-select', 'detail-status-select', 'excluded-topics', 'detail-excluded-topics'],
       { iconIds: ['sort-select', 'detail-sort-select'] });
   }
   function validatedProblemView(value) {
@@ -166,11 +167,11 @@
       seen.add(topic.trim().toLocaleLowerCase()); return true;
     }).slice(0, 256).map(topic => topic.trim());
     return { difficulty: core.validDifficultyFilter(stored.difficulty) ? stored.difficulty : '',
-      topics, topicMatch: stored.topicMatch === 'all' ? 'all' : 'any', completionFilter: completionFilters.includes(stored.completionFilter) ? stored.completionFilter : 'all', view: stored.view === 'topics' ? 'topics' : 'list' };
+      topics, excludedTopics: [...new Set((Array.isArray(stored.excludedTopics) ? stored.excludedTopics : []).filter(topic => typeof topic === 'string' && topic.trim() && topic.trim().length <= 200).map(topic => topic.trim()))].slice(0, 256), topicMatch: stored.topicMatch === 'all' ? 'all' : 'any', completionFilter: completionFilters.includes(stored.completionFilter) ? stored.completionFilter : 'all', view: stored.view === 'topics' ? 'topics' : 'list' };
   }
   function saveProblemView() {
     problemViewDirty = true;
-    const value = { ...problemView, topics: [...problemView.topics] };
+    const value = { ...problemView, topics: [...problemView.topics], excludedTopics: [...problemView.excludedTopics] };
     problemViewSave = problemViewSave.then(() => api.storage.local.set({ lctExplorerProblemView: value })).catch(() => {
       refreshError = 'Could not save your problem view preference. The current view still works.';
       renderStatus();
@@ -242,7 +243,17 @@
     renderTopicOptions(); positionTopicPicker();
     $('topic-picker-search').focus();
   }
+  function renderExcludedTopics(frame = null) {
+    const select = $((frame ? 'detail-' : '') + 'excluded-topics');
+    const values = (frame ? frame.filters : problemView).excludedTopics;
+    const topics = [...new Set([...(frame ? frame.topics : topicCatalog), ...values])].sort((a, b) => a.localeCompare(b));
+    if (JSON.stringify(Array.from(select.options, option => option.value)) !== JSON.stringify(topics)) {
+      select.replaceChildren(...topics.map(topic => new Option(topic, topic)));
+    }
+    selection(select.id, values); syncSelectControl(select);
+  }
   function renderTopicSelection(frame = null) {
+    renderExcludedTopics(frame);
     const selected = frame ? frame.filters.topics : problemView.topics;
     const prefix = frame ? 'detail-' : '';
     const trigger = $(prefix + 'topic-picker-trigger');
@@ -277,7 +288,7 @@
   }
   const scopeGroups = frame => frame ? frame.topicGroups : topicGroups;
   const scopeContext = frame => frame ? JSON.stringify([frame.name, windowKey(), frame.filters.query, frame.sort, frame.filters.difficulty,
-    frame.filters.topics.map(topic => topic.toLocaleLowerCase()).sort(), frame.filters.topicMatch, frame.filters.completionFilter,
+    frame.filters.topics.map(topic => topic.toLocaleLowerCase()).sort(), frame.filters.excludedTopics.map(topic => topic.toLocaleLowerCase()).sort(), frame.filters.topicMatch, frame.filters.completionFilter,
     frame.filters.completionFilter === 'all' ? null : completionFingerprint(frame.completion)]) : problemContext();
   const scopeGrouped = frame => frame ? frame.kind === 'company' && frame.filters.view === 'topics' : grouped();
   const scopeActive = frame => frame ? frame === activeDetail() && scopeGrouped(frame) : grouped() && !activeDetail();
@@ -300,12 +311,12 @@
   }
   function baseProblemRequest() {
     return { type: 'LCT_SEARCH_PROBLEMS', query: queries.problems, window: windowKey(), sort: sorts.problems,
-      difficulty: problemView.difficulty, topics: [...problemView.topics], topicMatch: problemView.topicMatch, completionFilter: problemView.completionFilter,
+      difficulty: problemView.difficulty, topics: [...problemView.topics], excludedTopics: [...problemView.excludedTopics], topicMatch: problemView.topicMatch, completionFilter: problemView.completionFilter,
       ...(problemView.completionFilter !== 'all' && list.refreshCompletion ? { refreshCompletion: true } : {}) };
   }
   function baseCompanyRequest(frame) {
     return { type: 'LCT_PRACTICE', company: frame.name, window: windowKey(), sort: frame.sort, query: frame.filters.query,
-      difficulty: frame.filters.difficulty, topics: [...frame.filters.topics], topicMatch: frame.filters.topicMatch, completionFilter: frame.filters.completionFilter,
+      difficulty: frame.filters.difficulty, topics: [...frame.filters.topics], excludedTopics: [...frame.filters.excludedTopics], topicMatch: frame.filters.topicMatch, completionFilter: frame.filters.completionFilter,
       ...(frame.filters.completionFilter !== 'all' && frame.refreshCompletion ? { refreshCompletion: true } : {}) };
   }
   function companyFiltersChanged(frame, debounce = false) {
@@ -822,6 +833,7 @@
     }
     const values = [...catalog.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
     if (frame) frame.topics = values; else topicCatalog = values;
+    renderExcludedTopics(frame);
     const metadata = new Map();
     for (const entry of Array.isArray(result.topicGroups) ? result.topicGroups : []) {
       if (!entry || (entry.topic !== null && (typeof entry.topic !== 'string' || !entry.topic.trim())) ||
@@ -947,7 +959,7 @@
     $('topic-groups').setAttribute('aria-busy', String(list.loading));
     const filteredStatus = mode === 'problems' && problemView.completionFilter !== 'all';
     const accountUnavailable = filteredStatus && !readyCompletion(list.completion);
-    const filtered = queries[mode].trim() || (mode === 'problems' && (problemView.difficulty || problemView.topics.length || filteredStatus));
+    const filtered = queries[mode].trim() || (mode === 'problems' && (problemView.difficulty || problemView.topics.length || problemView.excludedTopics.length || filteredStatus));
     const appearances = Array.from(topicGroups.values()).reduce((sum, group) => sum + group.total, 0);
     $('result-summary').textContent = list.loading ? 'Loading saved ' + mode + '…' : accountUnavailable ? completionHint(list.completion)
       : grouped() ? count(list.total) + ' unique problems · ' + count(topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
@@ -965,6 +977,7 @@
     $('problem-difficulty-select').disabled = unavailableFilters; syncSelectControl($('problem-difficulty-select'));
     $('topic-match-select').disabled = unavailableFilters; syncSelectControl($('topic-match-select'));
     $('topic-picker-trigger').disabled = unavailableFilters;
+    $('excluded-topics').disabled = unavailableFilters; syncSelectControl($('excluded-topics'));
     // Account failures must leave All problems available.
     $('problem-status-select').disabled = false; syncSelectControl($('problem-status-select'));
   }
@@ -1090,7 +1103,7 @@
     $('detail-summary').textContent = frame.loading ? 'Loading saved ' + noun + '…' : accountUnavailable ? completionHint(frame.completion)
       : byTopic ? count(frame.total) + ' unique questions · ' + count(frame.topicGroups.size) + ' topic groups · ' + count(appearances) + ' grouped appearances'
       : count(frame.rows.length) + ' of ' + count(frame.total) + ' ' + noun +
-        (frame.kind === 'company' && (frame.filters.query || frame.filters.topics.length || frame.filters.difficulty || filteredStatus) ? ' matching your filters' : '');
+        (frame.kind === 'company' && (frame.filters.query || frame.filters.topics.length || frame.filters.excludedTopics.length || frame.filters.difficulty || filteredStatus) ? ' matching your filters' : '');
     const message = frame.error || (!frame.loading && accountUnavailable ? completionHint(frame.completion)
       : !frame.loading && !frame.available ? unavailable() : !frame.loading && !frame.total
       ? frame.kind === 'company' ? 'No questions match these filters in this time window.' : 'No company matches in this dataset. Coverage may be incomplete.' : '');
@@ -1107,6 +1120,7 @@
       $('difficulty-select').disabled = unavailableFilters; syncSelectControl($('difficulty-select'));
       $('detail-topic-match-select').disabled = unavailableFilters; syncSelectControl($('detail-topic-match-select'));
       $('detail-topic-picker-trigger').disabled = unavailableFilters;
+      $('detail-excluded-topics').disabled = unavailableFilters; syncSelectControl($('detail-excluded-topics'));
       $('detail-status-select').disabled = false; syncSelectControl($('detail-status-select'));
     }
   }
@@ -1263,6 +1277,13 @@
     problemView.completionFilter = completionFilters.includes($('problem-status-select').value) ? $('problem-status-select').value : 'all';
     list.completion = problemView.completionFilter === 'all' ? null : { state: 'checking' };
     problemFiltersChanged();
+  });
+  $('excluded-topics').addEventListener('change', () => {
+    problemView.excludedTopics = Array.from($('excluded-topics').selectedOptions, option => option.value); problemFiltersChanged(true);
+  });
+  $('detail-excluded-topics').addEventListener('change', () => {
+    const frame = activeDetail(); if (!frame || frame.kind !== 'company') return;
+    frame.filters.excludedTopics = Array.from($('detail-excluded-topics').selectedOptions, option => option.value); companyFiltersChanged(frame, true);
   });
   $('topic-match-select').addEventListener('change', () => {
     problemView.topicMatch = $('topic-match-select').value === 'all' ? 'all' : 'any'; problemFiltersChanged();

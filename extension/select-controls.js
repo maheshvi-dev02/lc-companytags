@@ -55,13 +55,13 @@
       menu.style.top = (upward ? Math.max(8, rect.top - 6 - menu.getBoundingClientRect().height) : rect.bottom + 6) + 'px';
     }
     function syncDraft() {
-      if (noun === 'companies') {
+      if (noun === 'companies' || select.dataset.selectedLabel) {
         const options = Array.from(select.options).filter(option => draft.has(option.value));
         const signature = JSON.stringify(options.map(option => [option.value, option.textContent]));
         if (chosen.dataset.selection !== signature) {
           const focused = Array.from(chosenItems.children).indexOf(document.activeElement);
           chosen.dataset.selection = signature; chosen.hidden = !options.length;
-          chosenTitle.textContent = 'Selected companies (' + options.length + ')';
+          chosenTitle.textContent = (select.dataset.selectedLabel || 'Selected companies') + ' (' + options.length + ')';
           chosenItems.replaceChildren(...options.map(option => {
             const remove = make('button', 'multi-select-chip'); remove.type = 'button';
             remove.setAttribute('aria-label', 'Remove ' + option.textContent); remove.title = 'Remove ' + option.textContent;

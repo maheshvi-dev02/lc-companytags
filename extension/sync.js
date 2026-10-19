@@ -424,19 +424,22 @@
       return Object.assign({}, optionsForQuery, { query, offset, limit, sort, window: selectedWindow(optionsForQuery.window) });
     }
     function topicOptions(validated) {
-      const topics = validated.topics === undefined ? [] : validated.topics;
-      if (!Array.isArray(topics) || topics.length > 256) throw new Error('Invalid topic filters: use at most 256 topic names.');
-      const trimmedTopics = [];
-      for (const topic of topics) {
-        if (typeof topic !== 'string' || !topic.trim() || topic.trim().length > 200) throw new Error('Invalid topic filter.');
-        trimmedTopics.push(topic.trim());
+      for (const key of ['topics', 'excludedTopics']) {
+        const topics = validated[key] === undefined ? [] : validated[key];
+        if (!Array.isArray(topics) || topics.length > 256) throw new Error('Invalid topic filters: use at most 256 topic names.');
+        const trimmedTopics = [];
+        for (const topic of topics) {
+          if (typeof topic !== 'string' || !topic.trim() || topic.trim().length > 200) throw new Error('Invalid topic filter.');
+          trimmedTopics.push(topic.trim());
+        }
+        validated[key] = [...new Set(trimmedTopics)];
       }
       const topicMatch = validated.topicMatch === undefined ? 'any' : validated.topicMatch;
       if (typeof topicMatch !== 'string' || !['any', 'all'].includes(topicMatch)) throw new Error('Invalid topic match mode.');
       const groupTopic = validated.groupTopic;
       if (groupTopic !== undefined && groupTopic !== null &&
           (typeof groupTopic !== 'string' || !groupTopic.trim() || groupTopic.trim().length > 200)) throw new Error('Invalid topic group.');
-      Object.assign(validated, { topics: trimmedTopics, topicMatch,
+      Object.assign(validated, { topicMatch,
         groupTopic: typeof groupTopic === 'string' ? groupTopic.trim() : groupTopic });
       return validated;
     }

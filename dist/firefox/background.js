@@ -148,11 +148,12 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         if (slug !== undefined && (mode !== 'problems' || typeof slug !== 'string' || slug.length > 200 || slug !== slug.trim() || !LCTCore.SLUG_PATTERN.test(slug))) throw new Error('Invalid explorer problem.');
         const company = message.company;
         if (company !== undefined && (mode !== 'companies' || slug !== undefined || typeof company !== 'string' || !company.trim() || company !== company.trim() || company.length > 200)) throw new Error('Invalid explorer company.');
-        const contextKeys = ['window', 'difficulty', 'topic', 'sort', 'completionFilter'];
+        const contextKeys = ['window', 'difficulty', 'topic', 'sort', 'completionFilter', 'excludedTopics'];
         if (company === undefined && contextKeys.some(key => message[key] !== undefined)) throw new Error('Invalid explorer practice context.');
         if (company !== undefined && (
           (message.window !== undefined && (typeof message.window !== 'string' || !Object.hasOwn(LCTCore.WINDOW_FILES, message.window))) ||
           (message.difficulty !== undefined && !LCTCore.validDifficultyFilter(message.difficulty)) ||
+          (message.excludedTopics !== undefined && (!Array.isArray(message.excludedTopics) || message.excludedTopics.length > 256 || message.excludedTopics.some(topic => typeof topic !== 'string' || !topic.trim() || topic.length > 200))) ||
           (message.topic !== undefined && (typeof message.topic !== 'string' || message.topic.length > 200)) ||
           (message.sort !== undefined && !LCTCore.SORT_OPTIONS.practiceQuestions.includes(message.sort)) ||
           (message.completionFilter !== undefined && !['all', 'solved', 'not-solved'].includes(message.completionFilter))
@@ -161,7 +162,10 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
         if (slug !== undefined) params.set('slug', slug);
         if (company !== undefined) {
           params.set('company', company);
-          for (const key of contextKeys) if (message[key] !== undefined) params.set(key, message[key]);
+          for (const key of contextKeys) if (message[key] !== undefined) {
+            if (key === 'excludedTopics') for (const topic of message[key]) params.append('excludedTopic', topic.trim());
+            else params.set(key, message[key]);
+          }
         }
         const tab = { url: api.runtime.getURL('explore.html') + '?' + params.toString(), active: true };
         // Keep the full page in the browser window that requested it. Never use

@@ -455,6 +455,7 @@
     clearPracticeQuestions();
     practiceCompany = company;
     selection('difficulty-select', '');
+    selection('practice-excluded-topics', []); selectMenus.sync($('practice-excluded-topics'));
     selectMenus.sync($('difficulty-select'));
     $('topic-input').value = '';
     render();
@@ -463,7 +464,7 @@
   }
 
   function practiceContext() {
-    return JSON.stringify([practiceCompany, selectedWindow(), selection('difficulty-select'), $('topic-input').value.trim(), practiceSort, practiceCompletionFilter(), slug]);
+    return JSON.stringify([practiceCompany, selectedWindow(), selection('difficulty-select'), $('topic-input').value.trim(), Array.from($('practice-excluded-topics').selectedOptions, option => option.value), practiceSort, practiceCompletionFilter(), slug]);
   }
 
   function clearPracticeQuestions() {
@@ -617,7 +618,7 @@
     const context = practiceContext();
     const request = { type: 'LCT_OPEN_EXPLORER', mode: 'companies', company: practiceCompany,
       window: selectedWindow(), difficulty: selection('difficulty-select'),
-      topic: $('topic-input').value.trim(), sort: practiceSort, completionFilter: practiceCompletionFilter() };
+      topic: $('topic-input').value.trim(), excludedTopics: Array.from($('practice-excluded-topics').selectedOptions, option => option.value), sort: practiceSort, completionFilter: practiceCompletionFilter() };
     selectMenus.close();
     closeCompanySort();
     practiceOpening = true;
@@ -683,6 +684,7 @@
     const context = practiceContext();
     const request = { type: 'LCT_PRACTICE', company: practiceCompany, window: selectedWindow(), sort: practiceSort, completionFilter: practiceCompletionFilter() };
     if (selection('difficulty-select')) request.difficulty = selection('difficulty-select');
+    request.excludedTopics = Array.from($('practice-excluded-topics').selectedOptions, option => option.value);
     if ($('topic-input').value.trim()) request.topic = $('topic-input').value.trim();
     const current = () => id === practiceRequestId && Boolean(practiceCompany) && context === practiceContext();
     if (!append) clearPracticeQuestions();
@@ -700,6 +702,10 @@
         refreshCompletion = false;
         if (!current()) return;
         if (!result?.ok) throw new Error(result?.error || 'Could not load practice questions. Try again.');
+        const excludedSelect = $('practice-excluded-topics');
+        const topics = [...new Set([...(result.topics || []), ...request.excludedTopics])].sort((a, b) => a.localeCompare(b));
+        if (JSON.stringify(Array.from(excludedSelect.options, option => option.value)) !== JSON.stringify(topics)) excludedSelect.replaceChildren(...topics.map(topic => new Option(topic, topic)));
+        selection('practice-excluded-topics', request.excludedTopics); selectMenus.sync(excludedSelect);
         const revision = practiceSourceRevision(result);
         const filtered = request.completionFilter !== 'all';
         const nextCompletionRevision = filtered ? completionFingerprint(result.completion) : null;
@@ -875,6 +881,7 @@
     const returnButton = Array.from($('companies').querySelectorAll('.practice-company')).find(button => button.dataset.company === previousCompany);
     (returnButton || $('window-select-trigger')).focus();
   });
+  $('practice-excluded-topics').addEventListener('change', () => void loadPractice({ keepFilters: true }));
   $('difficulty-select').addEventListener('change', () => void loadPractice({ keepFilters: true }));
   $('practice-sort-select').addEventListener('change', changePracticeSort);
   $('practice-status-select').addEventListener('change', () => void loadPractice());
@@ -977,7 +984,7 @@
     await load();
   }
   setupCompanySort();
-  selectMenus.enhance(['window-select', 'difficulty-select', 'practice-status-select', 'practice-sort-select'], { iconIds: ['practice-sort-select'] });
+  selectMenus.enhance(['window-select', 'difficulty-select', 'practice-excluded-topics', 'practice-status-select', 'practice-sort-select'], { iconIds: ['practice-sort-select'] });
   syncPracticeSort();
   void start();
 })();
