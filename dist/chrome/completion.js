@@ -159,7 +159,7 @@
     let requestQueue = Promise.resolve();
     const now = typeof options.now === 'function' ? options.now : Date.now;
     const snapshotTTL = Number.isFinite(options.snapshotTTL) && options.snapshotTTL > 0 ? options.snapshotTTL : 60000;
-    let snapshotCache = null, snapshotFlight = null, identityFlight = null, activeSnapshotKey = null;
+    let snapshotCache = null, snapshotContext = null, snapshotFlight = null, identityFlight = null, activeSnapshotKey = null;
     let snapshotEpoch = 0, revisionCounter = 0;
     const revisionPrefix = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
 
@@ -256,7 +256,7 @@
 
     function invalidateSnapshot() {
       snapshotEpoch++;
-      snapshotCache = null;
+      snapshotCache = null; snapshotContext = null;
       snapshotFlight = null;
       activeSnapshotKey = null;
     }
@@ -313,7 +313,7 @@
         try { return await bounded(snapshotFlight.promise, deadline - Date.now()); }
         catch (_) { return snapshotFailure('unavailable', site); }
       }
-      snapshotCache = null;
+      // Keep the last verified snapshot available for immediate display while revalidating.
       const epoch = ++snapshotEpoch;
       const flight = { key, epoch, promise: null };
       flight.promise = (async () => {
@@ -339,12 +339,24 @@
         const snapshot = Object.freeze({ state: 'ready', sessionKey: key, site,
           revision: revisionPrefix + '-' + (++revisionCounter), checkedAt: new Date(now()).toISOString(),
           completed: Object.freeze(completed) });
-        snapshotCache = snapshot;
+        snapshotCache = snapshot; snapshotContext = contextKey(tab);
         return snapshot;
       })();
       snapshotFlight = flight;
       flight.promise.finally(() => { if (snapshotFlight === flight) snapshotFlight = null; }).catch(() => {});
       return flight.promise;
+    }
+
+    async function getCached(sender) {
+      const cached = snapshotCache;
+      // Display-only cache: never used to decide solved-filter membership before
+      // account verification. It stays in background memory, bounded to five minutes.
+      const age = cached ? now() - Date.parse(cached.checkedAt) : Infinity;
+      if (!cached || age < 0 || age > 5 * 60000) return { ok: true, state: 'empty' };
+      let context;
+      try { context = await chooseContext(sender, Date.now() + overallTimeoutMs); } catch (_) { return { ok: true, state: 'empty' }; }
+      if (!context || snapshotCache !== cached || contextKey(context) !== snapshotContext) return { ok: true, state: 'empty' };
+      return { ok: true, ...cached, cached: true };
     }
 
     async function get(slugs, sender, controls = {}) {
@@ -386,7 +398,7 @@
       return { ok: true, state: 'ready', sessionKey, site, completed };
     }
 
-    return { get, getSnapshot };
+    return { get, getSnapshot, getCached };
   }
 
   return { ORIGINS, BATCH_SIZE, FETCH_TIMEOUT_MS, RESPONSE_TIMEOUT_MS, OVERALL_TIMEOUT_MS, validateSlugs, officialOrigin, isExplorerSender,

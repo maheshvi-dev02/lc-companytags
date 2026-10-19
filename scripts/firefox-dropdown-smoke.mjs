@@ -230,6 +230,31 @@ try {
   await ui.click('#target-count-trigger'); await visibleMenu('target-count');
   report.resizeEvents=await ui.read('__resizes'); assert.ok(report.resizeEvents>0);
   report.screenshot=await screenshotExtension(target,'firefox-dropdown-fixed.png');
+  const explorerUrl = report.addon.manifestURL.replace('manifest.json', 'explore.html?mode=problems&query=' + practiceSlug);
+  const explorerTab = await evaluateBackground(`return (await browser.tabs.create({ url: ${JSON.stringify(explorerUrl)}, active: true })).id;`);
+  // Firefox extension-process tabs are not exposed to Playwright. Read the
+  // actual document through the background's same-extension view API.
+  const readExplorer = async () => JSON.parse(await evaluateConsoleRaw(`JSON.stringify((() => {
+    const view = browser.extension.getViews({type:'tab'}).find(v => v.location.href === ${JSON.stringify(explorerUrl)});
+    const tick = view?.document.querySelector(${JSON.stringify('#results [data-slug="' + practiceSlug + '"] .completion-indicator')});
+    return { oldDocument: Boolean(view?.__beforeReload), attached: Boolean(tick), visible: Boolean(tick && !tick.hidden && tick.getClientRects().length), state: view?.document.querySelector('#completion-status')?.dataset.state };
+  })())`));
+  const untilExplorer = async predicate => {
+    let state;
+    for (let i = 0; i < 200; i++) { state = await readExplorer(); if (predicate(state)) return state; await new Promise(resolve => setTimeout(resolve, 50)); }
+    throw new Error('Firefox Explorer did not settle: ' + JSON.stringify(state));
+  };
+  await untilExplorer(state => state.visible && state.state === 'ready');
+  await evaluateConsoleRaw(`browser.extension.getViews({type:'tab'}).find(v => v.location.href === ${JSON.stringify(explorerUrl)}).__beforeReload = true; 'marked'`);
+  completionFixture.state.holdNext = true;
+  await evaluateBackground(`await browser.tabs.reload(${explorerTab}); return 'reloaded';`);
+  await untilExplorer(state => !state.oldDocument && state.attached);
+  for (let i = 0; i < 150 && !completionFixture.pending.length; i++) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(completionFixture.pending.length, 1);
+  assert.equal((await readExplorer()).visible, true, 'Firefox shows the cached tick before the held catalog response');
+  completionFixture.releaseAll();
+  await untilExplorer(state => state.visible && state.state === 'ready');
+  report.checks.push('Firefox Explorer reload keeps recent completed ticks visible before the network revalidation finishes.');
   report.status='passed';
 } catch(error) {report.status='failed';report.error=error.stack;process.exitCode=1;}
 finally {rdp?.socket.destroy();await context?.close();await writeFile(path.join(output,'firefox-dropdown-report.json'),JSON.stringify(report,null,2));}

@@ -62,6 +62,7 @@
   let detailRequest = 0;
   const completionTTL = 60_000;
   const completionCache = new Map();
+  const completionValidated = new Set();
   let completionSession = null;
   let completionSnapshotFingerprint = null;
   let filteredCompletionEpoch = 0;
@@ -523,7 +524,7 @@
     // Supersede older visible-row checks before using the verified immutable
     // snapshot. Its private status fields never enter the source dataset.
     if (completionSnapshotFingerprint !== fingerprint || completionSession !== meta.sessionKey || completionState !== 'ready') {
-      completionEpoch++; completionCache.clear();
+      completionEpoch++; completionCache.clear(); completionValidated.clear();
     }
     completionSnapshotFingerprint = fingerprint;
     completionSession = meta.sessionKey; completionSite = meta.site; completionState = 'ready';
@@ -561,6 +562,7 @@
     status.dataset.state = completionState;
     const label = completionSiteLabel(completionSite);
     const text = completionState === 'ready' && label ? 'Completed status from ' + label
+      : completionState === 'refreshing' ? 'Updating completed status…'
       : completionState === 'signed-out' ? 'Sign in to LeetCode to show completed problems.'
       : completionState === 'no-tab' ? 'Open a signed-in LeetCode tab to show completed problems.'
       : completionState === 'checking' ? 'Checking completed status…' : 'Could not check completed status. Refresh your LeetCode tab and return here to retry.';
@@ -571,7 +573,7 @@
   function paintCompletionIndicators() {
     for (const row of document.querySelectorAll('.question-row[data-slug]')) {
       const indicator = row.querySelector('.completion-indicator');
-      if (indicator) indicator.hidden = !(completionState === 'ready' && completionSession && completionCache.get(row.dataset.slug) === true);
+      if (indicator) indicator.hidden = !(['ready', 'refreshing'].includes(completionState) && completionSession && completionCache.get(row.dataset.slug) === true);
     }
   }
   function visibleCompletionSlugs() {
@@ -585,13 +587,15 @@
     return [...slugs];
   }
   function clearCompletionState(state = 'checking', site = null) {
-    completionCache.clear(); completionSession = null; completionSite = site; completionState = state;
+    completionCache.clear(); completionValidated.clear(); completionSession = null; completionSite = site; completionState = state;
     paintCompletionIndicators(); renderCompletionStatus();
   }
   function refreshCompletionStatus(forceSnapshot = true) {
     completionEpoch++; completionRefreshedAt = Date.now(); completionSnapshotFingerprint = null;
-    completionBlocked = false; completionIdentityNeeded = true; completionNeedsScan = true;
-    clearCompletionState();
+    completionBlocked = false; completionIdentityNeeded = true; completionNeedsScan = true; completionValidated.clear();
+    if (!activeFilteredOwner() && completionSession && ['ready', 'refreshing'].includes(completionState)) {
+      completionState = 'refreshing'; renderCompletionStatus();
+    } else clearCompletionState();
     clearFilteredCompletionResults({ force: forceSnapshot === true });
     const owner = activeFilteredOwner();
     if (owner) {
@@ -619,7 +623,7 @@
     try {
       while (epoch === completionEpoch && !document.hidden && !completionBlocked && !activeFilteredOwner()) {
         completionNeedsScan = false;
-        const slugs = visibleCompletionSlugs().filter(slug => !completionCache.has(slug)).slice(0, 100);
+        const slugs = visibleCompletionSlugs().filter(slug => !completionValidated.has(slug)).slice(0, 100);
         if (!slugs.length && !completionIdentityNeeded) break;
         const result = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs, refreshCompletion: completionIdentityNeeded });
         if (epoch !== completionEpoch || activeFilteredOwner()) break;
@@ -636,15 +640,13 @@
         if (typeof result.sessionKey !== 'string' || !result.sessionKey || !completionSiteLabel(result.site)) {
           throw new Error('Completed account unavailable');
         }
-        // Every backend batch verifies the account. A changed identity must
-        // restart the latest pass, rather than combine checks from two users.
-        if (completionSession && (completionSession !== result.sessionKey || completionSite !== result.site)) {
-          refreshCompletionStatus(); break;
-        }
+        // Keep same-account cached marks until their individual rows are revalidated.
+        // Identity-only replies can arrive before the dataset rows have rendered.
+        if (completionSession !== result.sessionKey || completionSite !== result.site) { completionCache.clear(); completionValidated.clear(); }
         completionSession = result.sessionKey; completionSite = result.site; completionState = 'ready';
         completionIdentityNeeded = false;
         const completed = result.completed && typeof result.completed === 'object' && !Array.isArray(result.completed) ? result.completed : {};
-        for (const slug of slugs) completionCache.set(slug, completed[slug] === true ? true : completed[slug] === false ? false : null);
+        for (const slug of slugs) { completionCache.set(slug, completed[slug] === true ? true : completed[slug] === false ? false : null); completionValidated.add(slug); }
         paintCompletionIndicators(); renderCompletionStatus();
       }
     } catch (_) {
@@ -661,7 +663,7 @@
     const indicator = node('span', 'completion-indicator');
     indicator.title = 'Completed on LeetCode'; indicator.setAttribute('role', 'img');
     indicator.setAttribute('aria-label', 'Completed on LeetCode');
-    indicator.hidden = !(completionState === 'ready' && completionSession && completionCache.get(slug) === true);
+    indicator.hidden = !(['ready', 'refreshing'].includes(completionState) && completionSession && completionCache.get(slug) === true);
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('fill', 'none'); icon.setAttribute('stroke', 'currentColor');
     icon.setAttribute('stroke-width', '1.75'); icon.setAttribute('stroke-linecap', 'round'); icon.setAttribute('stroke-linejoin', 'round');
@@ -1407,6 +1409,7 @@
     if (reload) reloadCurrent();
   });
   async function start() {
+    const cachedCompletion = api.runtime.sendMessage({ type: 'LCT_COMPLETION_CACHED' }).catch(() => null);
     try {
       const stored = await api.storage.local.get(['lctSettings', 'lctStatus', 'lctExplorerSorts', 'lctExplorerProblemView']);
       settings = { ...defaults, ...stored.lctSettings }; status = stored.lctStatus || {};
@@ -1414,6 +1417,16 @@
       if (!problemViewDirty) problemView = validatedProblemView(stored.lctExplorerProblemView);
       if (!companyRoute && !problemRoute && mode === 'problems' && completionFilters.includes(params.get('completionFilter'))) problemView.completionFilter = params.get('completionFilter');
     } catch (_) { /* The cache request below reports a usable connection error. */ }
+    const cached = await cachedCompletion;
+    if (!completionSession && !completionBlocked && cached?.ok && cached.cached === true && cached.state === 'ready' &&
+        typeof cached.sessionKey === 'string' && cached.sessionKey && completionSiteLabel(cached.site) &&
+        cached.completed && typeof cached.completed === 'object' && !Array.isArray(cached.completed)) {
+      for (const [slug, completed] of Object.entries(cached.completed)) {
+        if (core.SLUG_PATTERN.test(slug) && slug.length <= 200) completionCache.set(slug, completed === true ? true : completed === false ? false : null);
+      }
+      completionSession = cached.sessionKey; completionSite = cached.site; completionState = 'refreshing';
+      completionRefreshedAt = Date.now(); completionIdentityNeeded = true;
+    }
     // Consume the initial route once. User navigation can cancel it while the
     // preferences load; automatic storage updates cannot reopen it later.
     const initialDetail = pendingDetail;

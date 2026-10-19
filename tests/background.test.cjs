@@ -808,3 +808,13 @@ test('Target collection messages reject content pages and unrelated senders befo
   }
   noDataWork(fixture.calls);
 });
+
+test('cached completion is limited to extension interfaces and an empty cache needs no account request', async () => {
+  const fixture = harness();
+  for (const caller of [sender(), explorerSender({ id: 'other-extension' }), explorerSender({ url: 'https://leetcode.com/explore.html' })]) {
+    assert.equal(fixture.dispatch({ type: 'LCT_COMPLETION_CACHED' }, caller).accepted, false);
+  }
+  assert.deepEqual(fixture.calls.queriedTabs, []);
+  const result = await fixture.dispatch({ type: 'LCT_COMPLETION_CACHED' }, explorerSender()).response;
+  assert.equal(result.state, 'empty'); assert.deepEqual(fixture.calls.completionMessages, []);
+});

@@ -2,10 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createCompletionService } = require('../extension/completion.js');
 const sender = { tab: { id: 1, windowId: 1, incognito: false } };
-function fixture() {
+function fixture(options = {}) {
   const state = { account: 'alpha', statuses: { 'two-sum': 'ac', 'add-two-numbers': null }, available: [], error: false };
   const calls = [];
-  const service = createCompletionService({ tabs: { query: async () => state.available,
+  const service = createCompletionService({ ...options, tabs: { query: async () => state.available,
     sendMessage: async () => { throw new Error('No tab should be needed.'); } },
     fetch: async (url, options) => {
       calls.push({ url, options });
@@ -73,4 +73,22 @@ test('failed direct requests can use any same-store LeetCode tab without visitin
       assert.equal(id, 12); bridged++; return { ok: true, site: 'https://leetcode.com', state: 'ready', username: 'alpha', completed: message.type.includes('SNAPSHOT') ? { 'two-sum': true } : {} };
     } } });
   assert.equal((await service.get(['two-sum'], sender)).completed['two-sum'], true); assert.equal(bridged, 2);
+});
+
+test('display cache reads use no network, stay within their browser context, expire, and clear on sign-out', async () => {
+  let clock = Date.now();
+  const { service, calls, state } = fixture({ now: () => clock });
+  assert.equal((await service.getCached(sender)).state, 'empty');
+  await service.get(['two-sum'], sender);
+  const requestCount = calls.length;
+  const cached = await service.getCached(sender);
+  assert.equal(cached.cached, true); assert.equal(cached.completed['two-sum'], true);
+  assert.equal(calls.length, requestCount, 'Restoring the UI must not wait for another HTTP request.');
+  assert.equal((await service.getCached({ tab: { incognito: true } })).state, 'empty');
+  assert.equal((await service.getCached({ tab: { cookieStoreId: 'firefox-container-2' } })).state, 'empty');
+  clock += 5 * 60000 + 1;
+  assert.equal((await service.getCached(sender)).state, 'empty');
+  clock -= 5 * 60000 + 1; state.account = null;
+  await service.get(['two-sum'], sender);
+  assert.equal((await service.getCached(sender)).state, 'empty');
 });

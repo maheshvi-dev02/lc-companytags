@@ -196,7 +196,7 @@ export async function exerciseCompletion(ui, { fixture, data, core, output, brow
     for (let attempt = 0; attempt < 200 && !fixture.pending.length; attempt++) await pause(50);
     assert.equal(fixture.pending.length, 1, 'A real question-status response must be delayed for the account-race test.');
     fixture.setStatus('two-sum', null, 'beta'); fixture.setAccount('beta');
-    await refresh(); await noMarks();
+    await refresh(); await status('refreshing');
     await ui.mutate("globalThis.__completionPaints=[];globalThis.__completionObserver=new MutationObserver(()=>{const marks=Array.from(document.querySelectorAll('#results .question-row')).filter(row=>row.querySelector('.completion-indicator')?.getClientRects().length).map(row=>row.dataset.slug);globalThis.__completionPaints.push(marks);});__completionObserver.observe(document.querySelector('#results'),{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','style']});");
     fixture.releaseAll(); await status('ready'); await assertMarks(rows, globalRows({ query: 'two sum' }));
     assert.equal(await ui.read("__completionPaints.some(slugs=>slugs.includes('two-sum'))"), false, 'Late alpha completion must never repaint after beta refresh supersedes it.');
