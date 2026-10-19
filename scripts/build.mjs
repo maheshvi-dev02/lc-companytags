@@ -55,7 +55,7 @@ const common = {
   icons: {16:'icons/16.png',32:'icons/32.png',48:'icons/48.png',128:'icons/128.png'},
   content_scripts: [{ matches, js: ['core.js', 'completion.js', 'lookup.js', 'logo-catalog.js', 'company-logos.js', 'completion-content.js', 'content.js'], run_at: 'document_idle' }],
   web_accessible_resources: [{ resources: ['logos/*.svg', 'logos/*.png'], matches }],
-  content_security_policy: {extension_pages: "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com"}
+  content_security_policy: {extension_pages: "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com https://leetcode.com https://www.leetcode.com https://leetcode.cn https://www.leetcode.cn"}
 };
 
 function crc32(bytes) {

@@ -145,7 +145,7 @@
 
   function result(state, site = null) {
     const messages = {
-      'signed-out': 'Sign in to LeetCode in an open tab to show completed problems.',
+      'signed-out': 'Sign in to LeetCode, then return here to show completed problems.',
       'no-tab': 'Open a signed-in LeetCode tab to check completed problems.',
       unavailable: 'Could not check completed problems. Refresh your LeetCode tab after updating the extension, then try again.'
     };
@@ -171,6 +171,42 @@
       });
     }
 
+    async function directRequest(context, message, deadline) {
+      const site = officialOrigin(context.url), catalog = message.type === 'LCT_COMPLETION_SNAPSHOT_QUERY';
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.max(0, Math.min(FETCH_TIMEOUT_MS, deadline - Date.now())));
+      let reply;
+      try {
+        const payload = catalog ? buildSnapshotQuery() : buildQuery(message.slugs);
+        const response = await options.fetch(site + '/graphql/', { method: 'POST', credentials: 'include',
+          cache: 'no-store', redirect: 'error', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload), signal: controller.signal });
+        if (!response.ok) throw new Error('Completion unavailable.');
+        const raw = await response.json();
+        reply = { ok: true, site, ...(catalog ? parseSnapshotResponse(raw) : parseBridgeResponse(raw, message.slugs)) };
+      } catch (_) { reply = { ok: true, site, ...unavailableBridge() }; }
+      finally { clearTimeout(timer); }
+      // Some browser/site configurations reject cross-origin credentials. A tab
+      // in this same cookie store can perform the request without changing pages.
+      if (reply.state !== 'ready' && context.fallback && Date.now() < deadline) {
+        try { return await tabs.sendMessage(context.fallback.id, message, { frameId: 0 }); } catch (_) { /* Keep the explicit failure. */ }
+      }
+      return reply;
+    }
+
+    async function chooseContext(sender, deadline) {
+      const candidates = await bounded(tabs.query({ url: MATCHES.slice() }), deadline - Date.now());
+      const tab = chooseTab(candidates, sender);
+      const source = sender?.tab;
+      const privateMode = typeof source?.incognito === 'boolean' ? source.incognito : options.incognito === true;
+      const isContainer = value => typeof value === 'string' && value !== 'firefox-default';
+      if (typeof options.fetch !== 'function' || privateMode || isContainer(source?.cookieStoreId) || isContainer(tab?.cookieStoreId)) return tab;
+      // A stable context survives closing the last LeetCode tab. No cookie or
+      // token is read: fetch uses the browser's existing signed-in session.
+      return { id: -1, direct: true, url: officialOrigin(tab?.url) || snapshotCache?.site || 'https://leetcode.com', incognito: false,
+        cookieStoreId: 'default', fallback: tab };
+    }
+
     function requestMessage(tab, message, deadline) {
       return new Promise((resolve, reject) => {
         let settled = false;
@@ -187,7 +223,7 @@
             finish(reject, new Error('Completion request timed out.'));
             return null;
           }
-          return tabs.sendMessage(tab.id, message, { frameId: 0 });
+          return tab.direct ? directRequest(tab, message, deadline) : tabs.sendMessage(tab.id, message, { frameId: 0 });
         });
         // A caller timeout never unlocks the actual transport. Wait for the
         // browser message to settle, and skip queued callers that expired.
@@ -200,7 +236,8 @@
       const source = sender?.tab;
       const incognito = typeof source?.incognito === 'boolean' ? source.incognito : options.incognito === true;
       const eligible = Array.isArray(candidates) ? candidates.filter((tab) => tab && Number.isInteger(tab.id) && tab.id >= 0 &&
-        !tab.discarded && (tab.incognito === true) === incognito && officialOrigin(tab.url)) : [];
+        !tab.discarded && (tab.incognito === true) === incognito &&
+        (!source?.cookieStoreId || source.cookieStoreId === 'firefox-default' || tab.cookieStoreId === source.cookieStoreId) && officialOrigin(tab.url)) : [];
       const usedAt = (tab) => typeof tab.lastAccessed === 'number' && Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0;
       eligible.sort((a, b) => Number(b.windowId === source?.windowId) - Number(a.windowId === source?.windowId) ||
         Number(b.active === true) - Number(a.active === true) || usedAt(b) - usedAt(a) || b.id - a.id);
@@ -249,7 +286,7 @@
       const deadline = Math.min(Date.now() + overallTimeoutMs, controls.deadlineAt === undefined ? Infinity : controls.deadlineAt);
       if (Date.now() >= deadline) { invalidateSnapshot(); return snapshotFailure('unavailable', null); }
       let tab;
-      try { tab = chooseTab(await bounded(tabs.query({ url: MATCHES.slice() }), deadline - Date.now()), sender); }
+      try { tab = await chooseContext(sender, deadline); }
       catch (_) { invalidateSnapshot(); return snapshotFailure('unavailable', null); }
       if (!tab) { invalidateSnapshot(); return snapshotFailure('no-tab', null); }
       const site = officialOrigin(tab.url);
@@ -310,11 +347,18 @@
       return flight.promise;
     }
 
-    async function get(slugs, sender) {
+    async function get(slugs, sender, controls = {}) {
       const requested = validateSlugs(slugs);
+      const force = validateRefresh(controls.force);
+      if (typeof options.fetch === 'function') {
+        const snapshot = await getSnapshot(sender, { ...controls, force });
+        if (snapshot.state !== 'ready') return { ok: true, ...snapshot };
+        return { ok: true, ...snapshot, completed: Object.fromEntries(requested.map(slug =>
+          [slug, Object.hasOwn(snapshot.completed, slug) ? snapshot.completed[slug] : null])) };
+      }
       const deadline = Date.now() + overallTimeoutMs;
       let tab;
-      try { tab = chooseTab(await bounded(tabs.query({ url: MATCHES.slice() }), deadline - Date.now()), sender); }
+      try { tab = await chooseContext(sender, deadline); }
       catch (_) { return result('unavailable'); }
       if (!tab) return result('no-tab');
       const site = officialOrigin(tab.url);

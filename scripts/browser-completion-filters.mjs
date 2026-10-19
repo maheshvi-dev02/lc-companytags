@@ -142,7 +142,7 @@ export async function exerciseCompletionFilters(ui, { fixture, data, core, outpu
     stage('full-source oracle and unavailable account versus empty matches');
     await ui.fill('#global-search', 'tree'); await flat(ui, globalRows, '#result-summary', globalOptions, 50);
     await ui.select('#problem-status-select', 'solved'); globalOptions.completionFilter = 'solved';
-    await rows(ui, globalRows, []); await nonready(ui, globalOptions, 'no-tab');
+    await rows(ui, globalRows, []); await nonready(ui, globalOptions, 'unavailable');
     assert.match(await ui.read(text('#result-summary')), /LeetCode|sign.in|status/i);
     await ui.select('#problem-status-select', 'all'); globalOptions.completionFilter = 'all';
     await flat(ui, globalRows, '#result-summary', globalOptions, 50);

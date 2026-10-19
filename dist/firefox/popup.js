@@ -31,6 +31,7 @@
   let practiceCompletionRevision = null;
   let practiceRefreshScheduled = false;
   const completionTTL = 60_000;
+  let practiceIndicatorEpoch = 0;
   let practiceNeedsRetry = false;
   let practiceError = '';
   let practiceRequestId = 0;
@@ -517,7 +518,7 @@
 
   function renderPracticeCompletionStatus() {
     const line = $('practice-completion-status');
-    line.hidden = practiceCompletionFilter() === 'all';
+    line.hidden = practiceCompletionFilter() === 'all' && !practiceQuestions.length;
     if (line.hidden) { line.textContent = ''; return; }
     const state = practiceLoading && !practiceCompletion ? 'checking' : practiceCompletion?.state;
     line.dataset.state = state || 'unavailable';
@@ -564,7 +565,7 @@
       const titleLine = document.createElement('span');
       titleLine.className = 'question-title-line';
       titleLine.append(title);
-      if (question.completed === true) titleLine.append(completionIndicator());
+      const indicator = completionIndicator(); indicator.hidden = question.completed !== true; titleLine.append(indicator);
       link.append(titleLine);
       if (question.slug === slug) {
         const current = document.createElement('span');
@@ -599,6 +600,7 @@
     });
     if (append) list.append(...items); else list.replaceChildren(...items);
     list.scrollTop = append ? scroll : 0;
+    void refreshPracticeIndicators();
   }
 
   function renderPracticeOpenState() {
@@ -773,7 +775,35 @@
     }
   }
 
+  async function refreshPracticeIndicators(force = false) {
+    const epoch = ++practiceIndicatorEpoch;
+    if (practiceCompletionFilter() !== 'all') return;
+    const rows = Array.from($('practice-questions').children);
+    for (const row of rows) row.querySelector('.completion-indicator').hidden = true;
+    if (!rows.length || !practiceCompany || document.hidden || document.body.hasAttribute('data-target')) return;
+    const company = practiceCompany, request = practiceRequestId;
+    practiceCompletion = { state: 'checking' }; renderPracticeCompletionStatus();
+    let session = null;
+    const completed = new Map();
+    const current = () => epoch === practiceIndicatorEpoch && request === practiceRequestId && company === practiceCompany &&
+      practiceCompletionFilter() === 'all' && !document.hidden && !document.body.hasAttribute('data-target');
+    try {
+      for (let offset = 0; offset < rows.length; offset += 100) {
+        const response = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs: rows.slice(offset, offset + 100).map(row => row.dataset.slug), refreshCompletion: force && offset === 0 });
+        if (!current()) return;
+        if (!response?.ok || response.state !== 'ready') { practiceCompletion = { state: response?.state || 'unavailable' }; renderPracticeCompletionStatus(); return; }
+        if (!response.sessionKey || (session && session !== response.sessionKey)) throw new Error('Account changed.');
+        session = response.sessionKey;
+        for (const row of rows.slice(offset, offset + 100)) completed.set(row.dataset.slug, response.completed?.[row.dataset.slug] === true);
+      }
+      if (!current()) return;
+      for (const row of rows) row.querySelector('.completion-indicator').hidden = !completed.get(row.dataset.slug);
+      practiceCompletion = { state: 'ready' }; renderPracticeCompletionStatus();
+    } catch (_) { if (current()) { practiceCompletion = { state: 'unavailable' }; renderPracticeCompletionStatus(); } }
+  }
+
   function refreshPracticeCompletion() {
+    if (practiceCompletionFilter() === 'all') { void refreshPracticeIndicators(true); return; }
     if (!practiceCompany || practiceCompletionFilter() === 'all' || document.hidden || practiceRefreshScheduled || document.body.hasAttribute('data-target')) return;
     // Invalidate the displayed account snapshot before any asynchronous request.
     practiceRequestId++;
@@ -921,8 +951,9 @@
     resetWindow();
   });
 
+  $('popup-browse').addEventListener('click', () => queueMicrotask(refreshPracticeCompletion));
   window.addEventListener('focus', refreshPracticeCompletion);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPracticeCompletion(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPracticeCompletion(); else { practiceIndicatorEpoch++; for (const check of $('practice-questions').querySelectorAll('.completion-indicator')) check.hidden = true; } });
   setInterval(refreshPracticeCompletion, completionTTL);
 
   async function start() {

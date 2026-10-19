@@ -17,7 +17,7 @@ async function expectRead(ui, expression, expected, label) {
 // Intercepts only the isolated browser's synthetic LeetCode origin. Responses
 // pass through the packaged content bridge, background service and Explorer.
 // Neither extension storage nor completion icons are seeded by this fixture.
-export function createCompletionFixture({ html }) {
+export function createCompletionFixture({ html, background = 'allow' }) {
   const fixture = {
     state: { account: 'alpha', statuses: new Map(), failure: null, holdNext: false, blockDocument: false },
     calls: [], pending: [], pendingDocuments: [], forbidden: [],
@@ -29,6 +29,7 @@ export function createCompletionFixture({ html }) {
   };
   fixture.route = async route => {
     const request = route.request(), url = new URL(request.url());
+    if (background === 'block' && request.serviceWorker?.()) { await route.abort(); return; }
     if (request.isNavigationRequest() && request.method() === 'GET') {
       const body = fixture.state.blockDocument ? html.replace(/<head([^>]*)>/i, '<head$1><script src="/completion-fixture-loader.js"></script>') : html;
       await route.fulfill({ contentType: 'text/html', body }); return;
@@ -137,9 +138,9 @@ export async function exerciseCompletion(ui, { fixture, data, core, output, brow
   let contentPage;
   try {
     stage('no-tab and real same-origin completion bridge');
-    await assertRows(rows, globalRows()); await status('no-tab');
+    await assertRows(rows, globalRows()); await status('unavailable');
     await assertMarks(rows, globalRows(), () => false);
-    assert.match(await ui.read(text('#completion-status')), /signed-in LeetCode tab/i);
+    assert.match(await ui.read(text('#completion-status')), /completed status|LeetCode/i);
     contentPage = await openLeetCode('https://leetcode.com/problemset/');
     await refresh(); await status('ready'); await assertMarks(rows, globalRows());
     assert.ok(fixture.calls.length > 0, 'The packaged bridge must make real intercepted same-origin requests.');
@@ -223,7 +224,7 @@ export async function exerciseCompletion(ui, { fixture, data, core, output, brow
         }
       }
     }
-    await closeLeetCode(); await refresh(); await status('no-tab'); await noMarks();
+    await closeLeetCode(); await refresh(); await status('unavailable'); await noMarks();
     await assertRows(rows, globalRows({ query: 'add two numbers' }));
     fixture.state.blockDocument = true;
     contentPage = await openLeetCode('https://leetcode.com/problemset/?bridge=pending', { waitUntil: 'commit' });

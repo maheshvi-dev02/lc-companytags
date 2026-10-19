@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { gunzipSync } from 'node:zlib';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -21,6 +22,9 @@ const output = path.join(root, 'output/playwright'), extension = path.join(root,
 await mkdir(output, { recursive: true });
 const report = { version: JSON.parse(await readFile(path.join(extension, 'manifest.json'))).version, checks: [], pageErrors: [] };
 const fixture = createCompletionFixture({ html: problemFixture() });
+const data = JSON.parse(gunzipSync(await readFile(path.join(extension, 'data/snapshot.json.gz'))));
+for (const slug of Object.keys(data.problems)) fixture.setStatus(slug, null);
+const directRequests = [];
 let context;
 try {
   context = await playwright.chromium.launchPersistentContext(path.join(output, 'target-completion-profile-' + Date.now()), {
@@ -31,9 +35,11 @@ try {
   context.on('page', p => p.on('pageerror', e => report.pageErrors.push(e.message)));
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
   const url = new URL(worker.url()), base = url.protocol + '//' + url.host;
-  await context.route(/^https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//, fixture.route);
-  const leetcode = await context.newPage();
-  await leetcode.goto('https://leetcode.com/problems/two-sum/');
+  await context.addCookies([{ name: 'company_lens_test_session', value: 'alpha', url: 'https://leetcode.com/', httpOnly: true, secure: true, sameSite: 'None' }]);
+  await context.route(/^https:\/\/(?:www\.)?leetcode\.(?:com|cn)\//, async route => {
+    if (route.request().serviceWorker()) directRequests.push({ url: route.request().url(), method: route.request().method(), cookie: (await route.request().allHeaders()).cookie });
+    await fixture.route(route);
+  });
   const page = await context.newPage();
   await page.goto(base + '/explore.html?mode=target');
   await page.locator('#target-company option[value="Microsoft"]').waitFor({ state: 'attached' });
@@ -96,10 +102,24 @@ try {
   await popup.screenshot({ path: path.join(output, 'target-completion-popup.png'), fullPage: true });
   await page.bringToFront(); await ready(page);
   await page.screenshot({ path: path.join(output, 'target-completion-fullpage.png'), fullPage: true });
-  await leetcode.close(); await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.waitForFunction(() => document.querySelector('#target-completion-status').dataset.state === 'no-tab');
-  assert.equal(await checked(page), 0);
-  report.checks.push('Popup completion route works; saved collection stays account-free; closing LeetCode clears checkmarks with guidance');
+  assert.ok(directRequests.length > 0, 'Requests originate in the extension background worker');
+  assert.ok(directRequests.every(request => request.cookie?.includes('company_lens_test_session=alpha')), 'Browser sends the permitted session cookie automatically');
+  assert.ok(context.pages().every(page => !page.url().startsWith('https://leetcode.')), 'No problem page was opened');
+  await page.locator('#target-company-trigger').click();
+  await page.locator('#target-company-search').fill('Google');
+  await page.locator('#target-company-options').getByRole('checkbox', { name: 'Google', exact: true }).check();
+  const chosen = page.locator('#target-company-selected');
+  assert.equal(await chosen.getByRole('button', { name: 'Remove Microsoft', exact: true }).isVisible(), true);
+  assert.equal(await chosen.getByRole('button', { name: 'Remove Google', exact: true }).isVisible(), true);
+  await page.locator('#target-company-search').fill('zzzz');
+  assert.equal(await chosen.getByRole('button', { name: 'Remove Microsoft', exact: true }).isVisible(), true);
+  await chosen.getByRole('button', { name: 'Remove Microsoft', exact: true }).click();
+  assert.deepEqual(await page.locator('#target-company').evaluate(select => Array.from(select.selectedOptions, option => option.value)), ['Google']);
+  assert.equal(await page.locator('#target-company-menu').isVisible(), true);
+  await page.locator('#target-company-search').fill('');
+  await page.screenshot({ path: path.join(output, 'target-selected-companies.png'), fullPage: true });
+  report.checks.push('Pinned selected companies remain visible during search; removal auto-applies without closing the menu');
+  report.checks.push('Popup and full-page completion work with no LeetCode tab, browser-managed session cookies, and no account data in saved collections');
   assert.deepEqual(fixture.forbidden, []); assert.deepEqual(report.pageErrors, []);
   report.status = 'passed';
 } catch (error) { report.status = 'failed'; report.error = error.stack; process.exitCode = 1; }

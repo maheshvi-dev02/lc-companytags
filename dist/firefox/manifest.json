@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Company Lens for LeetCode",
-  "version": "1.6.26",
+  "version": "1.6.27",
   "description": "See company logos and frequency scores in a compact LeetCode bar. Search companies and problems from the toolbar.",
   "permissions": [
     "storage",
@@ -66,7 +66,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com"
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://codeload.github.com https://leetcode.com https://www.leetcode.com https://leetcode.cn https://www.leetcode.cn"
   },
   "background": {
     "scripts": [

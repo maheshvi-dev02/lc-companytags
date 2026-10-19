@@ -20,7 +20,7 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
     onError: (error) => console.error('LeetCode Company Tags storage/snapshot error:', error.message)
   });
 
-  const completionService = LCTCompletion.createCompletionService({ tabs: api.tabs, runtime: api.runtime,
+  const completionService = LCTCompletion.createCompletionService({ tabs: api.tabs, runtime: api.runtime, fetch: globalThis.fetch.bind(globalThis),
     incognito: api.extension?.inIncognitoContext === true });
 
   const targetCollection = LCTTargetCollection.create(api.storage.local);
@@ -122,7 +122,9 @@ if (typeof importScripts === 'function' && typeof LCTSync === 'undefined') {
     (async () => {
       if (message.type === 'LCT_COMPLETION') {
         const slugs = LCTCompletion.validateSlugs(message.slugs);
-        return completionService.get(slugs, await privateQuerySender(sender, Date.now() + LCTCompletion.OVERALL_TIMEOUT_MS));
+        const force = LCTCompletion.validateRefresh(message.refreshCompletion);
+        const deadlineAt = Date.now() + LCTCompletion.OVERALL_TIMEOUT_MS;
+        return completionService.get(slugs, await privateQuerySender(sender, deadlineAt), { force, deadlineAt });
       }
       if (message.type === 'LCT_OPEN_POPUP') {
         if (typeof api.action?.openPopup !== 'function') {

@@ -31,7 +31,10 @@
     const emptyMessage = make('p', 'multi-select-hint', 'No matches. Try another search.'); emptyMessage.hidden = true;
     const actions = make('div', 'multi-select-actions'), clear = make('button', '', 'Clear selection');
     clear.type = 'button'; clear.id = id + '-clear'; actions.append(clear);
-    menu.append(searchLabel, hint, list, emptyMessage, actions); document.body.append(menu);
+    const chosen = make('section', 'multi-select-chosen'), chosenTitle = make('p', 'multi-select-hint'), chosenItems = make('div', 'multi-select-chips');
+    chosen.id = id + '-selected'; chosen.hidden = true; chosenTitle.id = id + '-selected-title';
+    chosen.setAttribute('aria-labelledby', chosenTitle.id); chosen.append(chosenTitle, chosenItems);
+    menu.append(searchLabel, hint, chosen, list, emptyMessage, actions); document.body.append(menu);
     let open = false, draft = new Set(), signature = '', positionSignature = '';
     const selectedValues = () => Array.from(select.selectedOptions, option => option.value).filter(Boolean);
     function close(focus = false) {
@@ -52,6 +55,24 @@
       menu.style.top = (upward ? Math.max(8, rect.top - 6 - menu.getBoundingClientRect().height) : rect.bottom + 6) + 'px';
     }
     function syncDraft() {
+      if (noun === 'companies') {
+        const options = Array.from(select.options).filter(option => draft.has(option.value));
+        const signature = JSON.stringify(options.map(option => [option.value, option.textContent]));
+        if (chosen.dataset.selection !== signature) {
+          const focused = Array.from(chosenItems.children).indexOf(document.activeElement);
+          chosen.dataset.selection = signature; chosen.hidden = !options.length;
+          chosenTitle.textContent = 'Selected companies (' + options.length + ')';
+          chosenItems.replaceChildren(...options.map(option => {
+            const remove = make('button', 'multi-select-chip'); remove.type = 'button';
+            remove.setAttribute('aria-label', 'Remove ' + option.textContent); remove.title = 'Remove ' + option.textContent;
+            const cross = make('span', '', '×'); cross.setAttribute('aria-hidden', 'true');
+            remove.append(make('span', '', option.textContent), cross);
+            remove.addEventListener('click', () => { draft.delete(option.value); commit(); });
+            return remove;
+          }));
+          if (focused >= 0) (chosenItems.children[Math.min(focused, chosenItems.children.length - 1)] || search).focus({ preventScroll: true });
+        }
+      }
       for (const input of list.querySelectorAll('input')) { input.checked = draft.has(input.value); input.disabled = !input.checked && draft.size >= limit; }
     }
     function renderOptions() {

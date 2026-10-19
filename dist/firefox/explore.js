@@ -621,7 +621,7 @@
         completionNeedsScan = false;
         const slugs = visibleCompletionSlugs().filter(slug => !completionCache.has(slug)).slice(0, 100);
         if (!slugs.length && !completionIdentityNeeded) break;
-        const result = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs });
+        const result = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs, refreshCompletion: completionIdentityNeeded });
         if (epoch !== completionEpoch || activeFilteredOwner()) break;
         if (!result?.ok || !['ready', 'signed-out', 'no-tab', 'unavailable'].includes(result.state)) {
           throw new Error('Completed status unavailable');

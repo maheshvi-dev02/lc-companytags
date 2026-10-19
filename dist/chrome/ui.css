@@ -46,3 +46,9 @@
 .multi-select-option input { width:16px; height:16px; min-height:0; padding:0; margin:0; flex:none; accent-color:var(--accent); }
 .multi-select-actions { display:flex; justify-content:space-between; gap:10px; flex:none; border-top:1px solid var(--line); padding-top:10px; }
 .multi-select-actions button { padding:7px 10px; font-size:var(--font-label); }
+
+.multi-select-chosen { flex:none; min-height:0; padding:0 0 8px; border-bottom:1px solid var(--line); }
+.multi-select-chips { display:flex; flex-wrap:wrap; gap:6px; max-height:100px; overflow:auto; scrollbar-width:thin; }
+.multi-select-chip { display:inline-flex; align-items:center; gap:8px; max-width:100%; padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--wash); color:var(--ink); font:inherit; font-size:var(--font-label); }
+.multi-select-chip span:first-child { overflow-wrap:anywhere; min-width:0; }
+.multi-select-chip span:last-child { flex:none; color:var(--muted); }

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { firefoxExplorerDriver } from './browser-explorer.mjs';
 import { problemFixture } from './browser-first-install.mjs';
+import { createCompletionFixture } from './browser-completion.mjs';
 
 // Focused regression for real Firefox action-popup sizing, not popup.html in a tab.
 // The isolated-profile preference allows opening the native popup through RDP;
@@ -145,7 +146,9 @@ try {
   await rdp.send({to:watcher.actor,type:'watchTargets',targetType:'frame'});
   backgroundConsole = (await rdp.waitFor(p => p.type === 'target-available-form' && p.target?.url?.includes('_generated_background_page.html'))).target.consoleActor;
   report.browser = await evaluateBackground('return await browser.runtime.getBrowserInfo();');
-  await context.route('https://leetcode.com/**', route=>route.fulfill({contentType:'text/html',body:problemFixture()}));
+  const completionFixture = createCompletionFixture({ html: problemFixture() });
+  completionFixture.setStatus('two-sum', 'ac');
+  await context.route('https://leetcode.com/**', completionFixture.route);
   const problemPage = await context.newPage();
   await problemPage.goto('https://leetcode.com/problems/two-sum/description/');
   await problemPage.locator('#company-lens-root .company-name').first().waitFor();
@@ -194,9 +197,25 @@ try {
   await choose('practice-status-select','all');
   await choose('practice-sort-select','name-asc');
   report.checks.push('Company practice difficulty, completion-status and sort menus open and select.');
+  await until(`document.querySelectorAll('#practice-questions > li').length > 0`);
+  const practiceSlug = await ui.read(`document.querySelector('#practice-questions > li').dataset.slug`);
+  completionFixture.setStatus(practiceSlug, 'ac');
+  await ui.mutate(`window.dispatchEvent(new Event('focus'))`);
+  await until(`document.querySelector('#practice-questions > li .completion-indicator')?.hidden === false`);
+  report.checks.push('All-problems practice shows accepted ticks through any signed-in tab without opening that problem.');
+
   await ui.click('#mode-target');
   await until(`document.querySelector('#target-company').options.length>2 && !document.querySelector('#target-company-trigger').disabled`);
   await choose('target-company','Microsoft'); await choose('target-difficulty','Medium');
+  await ui.click('#target-company-trigger');
+  await ui.click('#target-company-options input[data-value="Google"]');
+  assert.equal(await ui.read(`document.querySelectorAll('#target-company-selected button').length`), 2);
+  assert.equal(await ui.read(`document.querySelector('#target-company-selected').hidden`), false);
+  await ui.click('#target-company-selected button[aria-label="Remove Google"]');
+  assert.equal(await ui.read(`document.querySelectorAll('#target-company-selected button').length`), 1);
+  await visibleMenu('target-company');
+  await ui.press('#target-company-search', 'Escape');
+  report.checks.push('Selected company chips remain visible and remove immediately in the native Firefox popup.');
   await choose('target-topic','Array'); await choose('target-status','all');
   await ui.click('#target-plan'); await choose('target-count','12');
   await ui.click('#target-count-trigger'); await visibleMenu('target-count');

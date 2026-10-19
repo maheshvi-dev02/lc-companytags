@@ -37,7 +37,7 @@ const bundle = await bundledExpectations(extension, core);
 const report = { version: manifest.version, startedAt: new Date().toISOString(),
   mode: 'Actual unpacked Chromium Explorer/content bridge, bundled data, only controlled same-origin LeetCode GraphQL responses, external network blocked',
   pageErrors: [], progress: [] };
-const fixture = createCompletionFixture({ html: problemFixture() });
+const fixture = createCompletionFixture({ html: problemFixture(), background: 'block' });
 const contentPages = [];
 let context, page;
 try {

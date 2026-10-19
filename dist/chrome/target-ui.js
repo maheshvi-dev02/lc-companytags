@@ -336,7 +336,7 @@
     completionTimer = setTimeout(async () => {
       completionTimer = null;
       let response;
-      try { response = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs: result.questions.map(row => row.slug) }); }
+      try { response = await api.runtime.sendMessage({ type: 'LCT_COMPLETION', slugs: result.questions.map(row => row.slug), refreshCompletion: true }); }
       catch (_) { response = null; }
       if (epoch !== completionEpoch || result !== lastResult || !visible() || document.hidden) return;
       const ready = response?.ok === true && response.state === 'ready' && typeof response.sessionKey === 'string' && response.sessionKey &&
